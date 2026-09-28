@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Design Patterns Overview — System Design Mastery</title>
+  <link rel="stylesheet" href="../../css/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+</head>
+<body>
+<button class="menu-toggle" aria-label="Toggle menu">☰</button>
+<div class="page-wrapper">
+  <aside class="sidebar" id="sidebar"></aside>
+  <main class="main-content">
+    <div class="breadcrumb">
+      <a href="../../index.html">Home</a>
+      <span class="sep">›</span>
+      <a href="../index.html">Low-Level Design</a>
+      <span class="sep">›</span>
+      <strong>Design Patterns</strong>
+    </div>
+
+    <h1>Design Patterns Overview</h1>
+
+    <div class="callout callout-info">
+      <p>A Design Pattern is a general, reusable solution to a commonly occurring problem within a given context in software design.</p>
+    </div>
+
+    <h2>What is a Design Pattern?</h2>
+    <p>Think of a design pattern as a proven recipe for solving a common problem. It's not a finished piece of code that you can copy and paste; rather, it is a template or description of how to solve a problem that can be used in many different situations.</p>
+    
+    <h2>History</h2>
+    <p>The concept of design patterns was popularized by the book "Design Patterns: Elements of Reusable Object-Oriented Software" published in 1994 by four authors referred to as the <strong>Gang of Four (GoF)</strong>: Erich Gamma, Richard Helm, Ralph Johnson, and John Vlissides.</p>
+
+    <h2>Categories of Design Patterns</h2>
+    <p>The GoF patterns are generally divided into three categories:</p>
+    
+    <div class="diagram-container">
+      <div class="mermaid">
+        graph TD
+          DP[Design Patterns] --> C[Creational]
+          DP --> S[Structural]
+          DP --> B[Behavioral]
+          C --> C1[Singleton, Factory, Builder...]
+          S --> S1[Adapter, Decorator, Facade...]
+          B --> B1[Observer, Strategy, Command...]
+      </div>
+      <p class="caption">Figure 1: Design Pattern Categories</p>
+    </div>
+
+    <h2>When to use patterns</h2>
+    <p>Design patterns are great when you face a known problem. However, avoid "Patternitis" — don't force a pattern where a simple solution would suffice. Use them to improve code readability and maintainability, not to make simple code complex.</p>
+
+    <div class="card-grid">
+      <div class="card">
+        <h3><a href="creational.html">Creational Patterns</a></h3>
+        <p>Deal with object creation mechanisms, trying to create objects in a manner suitable to the situation.</p>
+      </div>
+      <div class="card">
+        <h3><a href="structural.html">Structural Patterns</a></h3>
+        <p>Deal with object composition and typically identify simple ways to realize relationships between entities.</p>
+      </div>
+      <div class="card">
+        <h3><a href="behavioral.html">Behavioral Patterns</a></h3>
+        <p>Deal with communication between objects, how objects interact and distribute responsibility.</p>
+      </div>
+    </div>
+
+    <div class="page-nav">
+      <a href="../solid.html" class="prev"><span class="label">← Previous</span><span class="title">SOLID Principles</span></a>
+      <a href="creational.html" class="next"><span class="label">Next →</span><span class="title">Creational Patterns</span></a>
+    </div>
+  </main>
+</div>
+<button class="scroll-top" aria-label="Scroll to top">↑</button>
+<script src="../../js/main.js"></script>
+</body>
+</html>

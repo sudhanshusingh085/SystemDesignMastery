@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Production Failure Scenarios — Learning From Real Outages — System Design Mastery</title>
+  <link rel="stylesheet" href="../css/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+</head>
+<body>
+<button class="menu-toggle" aria-label="Toggle menu">☰</button>
+<div class="page-wrapper">
+  <aside class="sidebar" id="sidebar"></aside>
+  <main class="main-content">
+    <div class="breadcrumb">
+      <a href="../index.html">Home</a>
+      <span class="sep">›</span>
+      <strong>Production Failure Scenarios</strong>
+    </div>
+
+    <h1>Production Failure Scenarios — Learning From Real Outages</h1>
+    <p>Designing a system is only half the battle. Keeping it alive in production is the real test. Here are 10 real-world failure scenarios, why they happen, and how to prevent them in Java 21.</p>
+
+    <!-- Scenario 1 -->
+    <div class="card">
+      <h2>1. Database Connection Pool Exhaustion</h2>
+      <p><strong>What happened:</strong> All database connections are used up. New requests to the application fail because they cannot get a connection to the DB.</p>
+      <p><strong>Root cause:</strong> A slow query or external API call holding a connection open for too long. Since there are a finite number of connections (e.g., 50), 50 concurrent slow requests will consume the entire pool.</p>
+      <p><strong>How to prevent:</strong> Enforce connection timeouts, query timeouts, and limit connection pool size.</p>
+      <span class="code-label">Java 21</span>
+      <pre>
+// Using standard HikariCP configuration for connection pooling
+import com.zaxxer.hikari.HikariConfig;
+import com.zaxxer.hikari.HikariDataSource;
+
+public class DatabaseConfig {
+    public static HikariDataSource getDataSource() {
+        var config = new HikariConfig();
+        config.setJdbcUrl("jdbc:postgresql://localhost:5432/mydb");
+        config.setUsername("user");
+        config.setPassword("pass");
+        
+        // CRITICAL: Set limits and timeouts!
+        config.setMaximumPoolSize(50); // Don't let it grow infinitely
+        config.setConnectionTimeout(3000); // 3s wait for a connection
+        config.setLeakDetectionThreshold(5000); // Log connections held > 5s
+        
+        return new HikariDataSource(config);
+    }
+}
+      </pre>
+    </div>
+
+    <!-- Scenario 2 -->
+    <div class="card">
+      <h2>2. Cascading Failure</h2>
+      <p><strong>What happened:</strong> Service A goes down. Service B depends on A, waits too long, and its threads get blocked. Soon, Service B crashes. Then Service C crashes. The whole system is down.</p>
+      <p><strong>Root cause:</strong> Tight coupling and lack of fallback mechanisms (like a <span class="jargon">Circuit Breaker</span>).</p>
+      <p><strong>How to prevent:</strong> Use Circuit Breakers, Bulkheads, and strict timeouts.</p>
+      
+      <div class="diagram-container">
+        <div class="mermaid">
+          flowchart LR
+            User --> A[Service A]
+            User2 --> B[Service B]
+            A --> C[Service C - SLOW]
+            B --> C
+            style C fill:#f99,stroke:#333,stroke-width:4px
+            style A fill:#f99,stroke:#333
+            style B fill:#f99,stroke:#333
+        </div>
+        <p class="caption">Figure 1: Domino effect in cascading failures</p>
+      </div>
+    </div>
+
+    <!-- Scenario 3 -->
+    <div class="card">
+      <h2>3. Cache Stampede (Thundering Herd)</h2>
+      <p><strong>What happened:</strong> A popular item's cache expires. Immediately, 10,000 requests hit the server, miss the cache, and all try to fetch from the DB at the exact same time, crashing the DB.</p>
+      <p><strong>Root cause:</strong> Massive concurrent cache misses due to the same TTL (Time To Live).</p>
+      <p><strong>How to prevent:</strong> Add jitter to TTLs, or use a Mutex Lock to ensure only one thread fetches from the DB while others wait.</p>
+      <span class="code-label">Java 21</span>
+      <pre>
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.locks.ReentrantLock;
+
+public class CacheService {
+    private final ConcurrentHashMap&lt;String, String&gt; cache = new ConcurrentHashMap&lt;&gt;();
+    private final ConcurrentHashMap&lt;String, ReentrantLock&gt; locks = new ConcurrentHashMap&lt;&gt;();
+
+    public String getData(String key) {
+        String value = cache.get(key);
+        if (value != null) return value; // Cache hit
+
+        // Cache miss: lock specifically for this key
+        var lock = locks.computeIfAbsent(key, k -> new ReentrantLock());
+        lock.lock();
+        try {
+            // Double-checked locking
+            value = cache.get(key);
+            if (value != null) return value;
+
+            // Simulate DB fetch
+            value = fetchFromDatabase(key);
+            cache.put(key, value);
+            return value;
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    private String fetchFromDatabase(String key) {
+        return "Data for " + key; 
+    }
+}
+      </pre>
+    </div>
+
+    <!-- Scenario 4 -->
+    <div class="card">
+      <h2>4. Split Brain</h2>
+      <p><strong>What happened:</strong> In a primary-secondary database setup, the network drops between them. The secondary thinks the primary is dead and promotes itself. The primary is still alive. Both accept writes. Data is corrupted.</p>
+      <p><strong>Root cause:</strong> Network partition without proper quorum or fencing tokens.</p>
+      <p><strong>How to prevent:</strong> Use Quorum (majority voting) for leader election. E.g., needing 3 out of 5 nodes to agree before promoting a new leader.</p>
+    </div>
+
+    <!-- Scenario 5 -->
+    <div class="card">
+      <h2>5. Memory Leak</h2>
+      <p><strong>What happened:</strong> Application steadily consumes more RAM over days, gets sluggish, and eventually crashes with <code>OutOfMemoryError</code>.</p>
+      <p><strong>Root cause:</strong> Collections that grow infinitely, unclosed I/O streams, or static maps holding object references forever.</p>
+      <p><strong>How to prevent:</strong> Use weak references, bound your collections, and ALWAYS use try-with-resources.</p>
+      <span class="code-label">Java 21</span>
+      <pre>
+import java.io.BufferedReader;
+import java.io.FileReader;
+import java.io.IOException;
+
+public class ResourceSafety {
+    // Anti-pattern: List grows forever
+    // private static List&lt;String&gt; history = new ArrayList&lt;&gt;();
+
+    public void processFileSafely(String path) {
+        // Java's try-with-resources ensures reader is CLOSED automatically
+        // preventing file handle leaks and memory leaks
+        try (BufferedReader reader = new BufferedReader(new FileReader(path))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                // process line
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+}
+      </pre>
+    </div>
+
+    <!-- Scenario 6 -->
+    <div class="card">
+      <h2>6. Hot Key / Hot Partition</h2>
+      <p><strong>What happened:</strong> A specific database shard CPU goes to 100% while other shards are at 5%.</p>
+      <p><strong>Root cause:</strong> A celebrity tweets, or a viral product drops. The partition key hashes all that traffic to a single node.</p>
+      <p><strong>How to prevent:</strong> Key salting (appending random numbers to keys to distribute them), or aggressively caching hot items locally in-memory.</p>
+    </div>
+
+    <!-- Scenario 7 -->
+    <div class="card">
+      <h2>7. Deployment Gone Wrong</h2>
+      <p><strong>What happened:</strong> Deployed v2.0 on Friday at 5 PM. It breaks. Rollback takes 2 hours.</p>
+      <p><strong>Root cause:</strong> In-place upgrades, backwards-incompatible database migrations, no canary.</p>
+      <p><strong>How to prevent:</strong> Blue-Green deployments or Canary releases.</p>
+      
+      <div class="diagram-container">
+        <div class="mermaid">
+          flowchart TD
+            LB[Load Balancer]
+            B[Blue Env - v1.0]
+            G[Green Env - v2.0]
+            LB -->|90% Traffic| B
+            LB -->|10% Traffic Canary| G
+        </div>
+        <p class="caption">Figure 2: Canary deployment routing traffic safely</p>
+      </div>
+    </div>
+
+    <!-- Scenario 8 -->
+    <div class="card">
+      <h2>8. DNS Failure</h2>
+      <p><strong>What happened:</strong> Your cloud provider's DNS goes down. Users see "Site not found" even though all your servers are perfectly fine.</p>
+      <p><strong>Root cause:</strong> Single point of failure for domain name resolution.</p>
+      <p><strong>How to prevent:</strong> Use multiple DNS providers and configure appropriate DNS TTLs.</p>
+    </div>
+
+    <!-- Scenario 9 -->
+    <div class="card">
+      <h2>9. Retry Storm</h2>
+      <p><strong>What happened:</strong> A database briefly stutters. Thousands of clients retry immediately. The sudden 10x traffic spike kills the recovered database instantly.</p>
+      <p><strong>Root cause:</strong> Immediate, aggressive retries.</p>
+      <p><strong>How to prevent:</strong> Exponential Backoff with Jitter.</p>
+      <span class="code-label">Java 21</span>
+      <pre>
+import java.util.Random;
+
+public class RetryStrategy {
+    private static final Random random = new Random();
+
+    public void executeWithBackoff() throws InterruptedException {
+        int maxRetries = 3;
+        int baseWaitMs = 1000;
+
+        for (int attempt = 1; attempt &lt;= maxRetries; attempt++) {
+            try {
+                // callExternalService();
+                return; // Success!
+            } catch (Exception e) {
+                if (attempt == maxRetries) throw e;
+                
+                // Exponential backoff: 1s, 2s, 4s
+                long waitTime = baseWaitMs * (1L &lt;&lt; (attempt - 1));
+                // Jitter: +/- 20% to prevent synchronized retries
+                long jitter = (long) (waitTime * 0.2 * (random.nextDouble() * 2 - 1));
+                
+                Thread.sleep(waitTime + jitter);
+            }
+        }
+    }
+}
+      </pre>
+    </div>
+
+    <!-- Scenario 10 -->
+    <div class="card">
+      <h2>10. Data Inconsistency After Partial Failure</h2>
+      <p><strong>What happened:</strong> User's credit card was charged, but the "Order Created" step failed. User has no order but lost money.</p>
+      <p><strong>Root cause:</strong> Two actions occurred across microservices without a distributed transaction protocol.</p>
+      <p><strong>How to prevent:</strong> Saga Pattern, Outbox Pattern, or ensuring operations are Idempotent.</p>
+    </div>
+
+    <div class="callout callout-purple">
+      <h3>Incident Post-Mortem Template</h3>
+      <p>When failures happen (and they will), don't assign blame. Write a blameless post-mortem:</p>
+      <ul>
+        <li><strong>Timeline:</strong> Exactly what happened and when.</li>
+        <li><strong>Impact:</strong> How many users/transactions were affected.</li>
+        <li><strong>Root Cause:</strong> The actual technical reason (ask "Why?" 5 times).</li>
+        <li><strong>Action Items:</strong> Concrete steps to ensure it NEVER happens again.</li>
+      </ul>
+    </div>
+
+    <div class="page-nav">
+      <a href="../hld-building-blocks/index.html" class="prev"><span class="label">← Previous</span><span class="title">HLD Building Blocks</span></a>
+      <a href="#" class="next"><span class="label">Next →</span><span class="title">Up Next</span></a>
+    </div>
+  </main>
+</div>
+<button class="scroll-top" aria-label="Scroll to top">↑</button>
+<script src="../js/main.js"></script>
+</body>
+</html>

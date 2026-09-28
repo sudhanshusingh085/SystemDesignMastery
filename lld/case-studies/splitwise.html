@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Splitwise Design — System Design Mastery</title>
+  <link rel="stylesheet" href="../../css/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+</head>
+<body>
+<button class="menu-toggle" aria-label="Toggle menu">☰</button>
+<div class="page-wrapper">
+  <aside class="sidebar" id="sidebar"></aside>
+  <main class="main-content">
+    <div class="breadcrumb">
+      <a href="../../index.html">Home</a>
+      <span class="sep">›</span>
+      LLD
+      <span class="sep">›</span>
+      Case Studies
+      <span class="sep">›</span>
+      <strong>Splitwise</strong>
+    </div>
+
+    <h1>Design Splitwise</h1>
+
+    <div class="callout callout-info">
+      <strong>Scenario:</strong> Design an expense sharing application like Splitwise where users can add expenses, split them using various strategies, and simplify their debts.
+    </div>
+
+    <h2>1. What is Splitwise?</h2>
+    <p>Splitwise is an app that allows groups of friends to split expenses. For example, if Alice pays $100 for dinner for herself, Bob, and Charlie, Splitwise tracks that Bob and Charlie each owe Alice $33.33.</p>
+    <div class="jargon">📖 <strong>Debt Simplification</strong>: Reducing the total number of transactions needed to settle up. If A owes B $10, and B owes C $10, it simplifies to A owing C $10.</div>
+
+    <h2>2. What problem does it solve?</h2>
+    <p>Tracking manual IOUs is prone to errors. Managing different splitting methods (Equal, Exact, Percentages) requires a flexible structure that allows extending logic without breaking the system.</p>
+
+    <h2>3. How does it work?</h2>
+    <div class="diagram-container">
+      <div class="mermaid">
+        classDiagram
+          Expense --> SplitStrategy
+          SplitStrategy <|-- EqualSplit
+          SplitStrategy <|-- PercentageSplit
+          SplitStrategy <|-- ExactSplit
+          ExpenseService --> BalanceSheet
+          ExpenseService --> ExpenseObserver
+      </div>
+      <p class="caption">Figure 1: Core Class Diagram</p>
+    </div>
+
+    <h2>4. Java 21 Code Implementation</h2>
+    <span class="code-label">Java</span>
+    <pre><code>
+import java.util.*;
+import java.time.LocalDateTime;
+
+record UserId(String id) {}
+class User {
+    String id, name, email;
+    public User(String id, String name, String email) {
+        this.id = id; this.name = name; this.email = email;
+    }
+}
+
+// Design Pattern: Strategy — interchangeable algorithms for splitting
+// SOLID: Open/Closed — new types extend without modifying existing code
+sealed interface SplitStrategy permits EqualSplit, PercentageSplit, ExactSplit {
+    Map&lt;UserId, Double&gt; calculateSplits(double totalAmount, List&lt;UserId&gt; participants);
+}
+
+record EqualSplit() implements SplitStrategy {
+    @Override
+    public Map&lt;UserId, Double&gt; calculateSplits(double totalAmount, List&lt;UserId&gt; participants) {
+        double splitAmount = totalAmount / participants.size();
+        Map&lt;UserId, Double&gt; splits = new HashMap&lt;&gt;();
+        for (UserId u : participants) splits.put(u, splitAmount);
+        return splits;
+    }
+}
+
+record PercentageSplit(Map&lt;UserId, Double&gt; percentages) implements SplitStrategy {
+    @Override
+    public Map&lt;UserId, Double&gt; calculateSplits(double totalAmount, List&lt;UserId&gt; participants) {
+        Map&lt;UserId, Double&gt; splits = new HashMap&lt;&gt;();
+        for (UserId u : participants) {
+            splits.put(u, (percentages.getOrDefault(u, 0.0) / 100.0) * totalAmount);
+        }
+        return splits;
+    }
+}
+
+record ExactSplit(Map&lt;UserId, Double&gt; amounts) implements SplitStrategy {
+    @Override
+    public Map&lt;UserId, Double&gt; calculateSplits(double totalAmount, List&lt;UserId&gt; participants) {
+        return amounts; // In real life, validate sum equals totalAmount
+    }
+}
+
+record Expense(String id, String description, double amount, UserId paidBy, SplitStrategy strategy, List&lt;UserId&gt; participants, LocalDateTime timestamp) {}
+
+class Group {
+    String groupId, name;
+    List&lt;UserId&gt; members = new ArrayList&lt;&gt;();
+    List&lt;Expense&gt; expenses = new ArrayList&lt;&gt;();
+}
+
+// SOLID: Single Responsibility — this class only handles balance calculation and debt tracking
+class BalanceSheet {
+    // Map of user -> (Map of who they owe -> amount)
+    private Map&lt;UserId, Map&lt;UserId, Double&gt;&gt; balances = new HashMap&lt;&gt;();
+
+    public void updateBalances(Expense expense) {
+        Map&lt;UserId, Double&gt; splits = expense.strategy().calculateSplits(expense.amount(), expense.participants());
+        UserId paidBy = expense.paidBy();
+        
+        for (Map.Entry&lt;UserId, Double&gt; split : splits.entrySet()) {
+            UserId owes = split.getKey();
+            if (owes.equals(paidBy)) continue;
+            
+            double amountOwed = split.getValue();
+            balances.putIfAbsent(owes, new HashMap&lt;&gt;());
+            balances.putIfAbsent(paidBy, new HashMap&lt;&gt;());
+            
+            balances.get(owes).put(paidBy, balances.get(owes).getOrDefault(paidBy, 0.0) + amountOwed);
+            balances.get(paidBy).put(owes, balances.get(paidBy).getOrDefault(owes, 0.0) - amountOwed);
+        }
+    }
+    
+    public void printBalances() {
+        System.out.println("Current Balances: " + balances);
+    }
+    
+    // Simplifies debts (can use Min/Max heap logic)
+    public void simplifyDebts() {
+        System.out.println("Simplifying debts...");
+        // Logic omitted for brevity, but uses a greedy approach with heaps to resolve net balances
+    }
+}
+
+// Design Pattern: Observer — notify subscribers on state change
+interface ExpenseObserver {
+    void onExpenseAdded(Expense expense);
+}
+
+class NotificationService implements ExpenseObserver {
+    @Override
+    public void onExpenseAdded(Expense expense) {
+        System.out.println("Notification: Expense '" + expense.description() + "' added!");
+    }
+}
+
+// Design Pattern: Facade
+class ExpenseService {
+    private BalanceSheet balanceSheet = new BalanceSheet();
+    private List&lt;ExpenseObserver&gt; observers = new ArrayList&lt;&gt;();
+    
+    public void addObserver(ExpenseObserver obs) { observers.add(obs); }
+    
+    public void addExpense(Expense expense) {
+        balanceSheet.updateBalances(expense);
+        for (ExpenseObserver obs : observers) obs.onExpenseAdded(expense);
+    }
+    
+    public void showBalances() { balanceSheet.printBalances(); }
+}
+
+public class Main {
+    public static void main(String[] args) {
+        UserId u1 = new UserId("U1"); UserId u2 = new UserId("U2"); UserId u3 = new UserId("U3");
+        ExpenseService service = new ExpenseService();
+        service.addObserver(new NotificationService());
+        
+        Expense e1 = new Expense("E1", "Dinner", 300, u1, new EqualSplit(), List.of(u1, u2, u3), LocalDateTime.now());
+        service.addExpense(e1);
+        service.showBalances();
+    }
+}
+    </code></pre>
+
+    <h2>5. Why is this recommended?</h2>
+    <p>Using the <strong>Strategy Pattern</strong> for splits makes adding new split types (like "shares") trivial. The <strong>Observer Pattern</strong> perfectly models the real-world requirement of pushing notifications to users.</p>
+    
+    <div class="callout callout-purple">
+      <strong>Interview Tip:</strong> The debt simplification algorithm is a common graph problem. Mention that it can be solved by calculating the "net balance" for each node (user), separating them into debtors and creditors, and greedily matching the largest debtor with the largest creditor using a Min/Max Heap.
+    </div>
+
+    <div class="page-nav">
+      <a href="atm.html" class="prev"><span class="label">← Previous</span><span class="title">ATM Machine</span></a>
+      <a href="movie-booking.html" class="next"><span class="label">Next →</span><span class="title">Movie Booking</span></a>
+    </div>
+  </main>
+</div>
+<button class="scroll-top" aria-label="Scroll to top">↑</button>
+<script src="../../js/main.js"></script>
+</body>
+</html>

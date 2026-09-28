@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Movie Booking System Design — System Design Mastery</title>
+  <link rel="stylesheet" href="../../css/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+</head>
+<body>
+<button class="menu-toggle" aria-label="Toggle menu">☰</button>
+<div class="page-wrapper">
+  <aside class="sidebar" id="sidebar"></aside>
+  <main class="main-content">
+    <div class="breadcrumb">
+      <a href="../../index.html">Home</a>
+      <span class="sep">›</span>
+      LLD
+      <span class="sep">›</span>
+      Case Studies
+      <span class="sep">›</span>
+      <strong>Movie Booking</strong>
+    </div>
+
+    <h1>Design a Movie Booking System (BookMyShow)</h1>
+
+    <div class="callout callout-info">
+      <strong>Scenario:</strong> Design a movie ticket booking system like BookMyShow where users can view available movies, select seats, and book tickets concurrently without race conditions.
+    </div>
+
+    <h2>1. What is a Movie Booking System?</h2>
+    <p>A system handling theaters, screens, shows, and seats. Multiple users might try to book the same seat at the same time, necessitating a robust locking mechanism.</p>
+    <div class="jargon">📖 <strong>Concurrency Control</strong>: Ensuring that when User A and User B try to book Seat #12 simultaneously, only one succeeds and the other gets an error gracefully.</div>
+
+    <h2>2. What problem does it solve?</h2>
+    <p>Handling temporary locks on seats during checkout so other users can't select them, and releasing them if the payment times out. It abstracts physical theater complexes into software entities.</p>
+
+    <h2>3. How does it work?</h2>
+    <div class="diagram-container">
+      <div class="mermaid">
+        sequenceDiagram
+          User->>BookingFacade: Select Seats
+          BookingFacade->>SeatLockManager: Lock Seats
+          SeatLockManager-->>BookingFacade: Lock Successful
+          BookingFacade->>PaymentService: Initiate Payment
+          PaymentService-->>BookingFacade: Payment Success
+          BookingFacade->>SeatLockManager: Confirm/Book Seats
+      </div>
+      <p class="caption">Figure 1: Concurrent Seat Locking Flow</p>
+    </div>
+
+    <h2>4. Java 21 Code Implementation</h2>
+    <span class="code-label">Java</span>
+    <pre><code>
+import java.util.*;
+import java.util.concurrent.*;
+import java.time.LocalDateTime;
+
+record MovieId(String id) {}
+record Movie(MovieId id, String title, String genre, int durationMinutes, String rating) {}
+record User(String id, String name) {}
+
+enum SeatType { REGULAR, PREMIUM, VIP }
+enum SeatStatus { AVAILABLE, LOCKED, BOOKED }
+
+// SOLID: Single Responsibility — this class only handles seat properties
+class Seat {
+    String id; int row, number; SeatType type; SeatStatus status;
+    public Seat(String id, int row, int number, SeatType type) {
+        this.id = id; this.row = row; this.number = number; this.type = type; this.status = SeatStatus.AVAILABLE;
+    }
+}
+
+class Screen {
+    String screenNumber; List&lt;Seat&gt; seats;
+    public Screen(String num, List&lt;Seat&gt; seats) { this.screenNumber = num; this.seats = seats; }
+}
+
+record Show(String showId, Movie movie, Screen screen, LocalDateTime startTime, Map&lt;SeatType, Double&gt; pricing) {}
+
+class Theater {
+    String name, address; List&lt;Screen&gt; screens;
+}
+
+record Booking(String bookingId, Show show, List&lt;Seat&gt; seats, User user, double totalAmount, LocalDateTime bookingTime) {}
+
+// Key Differentiator for Concurrency
+class SeatLockManager {
+    // Stores ShowID_SeatID -> Lock Expiry Time
+    private final ConcurrentHashMap&lt;String, Long&gt; locks = new ConcurrentHashMap&lt;&gt;();
+    
+    public synchronized boolean lockSeats(Show show, List&lt;Seat&gt; seats) {
+        // Check if any seat is already locked or booked
+        for (Seat s : seats) {
+            if (s.status != SeatStatus.AVAILABLE) return false;
+        }
+        // Lock them
+        long expiry = System.currentTimeMillis() + 60000; // 1 minute lock
+        for (Seat s : seats) {
+            s.status = SeatStatus.LOCKED;
+            locks.put(show.showId() + "_" + s.id, expiry);
+        }
+        return true;
+    }
+}
+
+// Design Pattern: Strategy — interchangeable algorithms for payment
+interface PaymentStrategy {
+    boolean pay(double amount);
+}
+
+class CreditCardPayment implements PaymentStrategy {
+    public boolean pay(double amount) { System.out.println("Paid via Credit Card"); return true; }
+}
+class UpiPayment implements PaymentStrategy {
+    public boolean pay(double amount) { System.out.println("Paid via UPI"); return true; }
+}
+
+// Design Pattern: Observer — notify subscribers on state change
+interface BookingObserver {
+    void onBookingConfirmed(Booking booking);
+}
+
+class EmailNotifier implements BookingObserver {
+    public void onBookingConfirmed(Booking booking) { System.out.println("Email Sent for booking: " + booking.bookingId()); }
+}
+
+// Design Pattern: Facade
+class BookingService {
+    private SeatLockManager lockManager = new SeatLockManager();
+    private List&lt;BookingObserver&gt; observers = new ArrayList&lt;&gt;();
+    
+    public void addObserver(BookingObserver obs) { observers.add(obs); }
+    
+    public Booking bookSeats(User user, Show show, List&lt;Seat&gt; seats, PaymentStrategy paymentMethod) {
+        if (!lockManager.lockSeats(show, seats)) {
+            throw new RuntimeException("Seats not available");
+        }
+        
+        double amount = seats.stream().mapToDouble(s -> show.pricing().get(s.type)).sum();
+        
+        if (paymentMethod.pay(amount)) {
+            seats.forEach(s -> s.status = SeatStatus.BOOKED);
+            Booking b = new Booking(UUID.randomUUID().toString(), show, seats, user, amount, LocalDateTime.now());
+            observers.forEach(o -> o.onBookingConfirmed(b));
+            return b;
+        }
+        return null;
+    }
+}
+
+public class Main {
+    public static void main(String[] args) {
+        BookingService service = new BookingService();
+        service.addObserver(new EmailNotifier());
+        
+        // Setup mock data...
+        Seat s1 = new Seat("S1", 1, 1, SeatType.REGULAR);
+        Show show = new Show("SHOW1", new Movie(new MovieId("M1"), "Inception", "Sci-Fi", 120, "PG-13"), new Screen("Scr1", List.of(s1)), LocalDateTime.now(), Map.of(SeatType.REGULAR, 150.0));
+        
+        service.bookSeats(new User("U1", "Alice"), show, List.of(s1), new UpiPayment());
+    }
+}
+    </code></pre>
+
+    <h2>5. Why is this recommended?</h2>
+    <p>Using a dedicated <code>SeatLockManager</code> handles concurrency and isolates locking logic from the business workflow, respecting <strong>Single Responsibility Principle</strong>. The <strong>Strategy</strong> pattern for payments prevents a monolithic checkout method.</p>
+    
+    <div class="callout callout-purple">
+      <strong>Interview Tip:</strong> Real-world booking systems use distributed caching like Redis for seat locking (using TTL - Time to Live) so the locks automatically expire across all servers without relying on a single machine's memory.
+    </div>
+
+    <div class="page-nav">
+      <a href="splitwise.html" class="prev"><span class="label">← Previous</span><span class="title">Splitwise</span></a>
+      <a href="car-rental.html" class="next"><span class="label">Next →</span><span class="title">Car Rental</span></a>
+    </div>
+  </main>
+</div>
+<button class="scroll-top" aria-label="Scroll to top">↑</button>
+<script src="../../js/main.js"></script>
+</body>
+</html>

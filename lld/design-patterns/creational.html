@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Creational Design Patterns — System Design Mastery</title>
+  <link rel="stylesheet" href="../../css/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+</head>
+<body>
+<button class="menu-toggle" aria-label="Toggle menu">☰</button>
+<div class="page-wrapper">
+  <aside class="sidebar" id="sidebar"></aside>
+  <main class="main-content">
+    <div class="breadcrumb">
+      <a href="../../index.html">Home</a>
+      <span class="sep">›</span>
+      <a href="../index.html">Low-Level Design</a>
+      <span class="sep">›</span>
+      <a href="index.html">Design Patterns</a>
+      <span class="sep">›</span>
+      <strong>Creational Patterns</strong>
+    </div>
+
+    <h1>Creational Design Patterns</h1>
+    <p>Creational design patterns provide various object creation mechanisms, which increase flexibility and reuse of existing code.</p>
+
+    <!-- Singleton -->
+    <section>
+      <h2>1. Singleton</h2>
+      <p>Ensures that a class has only one instance, while providing a global access point to this instance.</p>
+      <div class="jargon">📖 <strong>Analogy</strong>: There is only ONE president of a country. Whenever you ask for the president, you get the same person.</div>
+      
+      <span class="code-label">Java 21</span>
+      <pre>
+public final class DatabaseConnection {
+    // Volatile for thread-safe double-checked locking
+    private static volatile DatabaseConnection instance;
+
+    // Private constructor prevents external instantiation
+    private DatabaseConnection() {
+        // Initialization code
+    }
+
+    public static DatabaseConnection getInstance() {
+        if (instance == null) {
+            synchronized (DatabaseConnection.class) {
+                if (instance == null) {
+                    instance = new DatabaseConnection();
+                }
+            }
+        }
+        return instance;
+    }
+}
+      </pre>
+    </section>
+
+    <!-- Factory Method -->
+    <section>
+      <h2>2. Factory Method</h2>
+      <p>Provides an interface for creating objects in a superclass, but allows subclasses to alter the type of objects that will be created.</p>
+      <div class="jargon">📖 <strong>Analogy</strong>: A pizza store — you order a 'cheese pizza' and the store creates the right one for you.</div>
+      
+      <span class="code-label">Java 21</span>
+      <pre>
+public interface Notification {
+    void notifyUser();
+}
+
+public class EmailNotification implements Notification {
+    public void notifyUser() { System.out.println("Sending an email..."); }
+}
+
+public class SmsNotification implements Notification {
+    public void notifyUser() { System.out.println("Sending an SMS..."); }
+}
+
+public abstract class NotificationFactory {
+    public abstract Notification createNotification();
+    
+    public void send() {
+        Notification notification = createNotification();
+        notification.notifyUser();
+    }
+}
+
+public class EmailNotificationFactory extends NotificationFactory {
+    @Override
+    public Notification createNotification() {
+        return new EmailNotification();
+    }
+}
+      </pre>
+    </section>
+
+    <!-- Abstract Factory -->
+    <section>
+      <h2>3. Abstract Factory</h2>
+      <p>Lets you produce families of related objects without specifying their concrete classes.</p>
+      <div class="jargon">📖 <strong>Analogy</strong>: A furniture store. If you pick the Victorian style, you get a Victorian chair, sofa, and table.</div>
+      
+      <span class="code-label">Java 21</span>
+      <pre>
+public interface Button { void paint(); }
+public interface TextField { void render(); }
+
+public class WindowsButton implements Button {
+    public void paint() { System.out.println("Windows Button"); }
+}
+public class WindowsTextField implements TextField {
+    public void render() { System.out.println("Windows TextField"); }
+}
+
+public interface UIComponentFactory {
+    Button createButton();
+    TextField createTextField();
+}
+
+public class WindowsFactory implements UIComponentFactory {
+    public Button createButton() { return new WindowsButton(); }
+    public TextField createTextField() { return new WindowsTextField(); }
+}
+      </pre>
+    </section>
+
+    <!-- Builder -->
+    <section>
+      <h2>4. Builder</h2>
+      <p>Lets you construct complex objects step by step.</p>
+      <div class="jargon">📖 <strong>Analogy</strong>: Ordering a custom sandwich at Subway — you choose the bread, meat, cheese, and sauces step by step.</div>
+      
+      <span class="code-label">Java 21</span>
+      <pre>
+public class HttpRequest {
+    private final String url;
+    private final String method;
+    private final String body;
+
+    private HttpRequest(Builder builder) {
+        this.url = builder.url;
+        this.method = builder.method;
+        this.body = builder.body;
+    }
+
+    public static class Builder {
+        private String url;
+        private String method = "GET"; // Default
+        private String body;
+
+        public Builder url(String url) {
+            this.url = url;
+            return this;
+        }
+
+        public Builder method(String method) {
+            this.method = method;
+            return this;
+        }
+
+        public Builder body(String body) {
+            this.body = body;
+            return this;
+        }
+
+        public HttpRequest build() {
+            return new HttpRequest(this);
+        }
+    }
+}
+      </pre>
+    </section>
+
+    <!-- Prototype -->
+    <section>
+      <h2>5. Prototype</h2>
+      <p>Lets you copy existing objects without making your code dependent on their classes.</p>
+      <div class="jargon">📖 <strong>Analogy</strong>: Photocopying a document instead of writing it all out again.</div>
+      
+      <span class="code-label">Java 21</span>
+      <pre>
+public class GameCharacter implements Cloneable {
+    private String name;
+    private int health;
+
+    public GameCharacter(String name, int health) {
+        this.name = name;
+        this.health = health;
+    }
+
+    @Override
+    public GameCharacter clone() {
+        try {
+            return (GameCharacter) super.clone();
+        } catch (CloneNotSupportedException e) {
+            throw new AssertionError();
+        }
+    }
+}
+      </pre>
+    </section>
+
+    <div class="page-nav">
+      <a href="index.html" class="prev"><span class="label">← Previous</span><span class="title">Patterns Overview</span></a>
+      <a href="structural.html" class="next"><span class="label">Next →</span><span class="title">Structural Patterns</span></a>
+    </div>
+  </main>
+</div>
+<button class="scroll-top" aria-label="Scroll to top">↑</button>
+<script src="../../js/main.js"></script>
+</body>
+</html>

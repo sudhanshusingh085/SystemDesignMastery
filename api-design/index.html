@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>API Design — Building Clean, Production-Grade APIs — System Design Mastery</title>
+  <link rel="stylesheet" href="../css/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+</head>
+<body>
+<button class="menu-toggle">☰</button>
+<div class="page-wrapper">
+  <aside class="sidebar" id="sidebar"></aside>
+  <main class="main-content">
+    <div class="breadcrumb">
+      <a href="../index.html">Home</a>
+      <span class="sep">›</span>
+      <strong>API Design</strong>
+    </div>
+
+    <h1>API Design — Building Clean, Production-Grade APIs</h1>
+    
+    <div class="callout callout-info">
+      <strong>Interview Tip:</strong> "Design the API for X" is a common interview question. Mastering these conventions will show your interviewer you understand how to build real-world, production-ready systems.
+    </div>
+
+    <section>
+      <h2>1. What is an API?</h2>
+      <p>An <div class="jargon">📖 <strong>API (Application Programming Interface)</strong>: A set of rules and protocols that allows different software applications to communicate with each other.</div> is like a restaurant menu.</p>
+      <p>Imagine you're at a restaurant. You (the client) look at the menu (the API) which lists available dishes. You place an order with the waiter (the network). The waiter takes the order to the kitchen (the server), where the chefs prepare it. Finally, the waiter brings your food (the response) back to you. You don't need to know how the kitchen cooked it, just what to ask for!</p>
+      
+      <p>In modern systems, we typically build <div class="jargon">📖 <strong>REST (Representational State Transfer)</strong>: An architectural style for designing networked applications, relying on a stateless, client-server protocol, usually HTTP.</div> APIs.</p>
+    </section>
+
+    <section>
+      <h2>2. RESTful Conventions</h2>
+      <p>RESTful APIs are designed around <strong>resources</strong>. A resource is an object or representation of something, like a user, a tweet, or a product.</p>
+      <ul>
+        <li>Use <strong>nouns</strong> for URLs, not verbs: <code>/users</code>, not <code>/getUsers</code></li>
+        <li>Use <strong>plural nouns</strong>: <code>/users</code>, <code>/orders</code></li>
+        <li>Identify specific resources by ID: <code>/users/123</code></li>
+      </ul>
+      
+      <p>HTTP Methods map to CRUD operations:</p>
+      <table>
+        <tr><th>Method</th><th>CRUD</th><th>Action</th><th>Example URL</th></tr>
+        <tr><td>GET</td><td>Read</td><td>Retrieve a resource or collection</td><td>GET /users</td></tr>
+        <tr><td>POST</td><td>Create</td><td>Create a new resource</td><td>POST /users</td></tr>
+        <tr><td>PUT</td><td>Update</td><td>Replace an entire resource</td><td>PUT /users/123</td></tr>
+        <tr><td>PATCH</td><td>Update</td><td>Partially update a resource</td><td>PATCH /users/123</td></tr>
+        <tr><td>DELETE</td><td>Delete</td><td>Remove a resource</td><td>DELETE /users/123</td></tr>
+      </table>
+    </section>
+
+    <section>
+      <h2>3. HTTP Status Codes</h2>
+      <p>Status codes quickly tell the client the result of their request.</p>
+      <table>
+        <tr><th>Code</th><th>Name</th><th>Meaning</th></tr>
+        <tr><td>200</td><td>OK</td><td>Success!</td></tr>
+        <tr><td>201</td><td>Created</td><td>Successfully created (e.g., after POST).</td></tr>
+        <tr><td>204</td><td>No Content</td><td>Success, but no data to return (e.g., after DELETE).</td></tr>
+        <tr><td>400</td><td>Bad Request</td><td>Client error (e.g., invalid data sent).</td></tr>
+        <tr><td>401</td><td>Unauthorized</td><td>Client not authenticated.</td></tr>
+        <tr><td>403</td><td>Forbidden</td><td>Client authenticated, but lacks permissions.</td></tr>
+        <tr><td>404</td><td>Not Found</td><td>Resource doesn't exist.</td></tr>
+        <tr><td>409</td><td>Conflict</td><td>State conflict (e.g., duplicate email).</td></tr>
+        <tr><td>422</td><td>Unprocessable Entity</td><td>Validation error.</td></tr>
+        <tr><td>429</td><td>Too Many Requests</td><td>Rate limit exceeded.</td></tr>
+        <tr><td>500</td><td>Internal Server Error</td><td>Server crashed.</td></tr>
+        <tr><td>503</td><td>Service Unavailable</td><td>Server overloaded or down.</td></tr>
+      </table>
+    </section>
+
+    <section>
+      <h2>4. Request/Response Design</h2>
+      <p>An envelope pattern wraps all responses in a standard structure. This makes it easier for clients to parse results and errors consistently.</p>
+      
+      <span class="code-label">Java 21</span>
+      <pre>
+public sealed interface ApiResponse&lt;T&gt; permits ApiResponse.Success, ApiResponse.Error {
+    
+    // Success record holds the payload
+    record Success&lt;T&gt;(T data, String message) implements ApiResponse&lt;T&gt; {}
+    
+    // Error record holds details about the failure
+    record Error&lt;T&gt;(String code, String message, List&lt;String&gt; details) implements ApiResponse&lt;T&gt; {}
+
+    static &lt;T&gt; ApiResponse&lt;T&gt; success(T data) {
+        return new Success&lt;&gt;(data, "Operation successful");
+    }
+
+    static &lt;T&gt; ApiResponse&lt;T&gt; error(String code, String message) {
+        return new Error&lt;&gt;(code, message, List.of());
+    }
+}
+      </pre>
+      
+      <p>With Java 21's pattern matching, handling responses is very clean:</p>
+      <span class="code-label">Java 21</span>
+      <pre>
+void handleResponse(ApiResponse&lt;User&gt; response) {
+    switch (response) {
+        case ApiResponse.Success&lt;User&gt; s -> System.out.println("Got user: " + s.data().name());
+        case ApiResponse.Error&lt;User&gt; e -> System.err.println("Failed: " + e.message());
+    }
+}
+      </pre>
+    </section>
+
+    <section>
+      <h2>5. Pagination</h2>
+      <p>When returning lists, you can't return millions of items at once. You must paginate.</p>
+      <div class="comparison">
+        <div class="side good">
+          <h3>Offset-based Pagination</h3>
+          <p>Uses <code>page</code> and <code>size</code> (or <code>limit</code> and <code>offset</code>).</p>
+          <p>Example: <code>/users?page=2&size=10</code></p>
+          <p><strong>Pros:</strong> Easy to implement, can jump to a specific page.</p>
+          <p><strong>Cons:</strong> Slower on large tables, data can shift if items are added/deleted while paginating.</p>
+        </div>
+        <div class="side good">
+          <h3>Cursor-based Pagination</h3>
+          <p>Uses a <code>cursor</code> pointing to the last seen item.</p>
+          <p>Example: <code>/users?cursor=xyz123&limit=10</code></p>
+          <p><strong>Pros:</strong> Fast regardless of size, data doesn't shift.</p>
+          <p><strong>Cons:</strong> Harder to implement, cannot jump to page 10 directly.</p>
+        </div>
+      </div>
+
+      <span class="code-label">Java 21</span>
+      <pre>
+// Offset-based request and response
+public record PageRequest(int page, int size) {}
+public record PageResponse&lt;T&gt;(List&lt;T&gt; items, int totalPages, long totalElements) {}
+
+// Cursor-based request and response
+public record CursorRequest(String cursor, int limit) {}
+public record CursorPageResponse&lt;T&gt;(List&lt;T&gt; items, String nextCursor, boolean hasMore) {}
+      </pre>
+    </section>
+
+    <section>
+      <h2>6. Filtering, Sorting, Searching</h2>
+      <p>Use query parameters for operations that narrow down collections.</p>
+      <ul>
+        <li><strong>Filtering:</strong> <code>/users?role=admin&status=active</code></li>
+        <li><strong>Sorting:</strong> <code>/users?sort=createdAt:desc</code></li>
+        <li><strong>Searching:</strong> <code>/users?q=john</code></li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>7. API Versioning</h2>
+      <p>When you make breaking changes, you need a new version.</p>
+      <table>
+        <tr><th>Strategy</th><th>Example</th><th>Pros / Cons</th></tr>
+        <tr><td>URL Path</td><td><code>/v1/users</code></td><td>Pros: Visible, easy to cache.<br>Cons: Clutters URL, changes routing.</td></tr>
+        <tr><td>Header</td><td><code>Accept-Version: v1</code></td><td>Pros: Clean URLs.<br>Cons: Harder to test in browser.</td></tr>
+        <tr><td>Query Param</td><td><code>/users?version=1</code></td><td>Pros: Easy to test.<br>Cons: Often feels messy.</td></tr>
+      </table>
+    </section>
+
+    <section>
+      <h2>8. Idempotency</h2>
+      <p><div class="jargon">📖 <strong>Idempotency</strong>: An operation is idempotent if doing it once has the same effect as doing it multiple times.</div></p>
+      <p>Crucial for payment APIs. If a network drops during a POST, the client retries. An idempotency key ensures the payment isn't processed twice.</p>
+      <span class="code-label">Java 21</span>
+      <pre>
+public class IdempotencyFilter {
+    private final Set&lt;String&gt; processedKeys = ConcurrentHashMap.newKeySet();
+
+    public void processPayment(String idempotencyKey, PaymentRequest request) {
+        if (processedKeys.contains(idempotencyKey)) {
+            System.out.println("Payment already processed. Returning cached response.");
+            return;
+        }
+        // Process payment
+        processedKeys.add(idempotencyKey);
+        System.out.println("Payment processed successfully.");
+    }
+}
+      </pre>
+    </section>
+
+    <section>
+      <h2>9. Rate Limiting Headers</h2>
+      <p>Protect APIs from abuse using rate limits. Good APIs return these headers:</p>
+      <ul>
+        <li><code>X-RateLimit-Limit</code>: Total allowed requests in a window.</li>
+        <li><code>X-RateLimit-Remaining</code>: Remaining requests.</li>
+        <li><code>Retry-After</code>: Seconds to wait before retrying (when you get a 429).</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>10. HATEOAS</h2>
+      <p><strong>Hypermedia As The Engine Of Application State</strong> includes links in the response, allowing clients to dynamically discover what actions they can perform next.</p>
+      <pre>
+{
+  "id": 1,
+  "status": "pending",
+  "_links": {
+    "self": { "href": "/orders/1" },
+    "cancel": { "href": "/orders/1/cancel" }
+  }
+}
+      </pre>
+    </section>
+
+    <section>
+      <h2>11. API Documentation</h2>
+      <p>Tools like <strong>OpenAPI (Swagger)</strong> allow you to define your API structure. It auto-generates interactive documentation and even client SDKs.</p>
+    </section>
+
+    <section>
+      <h2>12. Common Mistakes</h2>
+      <div class="callout callout-danger">
+        <ul>
+          <li>Using verbs in URLs (e.g. <code>/createUser</code> instead of <code>POST /users</code>).</li>
+          <li>Inconsistent naming conventions (mixing camelCase and snake_case).</li>
+          <li>Not paginating large collections, causing server memory exhaustion.</li>
+          <li>Ignoring API versioning from the start.</li>
+        </ul>
+      </div>
+    </section>
+
+    <section>
+      <h2>13. API Request Lifecycle</h2>
+      <div class="diagram-container">
+        <div class="mermaid">
+          sequenceDiagram
+            participant C as Client
+            participant LB as Load Balancer
+            participant AG as API Gateway
+            participant S as Service
+            participant DB as Database
+            
+            C->>LB: POST /api/v1/orders (Idempotency-Key)
+            LB->>AG: Route Request
+            AG->>AG: Check Rate Limits & Auth
+            AG->>S: Forward Request
+            S->>DB: Process & Save Order
+            DB-->>S: Success
+            S-->>AG: 201 Created
+            AG-->>LB: 201 Created
+            LB-->>C: 201 Created
+        </div>
+        <p class="caption">Figure 1: Standard API Request Lifecycle</p>
+      </div>
+    </section>
+
+    <div class="page-nav">
+      <a href="../index.html" class="prev"><span class="label">← Previous</span><span class="title">Home</span></a>
+      <a href="../database-design/index.html" class="next"><span class="label">Next →</span><span class="title">Database Design</span></a>
+    </div>
+  </main>
+</div>
+<button class="scroll-top">↑</button>
+<script src="../js/main.js"></script>
+</body>
+</html>

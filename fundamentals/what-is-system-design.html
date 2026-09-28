@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>What is System Design? — System Design Mastery</title>
+  <link rel="stylesheet" href="../css/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+</head>
+<body>
+<button class="menu-toggle" aria-label="Toggle menu">☰</button>
+<div class="page-wrapper">
+  <aside class="sidebar" id="sidebar"></aside>
+  <main class="main-content">
+    <div class="breadcrumb">
+      <a href="../index.html">Home</a>
+      <span class="sep">›</span>
+      Fundamentals
+      <span class="sep">›</span>
+      <strong>What is System Design?</strong>
+    </div>
+
+    <h1>What is System Design?</h1>
+    
+    <p>Welcome to your journey into System Design! If you're new to software engineering, you might have heard this term thrown around a lot. But what does it actually mean? Let's break it down in simple terms.</p>
+
+    <h2>What is a 'System'?</h2>
+    <div class="jargon">📖 <strong>System</strong>: A collection of separate parts that work together to accomplish a shared goal.</div>
+
+    <p>Think about a busy restaurant. A restaurant isn't just one thing—it's a system made of many moving parts:</p>
+    <ul>
+      <li><strong>The Menu:</strong> Tells customers what they can order.</li>
+      <li><strong>The Waiter:</strong> Takes the order from the customer to the kitchen.</li>
+      <li><strong>The Kitchen:</strong> Where the chefs prepare the food.</li>
+      <li><strong>The Pantry:</strong> Where ingredients are stored until needed.</li>
+    </ul>
+    <p>If any of these parts break down, the entire restaurant fails. In software, a system is very similar. It's not just "code running on a computer." It's multiple pieces of software (servers, databases, networks) cooperating to serve users.</p>
+
+    <h2>What is 'Design'?</h2>
+    <p>Before building a skyscraper, engineers don't just show up with concrete and start pouring. They create detailed blueprints. They plan the foundation, the plumbing, and the electrical grids. This planning phase is <strong>Design</strong>.</p>
+    <p>In software, jumping straight into coding without a plan usually leads to messy, unscalable applications. Design is the process of deciding <em>how</em> things should be built before writing a single line of code.</p>
+
+    <div class="callout callout-info">
+      <strong>Analogy:</strong> Design is like planning the layout of our restaurant. How many tables can fit? Where should the kitchen be? Do we need a separate pickup window for takeout?
+    </div>
+
+    <h2>What is 'System Design'?</h2>
+    <p>Putting it all together, <strong>System Design</strong> is the process of defining the architecture, components, modules, interfaces, and data for a system to satisfy specified requirements.</p>
+    <p>It's planning how all the different parts of a software application—the user interface, the servers, the databases, the background jobs—will communicate and work together to deliver a reliable, fast, and scalable product to the end user.</p>
+
+    <h2>Why do companies care?</h2>
+    <p>Why is system design so important, especially at large tech companies? It comes down to three main factors:</p>
+    <ul>
+      <li><strong>Scaling:</strong> If your restaurant suddenly gets 10,000 customers in one day, your single chef will be overwhelmed. System design helps you figure out how to add more "chefs" (servers) to handle the load seamlessly.</li>
+      <li><strong>Reliability:</strong> What happens if a server crashes? A good design ensures the system stays online even if individual components fail.</li>
+      <li><strong>Cost:</strong> Running servers costs money. Efficient design minimizes wasted resources, saving millions of dollars at scale.</li>
+    </ul>
+
+    <h2>High-Level Design (HLD) vs Low-Level Design (LLD)</h2>
+    <p>System design is often split into two categories:</p>
+
+    <div class="comparison">
+      <div class="side good">
+        <h3>High-Level Design (HLD)</h3>
+        <p>Like <strong>City Planning</strong>. You decide where the residential zones, commercial zones, and highways go. You don't care about the layout of individual houses.</p>
+        <p>In software: Deciding what databases to use, how load balancers route traffic, and the overall architecture (e.g., Microservices vs Monolith).</p>
+      </div>
+      <div class="side bad">
+        <h3>Low-Level Design (LLD)</h3>
+        <p>Like a <strong>House Blueprint</strong>. You plan exactly where every wall, door, and electrical outlet will be placed in a specific house.</p>
+        <p>In software: Deciding which classes, interfaces, and design patterns to use in your Java code. Creating database schemas and API definitions.</p>
+      </div>
+    </div>
+
+    <h2>What does a system designer actually do?</h2>
+    <p>A software engineer designing a system will usually perform the following steps:</p>
+    <div class="step">
+      <div class="step-number">1</div>
+      <div class="step-content"><strong>Understand Requirements:</strong> Clarify exactly what the system needs to do. (e.g., "Users should be able to upload photos and view a feed.")</div>
+    </div>
+    <div class="step">
+      <div class="step-number">2</div>
+      <div class="step-content"><strong>Estimate Capacity:</strong> Calculate how much traffic and data the system will handle. (e.g., "We expect 1 million uploads a day.")</div>
+    </div>
+    <div class="step">
+      <div class="step-number">3</div>
+      <div class="step-content"><strong>Define APIs:</strong> Plan how different components will talk to each other.</div>
+    </div>
+    <div class="step">
+      <div class="step-number">4</div>
+      <div class="step-content"><strong>Draw the Architecture:</strong> Create diagrams showing servers, databases, and caches.</div>
+    </div>
+
+    <h2>A Simple Example: Designing a Web Application</h2>
+    <p>Let's look at a very simple high-level view of a web application.</p>
+
+    <div class="diagram-container">
+      <div class="mermaid">
+        graph LR
+          User((User)) --> |Internet| LB[Load Balancer]
+          LB --> S1[Web Server 1]
+          LB --> S2[Web Server 2]
+          S1 --> DB[(Database)]
+          S2 --> DB
+      </div>
+      <p class="caption">Figure 1: High-level architecture of a simple web application</p>
+    </div>
+
+    <p>In this diagram, the User connects via the Internet to a Load Balancer, which distributes the traffic evenly between two Web Servers. These servers then read and write data to a central Database.</p>
+
+    <h2>Java 21 Code: Modeling a Request and Response</h2>
+    <p>Even at a high level, components communicate via requests and responses. With Java 21, we can model this elegantly using <code>record</code> classes, which are perfect for immutable data carriers.</p>
+
+    <span class="code-label">Java</span>
+    <pre>
+/**
+ * Using Java 21 Records to model a simple API Request and Response.
+ * Records are immutable data carriers, perfect for transferring data
+ * between different parts of a system.
+ */
+public class SystemDesignBasics {
+
+    // A request sent by a client (e.g., a user's web browser)
+    public record ApiRequest(String endpoint, String payload) {}
+
+    // A response returned by the server
+    public record ApiResponse(int statusCode, String body) {}
+
+    // A simple mock server handler
+    public static class SimpleServer {
+        public ApiResponse handleRequest(ApiRequest request) {
+            System.out.println("Processing request to: " + request.endpoint());
+            
+            // Using Java 21 Enhanced Switch
+            return switch (request.endpoint()) {
+                case "/home" -> new ApiResponse(200, "Welcome Home!");
+                case "/about" -> new ApiResponse(200, "About Us");
+                default -> new ApiResponse(404, "Page Not Found");
+            };
+        }
+    }
+
+    public static void main(String[] args) {
+        SimpleServer server = new SimpleServer();
+        
+        ApiRequest req1 = new ApiRequest("/home", "");
+        ApiResponse res1 = server.handleRequest(req1);
+        System.out.println("Response: " + res1); // Prints 200, Welcome Home!
+    }
+}
+    </pre>
+
+    <div class="callout callout-purple">
+      <strong>Interview Tip:</strong> System Design is the #1 interview topic for senior roles because it tests your experience. You can memorize algorithms, but designing a system requires you to weigh trade-offs (e.g., speed vs accuracy, consistency vs availability). Always be prepared to explain <em>why</em> you chose a specific design.
+    </div>
+
+    <div class="page-nav">
+      <a href="../index.html" class="prev"><span class="label">← Previous</span><span class="title">Home</span></a>
+      <a href="client-server.html" class="next"><span class="label">Next →</span><span class="title">Client & Server</span></a>
+    </div>
+  </main>
+</div>
+<button class="scroll-top" aria-label="Scroll to top">↑</button>
+<script src="../js/main.js"></script>
+</body>
+</html>

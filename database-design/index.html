@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Database Design — Modeling Data Properly — System Design Mastery</title>
+  <link rel="stylesheet" href="../css/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+</head>
+<body>
+<button class="menu-toggle">☰</button>
+<div class="page-wrapper">
+  <aside class="sidebar" id="sidebar"></aside>
+  <main class="main-content">
+    <div class="breadcrumb">
+      <a href="../index.html">Home</a>
+      <span class="sep">›</span>
+      <strong>Database Design</strong>
+    </div>
+
+    <h1>Database Design — Modeling Data Properly</h1>
+
+    <section>
+      <h2>1. ER Diagrams</h2>
+      <p>An <div class="jargon">📖 <strong>Entity-Relationship (ER) Diagram</strong>: A flowchart that illustrates how "entities" such as people, objects, or concepts relate to each other within a system.</div> is essential for modeling databases.</p>
+      <div class="diagram-container">
+        <div class="mermaid">
+          erDiagram
+            USER ||--o{ ORDER : places
+            ORDER ||--|{ ORDER_ITEM : contains
+            PRODUCT ||--o{ ORDER_ITEM : "included in"
+            
+            USER {
+              int id
+              string email
+              string name
+            }
+            ORDER {
+              int id
+              int user_id
+              float total
+            }
+            ORDER_ITEM {
+              int id
+              int order_id
+              int product_id
+              int quantity
+            }
+            PRODUCT {
+              int id
+              string name
+              float price
+            }
+        </div>
+        <p class="caption">Figure 1: E-commerce ER Diagram</p>
+      </div>
+    </section>
+
+    <section>
+      <h2>2. Normalization</h2>
+      <p>Normalization organizes a database into tables to reduce redundancy and improve data integrity.</p>
+      <ul>
+        <li><strong>1NF (First Normal Form):</strong> Each column must contain atomic (indivisible) values. No lists in a column.</li>
+        <li><strong>2NF:</strong> Must be 1NF, and all non-key attributes must depend on the entire primary key.</li>
+        <li><strong>3NF:</strong> Must be 2NF, and no transitive dependencies (non-key attributes should not depend on other non-key attributes).</li>
+      </ul>
+      <p>Why normalize? It reduces duplicate data and anomalies when updating, deleting, or inserting.</p>
+    </section>
+
+    <section>
+      <h2>3. Denormalization</h2>
+      <p>Sometimes, normalized data requires too many expensive JOINs. <strong>Denormalization</strong> intentionally adds redundancy back into the database to speed up read performance.</p>
+      <p>Example: Storing the `total_order_amount` on the `USER` table instead of calculating it from `ORDER` and `ORDER_ITEM` every time.</p>
+    </section>
+
+    <section>
+      <h2>4. Indexing Deep Dive</h2>
+      <p>An <div class="jargon">📖 <strong>Index</strong>: A data structure (usually a B-Tree) that improves the speed of data retrieval operations.</div> is like the index at the back of a book. Instead of reading every page (a full table scan), you look up the word and jump straight to the page.</p>
+      
+      <span class="code-label">Java 21</span>
+      <pre>
+import java.util.*;
+
+public class IndexSimulation {
+    record User(int id, String email) {}
+    
+    public static void main(String[] args) {
+        List&lt;User&gt; table = new ArrayList&lt;&gt;();
+        Map&lt;String, User&gt; index = new HashMap&lt;&gt;(); // Simulating an index
+        
+        for (int i = 0; i < 1_000_000; i++) {
+            User u = new User(i, "user" + i + "@test.com");
+            table.add(u);
+            index.put(u.email(), u);
+        }
+        
+        String target = "user999999@test.com";
+        
+        // Full Table Scan
+        long startScan = System.nanoTime();
+        User foundScan = table.stream().filter(u -> u.email().equals(target)).findFirst().orElse(null);
+        System.out.println("Scan took: " + (System.nanoTime() - startScan) + " ns");
+        
+        // Index Lookup
+        long startIndex = System.nanoTime();
+        User foundIndex = index.get(target);
+        System.out.println("Index took: " + (System.nanoTime() - startIndex) + " ns");
+    }
+}
+      </pre>
+    </section>
+
+    <section>
+      <h2>5. SQL vs NoSQL Deep Dive</h2>
+      <table>
+        <tr><th>Feature</th><th>SQL (Relational)</th><th>NoSQL (Non-Relational)</th></tr>
+        <tr><td>Structure</td><td>Table-based, fixed schema</td><td>Document, Key-Value, Graph, Column</td></tr>
+        <tr><td>Scaling</td><td>Vertical (Scale Up)</td><td>Horizontal (Scale Out)</td></tr>
+        <tr><td>Properties</td><td>ACID compliant</td><td>Often BASE compliant (Eventual consistency)</td></tr>
+      </table>
+      
+      <h3>Types of NoSQL</h3>
+      <ul>
+        <li><strong>Key-Value (Redis):</strong> Extremely fast, great for caching.</li>
+        <li><strong>Document (MongoDB):</strong> Stores JSON-like documents, flexible schema.</li>
+        <li><strong>Column-Family (Cassandra):</strong> Great for heavy write loads and time-series data.</li>
+        <li><strong>Graph (Neo4j):</strong> Excellent for highly connected data (social networks, recommendations).</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>6. Schema Design Patterns</h2>
+      <ul>
+        <li><strong>Many-to-Many:</strong> Uses a junction/mapping table (e.g., `student_course`).</li>
+        <li><strong>Polymorphic associations:</strong> A table that can relate to multiple other tables (e.g., a `comments` table linking to `posts` or `videos`).</li>
+        <li><strong>Soft Delete:</strong> Adding a boolean `is_deleted` column instead of physically removing rows to keep history.</li>
+        <li><strong>Audit Columns:</strong> Standard columns like `created_at`, `updated_at`, `created_by` for tracking changes.</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>7. Connection Pooling</h2>
+      <p>Opening a database connection is expensive (network handshake, authentication). A <div class="jargon">📖 <strong>Connection Pool</strong>: A cache of database connections maintained so that connections can be reused.</div> keeps connections open.</p>
+      <p>Analogy: It's like a taxi stand. Instead of calling a company and waiting for a new taxi to arrive for every trip, taxis are already waiting at the stand ready to go.</p>
+      
+      <span class="code-label">Java 21</span>
+      <pre>
+// Simplified Simulation
+import java.util.concurrent.*;
+
+public class ConnectionPoolSimulation {
+    private final BlockingQueue&lt;String&gt; pool;
+
+    public ConnectionPoolSimulation(int poolSize) {
+        pool = new ArrayBlockingQueue&lt;&gt;(poolSize);
+        for (int i = 0; i < poolSize; i++) {
+            pool.offer("Connection-" + i);
+        }
+    }
+
+    public String getConnection() throws InterruptedException {
+        return pool.take(); // Blocks if empty
+    }
+
+    public void releaseConnection(String connection) {
+        pool.offer(connection);
+    }
+}
+      </pre>
+    </section>
+
+    <section>
+      <h2>8. Transactions & Isolation Levels</h2>
+      <p>A transaction is a unit of work that is fully completed or fully rolled back (ACID properties).</p>
+      <table>
+        <tr><th>Isolation Level</th><th>Dirty Read</th><th>Non-Repeatable Read</th><th>Phantom Read</th></tr>
+        <tr><td>READ_UNCOMMITTED</td><td>Yes</td><td>Yes</td><td>Yes</td></tr>
+        <tr><td>READ_COMMITTED</td><td>No</td><td>Yes</td><td>Yes</td></tr>
+        <tr><td>REPEATABLE_READ</td><td>No</td><td>No</td><td>Yes</td></tr>
+        <tr><td>SERIALIZABLE</td><td>No</td><td>No</td><td>No</td></tr>
+      </table>
+    </section>
+
+    <section>
+      <h2>9. Database Migrations</h2>
+      <p>Use tools like Flyway or Liquibase to manage schema changes via version-controlled SQL scripts. Never manually alter production databases!</p>
+    </section>
+
+    <section>
+      <h2>10. Repository Pattern Example</h2>
+      <span class="code-label">Java 21</span>
+      <pre>
+public record User(int id, String name) {}
+
+public interface UserRepository {
+    Optional&lt;User&gt; findById(int id);
+    void save(User user);
+}
+
+// In-Memory implementation for testing
+public class InMemoryUserRepository implements UserRepository {
+    private final Map&lt;Integer, User&gt; store = new ConcurrentHashMap&lt;&gt;();
+
+    @Override
+    public Optional&lt;User&gt; findById(int id) {
+        return Optional.ofNullable(store.get(id));
+    }
+
+    @Override
+    public void save(User user) {
+        store.put(user.id(), user);
+    }
+}
+      </pre>
+    </section>
+
+    <div class="page-nav">
+      <a href="../api-design/index.html" class="prev"><span class="label">← Previous</span><span class="title">API Design</span></a>
+      <a href="../distributed-systems/index.html" class="next"><span class="label">Next →</span><span class="title">Distributed Systems</span></a>
+    </div>
+  </main>
+</div>
+<button class="scroll-top">↑</button>
+<script src="../js/main.js"></script>
+</body>
+</html>

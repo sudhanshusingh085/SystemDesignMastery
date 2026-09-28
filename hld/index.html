@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>High-Level Design Overview — System Design Mastery</title>
+  <link rel="stylesheet" href="../css/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+</head>
+<body>
+<button class="menu-toggle" aria-label="Toggle menu">☰</button>
+<div class="page-wrapper">
+  <aside class="sidebar" id="sidebar"></aside>
+  <main class="main-content">
+    <div class="breadcrumb">
+      <a href="../index.html">Home</a>
+      <span class="sep">›</span>
+      High-Level Design
+      <span class="sep">›</span>
+      <strong>Overview</strong>
+    </div>
+
+    <h1>High-Level Design (HLD) Overview</h1>
+    
+    <div class="callout callout-purple">
+      <strong>Welcome to High-Level Design!</strong> High-level design (HLD) is the macro view of your system. It's about how different components like servers, databases, caches, and message queues connect to solve large-scale problems.
+    </div>
+
+    <section>
+      <h2>What is High-Level Design?</h2>
+      <p>Imagine you are building a city. Before you decide where to put the power outlets in a specific house (which is Low-Level Design), you need to figure out where the residential zones, commercial zones, power plants, and highways will be. This macro-level planning is <strong>High-Level Design (HLD)</strong>.</p>
+      <p>In software, HLD involves selecting the right broad architecture and technologies to ensure the system is scalable, reliable, and performant. You focus on the <em>boxes and arrows</em> that represent the flow of data.</p>
+      
+      <div class="jargon">📖 <strong>System Architecture</strong>: The conceptual model that defines the structure, behavior, and more views of a system. It's the blueprint.</div>
+    </section>
+
+    <section>
+      <h2>When is HLD used in interviews vs real-world?</h2>
+      
+      <div class="comparison">
+        <div class="side good">
+          <h3>In Interviews</h3>
+          <ul>
+            <li>Focuses on identifying bottlenecks and trade-offs.</li>
+            <li>Usually done on a whiteboard (or virtual whiteboard).</li>
+            <li>Expected to cover breadth first, then go deep into 1-2 components.</li>
+            <li>Time-bound (typically 45-60 minutes).</li>
+          </ul>
+        </div>
+        <div class="side good">
+          <h3>In the Real World</h3>
+          <ul>
+            <li>Involves writing detailed design documents (RFCs, Tech Specs).</li>
+            <li>Requires extensive debate and prototyping.</li>
+            <li>Cost and specific team expertise play huge roles in tech choices.</li>
+            <li>Evolves over time as business requirements change.</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>HLD Roadmap</h2>
+      <p>Here is a visual roadmap of how the various components of High-Level Design connect to form a robust system architecture.</p>
+      
+      <div class="diagram-container">
+        <div class="mermaid">
+          flowchart TD
+            Client[Clients / Mobile / Web] --> DNS[DNS]
+            DNS --> CDN[CDN]
+            CDN --> LB[Load Balancer]
+            LB --> WebServers[Web Servers]
+            LB --> AppServers[App Servers]
+            AppServers --> Cache[Cache Layer]
+            AppServers --> MQ[Message Queue]
+            AppServers --> DB[Databases]
+            DB --> Search[Search Engine]
+        </div>
+        <p class="caption">Figure 1: A typical macro-level architecture flow</p>
+      </div>
+    </section>
+
+    <section>
+      <h2>Explore HLD Topics</h2>
+      <p>Dive deep into each crucial topic of High-Level Design. We'll cover everything from making your systems handle more traffic to ensuring your data is safe and accessible.</p>
+      
+      <div class="card">
+        <h3><a href="scaling.html">Scaling</a></h3>
+        <p>Learn how to handle increasing traffic by growing your system vertically (bigger machines) and horizontally (more machines).</p>
+      </div>
+
+      <div class="card">
+        <h3><a href="load-balancing.html">Load Balancing</a></h3>
+        <p>Discover how to efficiently distribute incoming network traffic across a group of backend servers.</p>
+      </div>
+
+      <div class="card">
+        <h3><a href="caching.html">Caching</a></h3>
+        <p>Understand how to store frequently accessed data in temporary storage to drastically reduce database load and latency.</p>
+      </div>
+
+      <div class="card">
+        <h3><a href="databases.html">Databases & Sharding</a></h3>
+        <p>Explore SQL vs NoSQL, replication strategies, and how to split your database across multiple servers (sharding) for massive scale.</p>
+      </div>
+
+      <div class="card">
+        <h3><a href="cap-theorem.html">CAP Theorem</a></h3>
+        <p>Master the fundamental trade-offs in distributed systems between Consistency, Availability, and Partition Tolerance.</p>
+      </div>
+    </section>
+
+    <div class="page-nav">
+      <a href="../interview/oop-for-interviews.html" class="prev"><span class="label">← Previous</span><span class="title">OOP for Interviews</span></a>
+      <a href="scaling.html" class="next"><span class="label">Next →</span><span class="title">Scaling</span></a>
+    </div>
+  </main>
+</div>
+<button class="scroll-top" aria-label="Scroll to top">↑</button>
+<script src="../js/main.js"></script>
+<script>
+  mermaid.initialize({ startOnLoad: true, theme: 'default' });
+</script>
+</body>
+</html>

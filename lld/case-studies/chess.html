@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Chess Game — System Design Mastery</title>
+  <link rel="stylesheet" href="../../css/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+</head>
+<body>
+<button class="menu-toggle" aria-label="Toggle menu">☰</button>
+<div class="page-wrapper">
+  <aside class="sidebar" id="sidebar"></aside>
+  <main class="main-content">
+    <div class="breadcrumb">
+      <a href="../../index.html">Home</a>
+      <span class="sep">›</span>
+      LLD
+      <span class="sep">›</span>
+      <a href="../case-studies.html">Case Studies</a>
+      <span class="sep">›</span>
+      <strong>Chess Game</strong>
+    </div>
+
+    <h1>Design a Chess Game (LLD)</h1>
+
+    <div class="callout callout-info">
+      <strong>Scenario:</strong> Design a classic 8x8 Chess game for 2 players. Include pieces with unique move sets, turn-based logic, check/checkmate detection, and move validation.
+    </div>
+
+    <h2>1. What is a Chess Game System?</h2>
+    <p>Think of it like an organized battlefield governed by strict rules. The <div class="jargon">📖 <strong>Board</strong>: The 8x8 grid where pieces move.</div> acts as the terrain, and the players are the commanders.</p>
+    <p>A good design will manage the state of the game without tightly coupling the game loop to the individual piece behaviors.</p>
+
+    <h2>2. What problem does it solve?</h2>
+    <ul>
+      <li><strong>State Management:</strong> Keeping track of where every piece is.</li>
+      <li><strong>Rule Enforcement:</strong> Ensuring pieces only make legal moves.</li>
+      <li><strong>Game Progression:</strong> Alternating turns and checking for win/draw conditions like checkmate or stalemate.</li>
+    </ul>
+
+    <h2>3. How does it work?</h2>
+    <div class="diagram-container">
+      <div class="mermaid">
+        classDiagram
+          class ChessGame {
+            +Board board
+            +Player[] players
+            +GameStatus status
+            +playMove()
+          }
+          class Board {
+            +Piece[][] grid
+            +movePiece()
+            +getPieceAt()
+          }
+          class Piece {
+            <<abstract>>
+            +Color color
+            +Position position
+            +getValidMoves(Board)
+          }
+          ChessGame --> Board
+          ChessGame "1" *-- "2" Player
+          Board "1" *-- "32" Piece
+          Piece <|-- King
+          Piece <|-- Queen
+          Piece <|-- Rook
+          Piece <|-- Bishop
+          Piece <|-- Knight
+          Piece <|-- Pawn
+      </div>
+      <p class="caption">Figure 1: Class hierarchy and relationships for Chess</p>
+    </div>
+
+    <h2>4. Java 21 Implementation</h2>
+    <span class="code-label">Java</span>
+    <pre>
+import java.util.List;
+import java.util.ArrayList;
+
+// SOLID: SRP — Enums cleanly define specific constant categories
+enum Color { WHITE, BLACK }
+
+// Java 21 Record for immutable coordinates
+record Position(int row, int col) {
+    public Position {
+        if (row < 0 || row > 7 || col < 0 || col > 7) {
+            throw new IllegalArgumentException("Position out of bounds");
+        }
+    }
+}
+
+// SOLID: OCP — New pieces can extend this without modifying the Board or Game classes.
+// SOLID: Liskov — Any Piece subclass can be used polymorphically anywhere a Piece is expected.
+abstract class Piece {
+    protected Color color;
+    protected Position position;
+    
+    public Piece(Color color, Position position) {
+        this.color = color;
+        this.position = position;
+    }
+    
+    public Color getColor() { return color; }
+    public Position getPosition() { return position; }
+    public void setPosition(Position position) { this.position = position; }
+    
+    // Abstract method to let each piece define its own movement logic (Polymorphism)
+    public abstract List<Position> getValidMoves(Board board);
+}
+
+final class King extends Piece {
+    public King(Color color, Position position) { super(color, position); }
+    @Override
+    public List<Position> getValidMoves(Board board) {
+        List<Position> moves = new ArrayList<>();
+        // Logic for 1-square moves in all directions and Castling...
+        return moves;
+    }
+}
+
+final class Queen extends Piece {
+    public Queen(Color color, Position position) { super(color, position); }
+    @Override
+    public List<Position> getValidMoves(Board board) {
+        // Combines Rook and Bishop logic
+        return new ArrayList<>();
+    }
+}
+
+final class Rook extends Piece {
+    public Rook(Color color, Position position) { super(color, position); }
+    @Override
+    public List<Position> getValidMoves(Board board) {
+        // Horizontal and vertical logic
+        return new ArrayList<>();
+    }
+}
+
+final class Bishop extends Piece {
+    public Bishop(Color color, Position position) { super(color, position); }
+    @Override
+    public List<Position> getValidMoves(Board board) {
+        // Diagonal logic
+        return new ArrayList<>();
+    }
+}
+
+final class Knight extends Piece {
+    public Knight(Color color, Position position) { super(color, position); }
+    @Override
+    public List<Position> getValidMoves(Board board) {
+        // L-shape logic
+        return new ArrayList<>();
+    }
+}
+
+final class Pawn extends Piece {
+    public Pawn(Color color, Position position) { super(color, position); }
+    @Override
+    public List<Position> getValidMoves(Board board) {
+        // Forward move, diagonal capture, en passant...
+        return new ArrayList<>();
+    }
+}
+
+// Manages grid state only.
+class Board {
+    private Piece[][] grid = new Piece[8][8];
+    
+    public Board() {
+        // Initialize board with pieces...
+    }
+    
+    public Piece getPieceAt(Position pos) {
+        return grid[pos.row()][pos.col()];
+    }
+    
+    public void movePiece(Piece piece, Position to) {
+        Position from = piece.getPosition();
+        grid[from.row()][from.col()] = null;
+        grid[to.row()][to.col()] = piece;
+        piece.setPosition(to);
+    }
+    
+    public boolean isPathClear(Position from, Position to) {
+        // Logic to ensure no pieces block the path (useful for sliding pieces)
+        return true;
+    }
+}
+
+class Player {
+    private Color color;
+    private String name;
+    private List<Piece> capturedPieces = new ArrayList<>();
+    
+    public Player(Color color, String name) {
+        this.color = color;
+        this.name = name;
+    }
+}
+
+// Java 21 Sealed Interfaces: restricts which classes can implement it
+// Ideal for representing distinct, closed sets of states like game phases.
+sealed interface GameStatus permits InProgress, Check, Checkmate, Stalemate, Resignation {}
+record InProgress() implements GameStatus {}
+record Check(Player checkedPlayer) implements GameStatus {}
+record Checkmate(Player winner) implements GameStatus {}
+record Stalemate() implements GameStatus {}
+record Resignation(Player winner) implements GameStatus {}
+
+// SOLID: SRP — move validation is separate from the central game coordinator
+interface MoveValidator {
+    boolean isValid(Board board, Piece piece, Position to);
+}
+
+class StandardMoveValidator implements MoveValidator {
+    public boolean isValid(Board board, Piece piece, Position to) {
+        // 1. Check if 'to' is in piece's getValidMoves()
+        // 2. Simulate move and ensure it doesn't leave the king in check
+        return true;
+    }
+}
+
+// Design Pattern: Facade — Provides a simple interface for clients to play the game,
+// hiding the complex interactions between Board, Pieces, and Validators.
+class ChessGame {
+    private Board board;
+    private Player[] players;
+    private int currentTurn; // 0 for White, 1 for Black
+    private GameStatus status;
+    private MoveValidator validator;
+    
+    public ChessGame(Player p1, Player p2) {
+        this.board = new Board();
+        this.players = new Player[]{p1, p2};
+        this.currentTurn = 0;
+        this.status = new InProgress();
+        this.validator = new StandardMoveValidator();
+    }
+    
+    public boolean playMove(Position from, Position to) {
+        if (!(status instanceof InProgress || status instanceof Check)) {
+            System.out.println("Game is over.");
+            return false;
+        }
+        
+        Piece p = board.getPieceAt(from);
+        if (p == null || p.getColor() != players[currentTurn].color) {
+            return false; // Not your turn or empty square
+        }
+        
+        if (validator.isValid(board, p, to)) {
+            board.movePiece(p, to);
+            updateGameStatus();
+            currentTurn = 1 - currentTurn; // Swap turns
+            return true;
+        }
+        return false;
+    }
+    
+    private void updateGameStatus() {
+        // Logic to detect check, checkmate, or stalemate and update 'status'
+    }
+}
+
+public class Main {
+    public static void main(String[] args) {
+        Player white = new Player(Color.WHITE, "Alice");
+        Player black = new Player(Color.BLACK, "Bob");
+        ChessGame game = new ChessGame(white, black);
+        
+        // Simulating some play
+        game.playMove(new Position(1, 4), new Position(3, 4)); // White e4
+    }
+}
+    </pre>
+
+    <h2>5. Why is it recommended / When to use it?</h2>
+    <p>This object-oriented structure is highly extensible. By making <code>Piece</code> abstract and using Polymorphism, adding new fairy chess pieces or modifying movement rules becomes trivial. The use of a <code>MoveValidator</code> ensures the <code>ChessGame</code> class doesn't become a "God Class" filled with complex logic.</p>
+
+    <div class="callout callout-purple">
+      <strong>Interview Tip:</strong> Mention how you handle check validation. The typical approach is to simulate the proposed move on a cloned or scratchpad board and see if the king is under attack, before committing it to the actual game board.
+    </div>
+
+    <div class="page-nav">
+      <a href="library.html" class="prev"><span class="label">← Previous</span><span class="title">Library System</span></a>
+      <a href="tic-tac-toe.html" class="next"><span class="label">Next →</span><span class="title">Tic-Tac-Toe</span></a>
+    </div>
+  </main>
+</div>
+<button class="scroll-top" aria-label="Scroll to top">↑</button>
+<script src="../../js/main.js"></script>
+</body>
+</html>

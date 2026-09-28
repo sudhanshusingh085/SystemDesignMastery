@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Load Balancing — System Design Mastery</title>
+  <link rel="stylesheet" href="../css/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+</head>
+<body>
+<button class="menu-toggle" aria-label="Toggle menu">☰</button>
+<div class="page-wrapper">
+  <aside class="sidebar" id="sidebar"></aside>
+  <main class="main-content">
+    <div class="breadcrumb">
+      <a href="../index.html">Home</a>
+      <span class="sep">›</span>
+      High-Level Design
+      <span class="sep">›</span>
+      <strong>Load Balancing</strong>
+    </div>
+
+    <h1>Load Balancing</h1>
+
+    <section>
+      <h2>What is Load Balancing?</h2>
+      <p>If you have horizontally scaled your application to use 10 servers, how does a user's browser know which server to talk to? The answer is a <strong>Load Balancer</strong>.</p>
+      <p>Think of a load balancer like a traffic cop standing at a busy intersection. Instead of letting all the cars crowd into one lane and cause a massive jam, the traffic cop directs cars evenly across all available lanes so traffic flows smoothly.</p>
+
+      <div class="jargon">📖 <strong>Load Balancer (LB)</strong>: A device or software application that distributes incoming network or application traffic across multiple servers.</div>
+    </section>
+
+    <section>
+      <h2>Why do we need it?</h2>
+      <ul>
+        <li><strong>Prevent Overload:</strong> Ensures no single server bears too much demand, which could cause it to crash.</li>
+        <li><strong>High Availability:</strong> If one server goes down, the load balancer stops sending traffic to it and redirects it to the remaining healthy servers.</li>
+        <li><strong>Performance:</strong> Distributes requests to the server closest to the user or the one with the lowest latency.</li>
+      </ul>
+    </section>
+    
+    <section>
+      <h2>Types of Load Balancers</h2>
+      <div class="comparison">
+        <div class="side good">
+          <h3>Hardware Load Balancers</h3>
+          <p>Physical devices designed specifically to handle massive amounts of traffic (e.g., F5 BIG-IP). Very expensive and hard to configure, but extremely fast.</p>
+        </div>
+        <div class="side good">
+          <h3>Software Load Balancers</h3>
+          <p>Software running on standard servers (e.g., Nginx, HAProxy) or provided as a cloud service (AWS ELB). Flexible, cheaper, and highly scalable.</p>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>Load Balancing Algorithms</h2>
+      <p>How does the load balancer decide which server gets the next request? It uses an algorithm.</p>
+      
+      <ol class="step">
+        <li class="step-content"><strong>Round Robin:</strong> Takes turns. Server A, then Server B, then Server C, then back to A. Good when all servers have identical specs.</li>
+        <li class="step-content"><strong>Weighted Round Robin:</strong> Takes turns, but servers with higher "weights" (e.g., a beefier machine) get more requests.</li>
+        <li class="step-content"><strong>Least Connections:</strong> Sends the request to the server with the fewest active connections. Great for long-lived connections (like WebSockets or heavy DB queries).</li>
+        <li class="step-content"><strong>IP Hash:</strong> Uses the client's IP address to mathematically determine the server. Ensures a specific user always hits the same server (good for session persistence).</li>
+        <li class="step-content"><strong>Random:</strong> Just picks a random server. Simple, but can lead to uneven distribution under small loads.</li>
+      </ol>
+    </section>
+
+    <section>
+      <h2>Layer 4 vs Layer 7 Load Balancing</h2>
+      <p>Load balancers can operate at different levels of the OSI model.</p>
+      <ul>
+        <li><strong>Layer 4 (Transport Layer):</strong> Routes traffic based on IP address and port (TCP/UDP). It's very fast because it doesn't look at the content of the message.</li>
+        <li><strong>Layer 7 (Application Layer):</strong> Routes traffic based on the actual content of the HTTP request (like the URL, headers, or cookies). Slower, but allows smart routing (e.g., sending `/api` requests to one set of servers and `/images` to another).</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>Health Checks</h2>
+      <p>A load balancer continuously monitors the "health" of its backend servers. It periodically sends a small request (like a ping or an HTTP GET to `/health`). If a server doesn't respond in time, the LB removes it from the pool until it recovers.</p>
+    </section>
+
+    <section>
+      <h2>Visualizing the Flow</h2>
+      <div class="diagram-container">
+        <div class="mermaid">
+          flowchart LR
+            U1[User 1] --> LB{Load Balancer\n(Nginx)}
+            U2[User 2] --> LB
+            U3[User 3] --> LB
+            
+            LB -- "Request 1" --> S1((Server 1\nHealthy))
+            LB -- "Request 2" --> S2((Server 2\nHealthy))
+            LB -. "Failing Health Check" .-> S3((Server 3\nDown))
+            
+            style S3 fill:#ffcccc,stroke:#ff0000
+        </div>
+        <p class="caption">Figure 1: Load balancer routing traffic and ignoring unhealthy servers.</p>
+      </div>
+    </section>
+
+    <section>
+      <h2>Java 21 Code: Load Balancing Strategies</h2>
+      <p>Let's use Java 21's modern features to represent different load balancing algorithms.</p>
+      
+      <span class="code-label">Java</span>
+      <pre>
+import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.ThreadLocalRandom;
+import java.util.Comparator;
+
+record ServerNode(String ip, int weight, AtomicInteger activeConnections) {}
+
+sealed interface LoadBalancingStrategy 
+    permits RoundRobin, WeightedRoundRobin, LeastConnections, IPHash, RandomStrategy {
+    
+    ServerNode selectServer(List&lt;ServerNode&gt; servers, String clientIp);
+}
+
+final class RoundRobin implements LoadBalancingStrategy {
+    private final AtomicInteger counter = new AtomicInteger(0);
+
+    @Override
+    public ServerNode selectServer(List&lt;ServerNode&gt; servers, String clientIp) {
+        int index = Math.abs(counter.getAndIncrement()) % servers.size();
+        return servers.get(index);
+    }
+}
+
+final class WeightedRoundRobin implements LoadBalancingStrategy {
+    private final AtomicInteger counter = new AtomicInteger(0);
+    // Simplified implementation: in reality, you'd expand the list or use a weighted selection algorithm
+    @Override
+    public ServerNode selectServer(List&lt;ServerNode&gt; servers, String clientIp) {
+        int totalWeight = servers.stream().mapToInt(ServerNode::weight).sum();
+        int index = Math.abs(counter.getAndIncrement()) % totalWeight;
+        
+        for (ServerNode server : servers) {
+            index -= server.weight();
+            if (index < 0) return server;
+        }
+        return servers.getFirst();
+    }
+}
+
+final class LeastConnections implements LoadBalancingStrategy {
+    @Override
+    public ServerNode selectServer(List&lt;ServerNode&gt; servers, String clientIp) {
+        return servers.stream()
+                .min(Comparator.comparingInt(s -> s.activeConnections().get()))
+                .orElseThrow();
+    }
+}
+
+final class IPHash implements LoadBalancingStrategy {
+    @Override
+    public ServerNode selectServer(List&lt;ServerNode&gt; servers, String clientIp) {
+        int index = Math.abs(clientIp.hashCode()) % servers.size();
+        return servers.get(index);
+    }
+}
+
+final class RandomStrategy implements LoadBalancingStrategy {
+    @Override
+    public ServerNode selectServer(List&lt;ServerNode&gt; servers, String clientIp) {
+        int index = ThreadLocalRandom.current().nextInt(servers.size());
+        return servers.get(index);
+    }
+}
+      </pre>
+    </section>
+
+    <div class="callout callout-success">
+      <strong>💡 Interview Tip:</strong>
+      Always draw a load balancer between your client and web servers, and another one between your web servers and app servers. Mention "Nginx" or "HAProxy" and state that you'd use Round Robin initially, but might switch to Least Connections if requests take highly variable amounts of time.
+    </div>
+
+    <div class="page-nav">
+      <a href="scaling.html" class="prev"><span class="label">← Previous</span><span class="title">Scaling</span></a>
+      <a href="caching.html" class="next"><span class="label">Next →</span><span class="title">Caching</span></a>
+    </div>
+  </main>
+</div>
+<button class="scroll-top" aria-label="Scroll to top">↑</button>
+<script src="../js/main.js"></script>
+<script>
+  mermaid.initialize({ startOnLoad: true, theme: 'default' });
+</script>
+</body>
+</html>

@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ATM Machine Design — System Design Mastery</title>
+  <link rel="stylesheet" href="../../css/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+</head>
+<body>
+<button class="menu-toggle" aria-label="Toggle menu">☰</button>
+<div class="page-wrapper">
+  <aside class="sidebar" id="sidebar"></aside>
+  <main class="main-content">
+    <div class="breadcrumb">
+      <a href="../../index.html">Home</a>
+      <span class="sep">›</span>
+      LLD
+      <span class="sep">›</span>
+      Case Studies
+      <span class="sep">›</span>
+      <strong>ATM Machine</strong>
+    </div>
+
+    <h1>Design an ATM Machine</h1>
+
+    <div class="callout callout-info">
+      <strong>Scenario:</strong> You are asked to design the Low-Level Design (LLD) for an Automated Teller Machine (ATM) that allows users to withdraw cash, deposit money, check their balance, and transfer funds.
+    </div>
+
+    <h2>1. What is an ATM Machine System?</h2>
+    <p>An ATM system involves a machine that interacts with a central bank system. Users insert cards, authenticate via PIN, select a transaction, and receive cash or receipts.</p>
+    <div class="jargon">📖 <strong>State Machine</strong>: A system that can be in exactly one of a finite number of states at any given time. The ATM is a classic example, as it moves from Idle -> Authenticating -> Selecting -> Processing -> Dispensing.</div>
+
+    <h2>2. What problem does it solve?</h2>
+    <p>It provides a standardized, secure way to process banking transactions physically, without human tellers. The challenge is ensuring security, correct state transitions, and precise cash dispensing (handling different denominations).</p>
+
+    <h2>3. How does it work?</h2>
+    <div class="diagram-container">
+      <div class="mermaid">
+        stateDiagram-v2
+          [*] --> IdleState
+          IdleState --> AuthenticatingState : Insert Card
+          AuthenticatingState --> SelectingTransactionState : Valid PIN
+          AuthenticatingState --> IdleState : Invalid PIN
+          SelectingTransactionState --> ProcessingState : Select Transaction
+          ProcessingState --> DispensingState : Approve
+          ProcessingState --> IdleState : Deny
+          DispensingState --> IdleState : Eject Card
+      </div>
+      <p class="caption">Figure 1: ATM State Machine Diagram</p>
+    </div>
+
+    <h2>4. Java 21 Code Implementation</h2>
+    <span class="code-label">Java</span>
+    <pre><code>
+import java.util.*;
+import java.time.LocalDateTime;
+
+// Enum for transaction types
+enum TransactionType { WITHDRAW, DEPOSIT, BALANCE_CHECK, TRANSFER }
+enum Denomination { HUNDRED(100), FIVE_HUNDRED(500), THOUSAND(1000), TWO_THOUSAND(2000); 
+    final int value;
+    Denomination(int value) { this.value = value; }
+}
+
+// Data Records
+record Card(String cardNumber, String pin, String bankCode) {}
+record Cash(Map&lt;Denomination, Integer&gt; notes) {}
+record Receipt(TransactionType type, double amount, LocalDateTime time, String cardNumber) {}
+
+// SOLID: DIP (Dependency Inversion Principle) — depend on abstractions, not concretions
+interface BankService {
+    boolean verifyPin(Card card, String pin);
+    double checkBalance(Card card);
+    boolean debit(Card card, double amount);
+    boolean credit(Card card, double amount);
+}
+
+class BankServiceImpl implements BankService {
+    // Dummy implementation for demo
+    public boolean verifyPin(Card card, String pin) { return card.pin().equals(pin); }
+    public double checkBalance(Card card) { return 10000.0; }
+    public boolean debit(Card card, double amount) { return true; }
+    public boolean credit(Card card, double amount) { return true; }
+}
+
+// SOLID: DIP — CashDispenser abstraction
+interface CashDispenser {
+    boolean dispense(int amount);
+}
+
+// Design Pattern: Chain of Responsibility (implicit here with greedy approach)
+class GreedyCashDispenser implements CashDispenser {
+    // SOLID: Single Responsibility — this class only handles dispensing cash logic
+    @Override
+    public boolean dispense(int amount) {
+        System.out.println("Dispensing " + amount + " using greedy algorithm...");
+        return true;
+    }
+}
+
+// Design Pattern: State — encapsulated states
+sealed interface AtmState permits IdleState, AuthenticatingState, SelectingTransactionState, ProcessingState, DispensingState {
+    void handle(AtmMachine atm);
+}
+
+// SOLID: Single Responsibility — each state handles only its own logic
+final class IdleState implements AtmState {
+    @Override
+    public void handle(AtmMachine atm) {
+        System.out.println("Welcome. Please insert your card.");
+        atm.setState(new AuthenticatingState());
+    }
+}
+
+final class AuthenticatingState implements AtmState {
+    @Override
+    public void handle(AtmMachine atm) {
+        System.out.println("Authenticating card...");
+        // In real system, take input. Hardcoding for demo.
+        if (atm.getBankService().verifyPin(atm.getCurrentCard(), atm.getCurrentCard().pin())) {
+            atm.setState(new SelectingTransactionState());
+        } else {
+            System.out.println("Invalid PIN.");
+            atm.setState(new IdleState());
+        }
+    }
+}
+
+final class SelectingTransactionState implements AtmState {
+    @Override
+    public void handle(AtmMachine atm) {
+        System.out.println("Select transaction: WITHDRAW, DEPOSIT, BALANCE_CHECK...");
+        atm.setTransactionType(TransactionType.WITHDRAW); // Mock selection
+        atm.setAmount(500); // Mock amount
+        atm.setState(new ProcessingState());
+    }
+}
+
+final class ProcessingState implements AtmState {
+    @Override
+    public void handle(AtmMachine atm) {
+        System.out.println("Processing transaction...");
+        if (atm.getTransactionType() == TransactionType.WITHDRAW) {
+            if (atm.getBankService().debit(atm.getCurrentCard(), atm.getAmount())) {
+                atm.setState(new DispensingState());
+            } else {
+                atm.setState(new IdleState());
+            }
+        }
+    }
+}
+
+final class DispensingState implements AtmState {
+    @Override
+    public void handle(AtmMachine atm) {
+        if (atm.getCashDispenser().dispense((int)atm.getAmount())) {
+            System.out.println("Please take your cash.");
+            Receipt r = new Receipt(atm.getTransactionType(), atm.getAmount(), LocalDateTime.now(), atm.getCurrentCard().cardNumber());
+            System.out.println("Receipt printed: " + r);
+        }
+        atm.setState(new IdleState());
+    }
+}
+
+// Design Pattern: Context for State Pattern
+class AtmMachine {
+    // OOP: Composition — AtmMachine cannot exist without states and services
+    private AtmState currentState;
+    private final BankService bankService;
+    private final CashDispenser cashDispenser;
+    
+    private Card currentCard;
+    private TransactionType transactionType;
+    private double amount;
+
+    public AtmMachine(BankService bankService, CashDispenser cashDispenser) {
+        this.bankService = bankService;
+        this.cashDispenser = cashDispenser;
+        this.currentState = new IdleState();
+    }
+
+    public void insertCard(Card card) {
+        this.currentCard = card;
+        runMachine();
+    }
+
+    private void runMachine() {
+        while (!(currentState instanceof IdleState) || currentCard != null) {
+            currentState.handle(this);
+            if (currentState instanceof IdleState) {
+                currentCard = null; // Reset
+                break;
+            }
+        }
+    }
+
+    public void setState(AtmState state) { this.currentState = state; }
+    public BankService getBankService() { return bankService; }
+    public CashDispenser getCashDispenser() { return cashDispenser; }
+    
+    public Card getCurrentCard() { return currentCard; }
+    public TransactionType getTransactionType() { return transactionType; }
+    public void setTransactionType(TransactionType type) { this.transactionType = type; }
+    public double getAmount() { return amount; }
+    public void setAmount(double amount) { this.amount = amount; }
+}
+
+public class Main {
+    public static void main(String[] args) {
+        BankService bankService = new BankServiceImpl();
+        CashDispenser dispenser = new GreedyCashDispenser();
+        AtmMachine atm = new AtmMachine(bankService, dispenser);
+        
+        Card myCard = new Card("1234-5678-9012-3456", "1234", "BANK_1");
+        atm.insertCard(myCard);
+    }
+}
+    </code></pre>
+
+    <h2>5. Why is this recommended?</h2>
+    <p>Using the <strong>State Pattern</strong> avoids giant <code>if-else</code> or <code>switch</code> blocks to check what the ATM is currently doing. Each state manages its own transitions, adhering to the <strong>Single Responsibility Principle</strong>.</p>
+    
+    <div class="callout callout-purple">
+      <strong>Interview Tip:</strong> Interviewers love to ask about cash dispensing (Denomination logic). Be prepared to discuss the Greedy Algorithm versus Dynamic Programming for making exact change if specific notes are depleted.
+    </div>
+
+    <div class="page-nav">
+      <a href="index.html" class="prev"><span class="label">← Previous</span><span class="title">Case Studies</span></a>
+      <a href="splitwise.html" class="next"><span class="label">Next →</span><span class="title">Splitwise</span></a>
+    </div>
+  </main>
+</div>
+<button class="scroll-top" aria-label="Scroll to top">↑</button>
+<script src="../../js/main.js"></script>
+</body>
+</html>

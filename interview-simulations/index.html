@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Full Interview Simulations — System Design Mastery</title>
+  <link rel="stylesheet" href="../css/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+</head>
+<body>
+<button class="menu-toggle" aria-label="Toggle menu">☰</button>
+<div class="page-wrapper">
+  <aside class="sidebar" id="sidebar"></aside>
+  <main class="main-content">
+    <div class="breadcrumb">
+      <a href="../index.html">Home</a>
+      <span class="sep">›</span>
+      <strong>Interview Simulations</strong>
+    </div>
+
+    <h1>Full Interview Simulations — Mock Interviews with Dialogue</h1>
+    <p>This page shows complete mock interviews — the actual dialogue between interviewer and candidate. This is the most practical page in the entire site, giving you a peek into what a real system design interview feels like.</p>
+
+    <div class="card">
+        <h2>Simulation 1: HLD — Design a Ride-Sharing App (like Uber)</h2>
+        <p>A classic High-Level Design (HLD) question. Notice how the candidate starts by clarifying requirements before jumping into solutions.</p>
+
+        <div class="dialogue">
+            <p><strong>🎙️ INTERVIEWER:</strong> Design a ride-sharing app like Uber.</p>
+            
+            <p><strong>🎓 CANDIDATE:</strong> Before I start, I'd like to ask a few clarifying questions to understand the scope.</p>
+            <ul>
+                <li>Who are our primary users? (Riders and Drivers?)</li>
+                <li>What is the core functionality? Just booking a ride, or do we need carpooling, scheduled rides, and food delivery?</li>
+                <li>How many Daily Active Users (DAU) are we expecting?</li>
+                <li>What regions are we operating in? Global or local?</li>
+                <li>Do we need to handle payments within the app?</li>
+                <li>How critical is the ETA accuracy?</li>
+            </ul>
+
+            <p><strong>🎙️ INTERVIEWER:</strong> Great questions. Primary users are Riders and Drivers. Let's focus on the core functionality: a rider requests a ride, and a nearby driver accepts it. No carpooling or food delivery for now. Assume 50 million DAU, global operation. Yes, handle payments, and ETA should be reasonably accurate but doesn't have to be perfect initially.</p>
+
+            <p><strong>🎓 CANDIDATE:</strong> Great, let me summarize the requirements.</p>
+            
+            <div class="callout callout-info">
+                <strong>Functional Requirements:</strong>
+                <ul>
+                    <li>Riders can request a ride.</li>
+                    <li>Drivers can accept or decline a ride request.</li>
+                    <li>Riders can see nearby drivers and track their driver's location in real-time.</li>
+                    <li>System calculates ETA and pricing.</li>
+                    <li>Payment processing at the end of the ride.</li>
+                </ul>
+                <strong>Non-Functional Requirements:</strong>
+                <ul>
+                    <li><strong>Low Latency:</strong> Ride matching should be fast.</li>
+                    <li><strong>High Availability:</strong> The system shouldn't go down.</li>
+                    <li><strong>Scalability:</strong> Must handle high concurrent requests (50M DAU).</li>
+                    <li><strong>Consistency:</strong> Payment and ride state must be strongly consistent.</li>
+                </ul>
+            </div>
+
+            <p><strong>🎓 CANDIDATE:</strong> Let me start with the high-level architecture. I'll break this into a few microservices: A Rider Service, a Driver Service (Location Tracking), a Ride Matching Service, and a Payment Service.</p>
+            
+            <div class="diagram-container">
+                <div class="mermaid">
+                graph TD
+                    Rider[Rider App] --> API[API Gateway]
+                    Driver[Driver App] --> API
+                    API --> RiderSvc[Rider Service]
+                    API --> DriverLoc[Driver Location Service]
+                    API --> Matching[Ride Matching Service]
+                    API --> Payment[Payment Service]
+                    
+                    DriverLoc --> Redis[(Redis Geo Hash)]
+                    Matching --> Redis
+                    Matching --> TripDB[(Trip DB / PostgreSQL)]
+                    Payment --> PaymentGateway[External Payment Gateway]
+                </div>
+                <p class="caption">Figure 1: High-Level Architecture of a Ride-Sharing App</p>
+            </div>
+
+            <div class="jargon">📖 <strong>Redis Geo Hash</strong>: A data structure in Redis that allows you to store coordinates (longitude and latitude) and easily search for nearby points (like finding drivers within a 3km radius).</div>
+
+            <p><strong>🎙️ INTERVIEWER:</strong> How does the Driver Location Service handle real-time updates? Drivers are moving constantly.</p>
+
+            <p><strong>🎓 CANDIDATE:</strong> Drivers send their GPS coordinates every few seconds. We can use a WebSocket connection for real-time, bi-directional communication. If they send it every 5 seconds, that's a lot of writes. We shouldn't write this directly to a traditional relational database because it will overwhelm the database. Instead, I'd write these updates to <strong>Redis</strong> or an in-memory datastore using Geo-hashing, which is optimized for high read/write throughput and spatial queries.</p>
+
+            <p><strong>🎙️ INTERVIEWER:</strong> What about the Ride Matching algorithm? How do you ensure two riders don't book the same driver?</p>
+
+            <p><strong>🎓 CANDIDATE:</strong> Good point. The Ride Matching Service will query Redis for nearby available drivers. We can use a distributed lock (like Redlock) on the driver's ID when a request is sent to them. Or, better yet, we can use an optimistic concurrency control mechanism in our Trip Database. If two requests try to assign the same driver, the database will only allow one transaction to succeed, and the other rider's request will retry and pick the next available driver.</p>
+
+            <p><strong>🎙️ INTERVIEWER:</strong> Excellent. Let's move on.</p>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>Simulation 2: LLD — Design a Movie Ticket Booking System</h2>
+        <p>A Low-Level Design (LLD) interview focuses on classes, objects, design patterns, and core logic.</p>
+
+        <div class="dialogue">
+            <p><strong>🎙️ INTERVIEWER:</strong> Design a movie ticket booking system like BookMyShow or Fandango.</p>
+            
+            <p><strong>🎓 CANDIDATE:</strong> Sure! A few questions first to clarify the scope:</p>
+            <ul>
+                <li>Are we focusing on the backend APIs and classes?</li>
+                <li>Can a theater have multiple screens, and each screen multiple shows?</li>
+                <li>How do we handle concurrency? E.g., two users trying to book the exact same seat at the same time.</li>
+                <li>Do we need to support different payment methods?</li>
+            </ul>
+
+            <p><strong>🎙️ INTERVIEWER:</strong> Yes to backend classes. Yes, multiple screens and shows. Concurrency is critical—only one user should get the seat. And yes, support multiple payment methods.</p>
+
+            <p><strong>🎓 CANDIDATE:</strong> Let me identify the main entities and their relationships. We'll need `Movie`, `Theater`, `Screen`, `Show`, `Seat`, `Booking`, `User`, and payment classes.</p>
+            
+            <div class="diagram-container">
+                <div class="mermaid">
+                classDiagram
+                    class Theater {
+                        String id
+                        String name
+                        List~Screen~ screens
+                    }
+                    class Screen {
+                        String id
+                        List~Seat~ seats
+                    }
+                    class Show {
+                        String id
+                        Movie movie
+                        Screen screen
+                        LocalDateTime startTime
+                    }
+                    class Seat {
+                        String id
+                        SeatType type
+                        double price
+                    }
+                    class Booking {
+                        String id
+                        User user
+                        Show show
+                        List~Seat~ seats
+                        BookingStatus status
+                    }
+                    Theater "1" *-- "*" Screen
+                    Screen "1" *-- "*" Seat
+                    Screen "1" -- "*" Show
+                    Booking "*" -- "1" Show
+                    Booking "*" -- "*" Seat
+                </div>
+                <p class="caption">Figure 2: Class Diagram for Movie Booking</p>
+            </div>
+
+            <p><strong>🎓 CANDIDATE:</strong> I'll now write the Java 21 code for this. I'll use <code>record</code> types for immutable data and the Strategy Pattern for payments.</p>
+
+            <span class="code-label">Java 21</span>
+            <pre>
+<code>
+import java.util.List;
+import java.util.concurrent.locks.ReentrantLock;
+
+// Using Java records for simple data carriers (Immutable)
+public record User(String id, String name, String email) {}
+public record Movie(String id, String title, int durationInMinutes) {}
+
+// Enums
+enum SeatStatus { AVAILABLE, LOCKED, BOOKED }
+enum SeatType { REGULAR, PREMIUM }
+
+class Seat {
+    private final String id;
+    private final SeatType type;
+    private SeatStatus status;
+    private final ReentrantLock lock; // For thread-safe booking
+
+    public Seat(String id, SeatType type) {
+        this.id = id;
+        this.type = type;
+        this.status = SeatStatus.AVAILABLE;
+        this.lock = new ReentrantLock();
+    }
+
+    // Thread-safe method to lock a seat temporarily during checkout
+    public boolean lockSeat() {
+        if (lock.tryLock()) {
+            try {
+                if (this.status == SeatStatus.AVAILABLE) {
+                    this.status = SeatStatus.LOCKED;
+                    return true;
+                }
+            } finally {
+                lock.unlock();
+            }
+        }
+        return false; // Seat is already locked or booked
+    }
+
+    public void confirmBooking() {
+        this.status = SeatStatus.BOOKED;
+    }
+}
+
+// Design Pattern: Strategy Pattern for Payments
+// SOLID: Open/Closed Principle - We can add new payment methods without changing existing code.
+sealed interface PaymentStrategy permits CreditCardPayment, UPIPayment {
+    boolean pay(double amount);
+}
+
+final class CreditCardPayment implements PaymentStrategy {
+    @Override
+    public boolean pay(double amount) {
+        System.out.println("Paid " + amount + " via Credit Card.");
+        return true;
+    }
+}
+
+final class UPIPayment implements PaymentStrategy {
+    @Override
+    public boolean pay(double amount) {
+        System.out.println("Paid " + amount + " via UPI.");
+        return true;
+    }
+}
+
+// Booking Service handling the core logic
+class BookingManager {
+    // SOLID: Single Responsibility Principle - This class only handles the booking flow.
+    public boolean bookTickets(User user, Show show, List<Seat> selectedSeats, PaymentStrategy paymentMethod) {
+        // 1. Try to lock all seats to prevent double booking
+        boolean allLocked = true;
+        for (Seat seat : selectedSeats) {
+            if (!seat.lockSeat()) {
+                allLocked = false;
+                break;
+            }
+        }
+
+        if (!allLocked) {
+            // Rollback: unlock seats if we couldn't lock all of them
+            System.out.println("Sorry, some seats were just taken!");
+            return false;
+        }
+
+        // 2. Process Payment
+        double totalAmount = calculateTotal(selectedSeats);
+        boolean paymentSuccess = paymentMethod.pay(totalAmount);
+
+        // 3. Confirm or Release
+        if (paymentSuccess) {
+            selectedSeats.forEach(Seat::confirmBooking);
+            System.out.println("Booking successful for " + user.name());
+            return true;
+        } else {
+            // Handle payment failure, release locks (implementation omitted for brevity)
+            System.out.println("Payment failed.");
+            return false;
+        }
+    }
+
+    private double calculateTotal(List<Seat> seats) {
+        // Simplified pricing
+        return seats.stream().mapToDouble(s -> 10.0).sum(); 
+    }
+}
+</code>
+            </pre>
+
+            <p><strong>🎙️ INTERVIEWER:</strong> The lock on the Seat object handles threads in a single JVM. What if we have multiple instances of this backend service running across different servers?</p>
+
+            <p><strong>🎓 CANDIDATE:</strong> Ah, excellent point. In a distributed environment, standard Java locks won't work across different JVM instances. We would need a <strong>Distributed Lock</strong>. We could use Redis (Redlock) or a database-level lock (e.g., <code>SELECT ... FOR UPDATE</code>) on the Seat table row to ensure only one server can lock a specific seat at a time.</p>
+        </div>
+    </div>
+
+
+    <div class="card">
+        <h2>Simulation 3: Mixed — Design a Payment Gateway</h2>
+        <p>Often, interviews blur the lines between HLD and LLD. You might be asked to architect a system and then dive deep into the code of a critical component.</p>
+
+        <div class="dialogue">
+            <p><strong>🎙️ INTERVIEWER:</strong> Design a Payment Gateway that processes payments for merchants (like Stripe).</p>
+            
+            <p><strong>🎓 CANDIDATE:</strong> Got it. To gather requirements:</p>
+            <ul>
+                <li>Are we taking the credit card details directly, or redirecting to a bank? (Assume direct API)</li>
+                <li>What is the expected throughput? (Say, 1000 TPS)</li>
+                <li>We definitely need absolute consistency and idempotency. No one should be charged twice for the same order.</li>
+            </ul>
+
+            <p><strong>🎙️ INTERVIEWER:</strong> Exactly. Let's briefly look at the High-Level flow.</p>
+
+            <p><strong>🎓 CANDIDATE:</strong> Sure, here is the basic flow.</p>
+
+            <div class="diagram-container">
+                <div class="mermaid">
+                sequenceDiagram
+                    participant Client
+                    participant API as API Gateway
+                    participant PG as Payment Gateway
+                    participant DB as Payment DB
+                    participant Bank as Bank API
+
+                    Client->>API: POST /charge (Idempotency-Key: X)
+                    API->>PG: Process Payment
+                    PG->>DB: Check if Key X exists
+                    alt Key exists (Duplicate)
+                        DB-->>PG: Return previous status
+                        PG-->>API: 200 OK (Previous Result)
+                    else New Request
+                        PG->>DB: Save Pending State
+                        PG->>Bank: Process Transfer
+                        Bank-->>PG: Success / Fail
+                        PG->>DB: Update State
+                        PG-->>API: 200 OK
+                    end
+                </div>
+                <p class="caption">Figure 3: Sequence of Idempotent Payment Processing</p>
+            </div>
+
+            <div class="jargon">📖 <strong>Idempotency</strong>: The property of an operation where doing it once has the same effect as doing it multiple times. If a user clicks "Pay" twice by accident, an idempotent API ensures they are only charged once.</div>
+
+            <p><strong>🎙️ INTERVIEWER:</strong> Perfect. Now, let's write the core Java code for the Payment Processor, focusing on how you'd structure the result handling and retries.</p>
+
+            <p><strong>🎓 CANDIDATE:</strong> I'll use Java 21's sealed interfaces and pattern matching for safe and exhaustive handling of different payment outcomes.</p>
+
+            <span class="code-label">Java 21</span>
+            <pre>
+<code>
+import java.util.UUID;
+
+// Immutable record for the request
+public record PaymentRequest(String idempotencyKey, double amount, String merchantId, String currency) {}
+
+// Sealed interface for strict outcome control
+// SOLID: Open/Closed - We know exactly what outcomes are possible.
+sealed interface PaymentResult {
+    record Success(String transactionId) implements PaymentResult {}
+    record Failure(String reason, boolean retryable) implements PaymentResult {}
+    record Pending(String statusUrl) implements PaymentResult {}
+}
+
+interface BankClient {
+    PaymentResult executeTransfer(PaymentRequest request);
+}
+
+class PaymentProcessor {
+    private final BankClient bankClient;
+    private final Database db; // Hypothetical DB interface
+
+    public PaymentProcessor(BankClient bankClient, Database db) {
+        this.bankClient = bankClient;
+        this.db = db;
+    }
+
+    public PaymentResult process(PaymentRequest request) {
+        // 1. Check Idempotency (Prevent double charging)
+        if (db.exists(request.idempotencyKey())) {
+            return db.getPreviousResult(request.idempotencyKey());
+        }
+
+        // 2. Process with the bank
+        PaymentResult result = bankClient.executeTransfer(request);
+
+        // 3. Handle the result using Java 21 Pattern Matching for switch
+        switch (result) {
+            case PaymentResult.Success s -> {
+                System.out.println("Payment successful! TX: " + s.transactionId());
+                db.save(request.idempotencyKey(), s);
+            }
+            case PaymentResult.Failure f when f.retryable() -> {
+                System.out.println("Payment failed due to: " + f.reason() + ". Queuing for retry.");
+                // Add to retry queue logic...
+                db.save(request.idempotencyKey(), f);
+            }
+            case PaymentResult.Failure f -> {
+                System.out.println("Hard failure: " + f.reason() + ". Do not retry.");
+                db.save(request.idempotencyKey(), f);
+            }
+            case PaymentResult.Pending p -> {
+                System.out.println("Payment pending, check status at: " + p.statusUrl());
+                db.save(request.idempotencyKey(), p);
+            }
+        }
+
+        return result;
+    }
+}
+</code>
+            </pre>
+
+            <p><strong>🎙️ INTERVIEWER:</strong> Very clean. Using switch expressions with sealed types ensures you never forget to handle an outcome type. Great job.</p>
+        </div>
+    </div>
+
+
+    <h2>Scoring Rubric</h2>
+    <p>Wondering how you are actually graded? Here is a typical rubric used by major tech companies.</p>
+
+    <table class="rubric-table">
+        <thead>
+            <tr>
+                <th>Criteria</th>
+                <th>Weight</th>
+                <th>What They Look For</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td><strong>Requirement Gathering</strong></td>
+                <td>15%</td>
+                <td>Did they ask good, scoping questions? Did they identify scale and bottlenecks?</td>
+            </tr>
+            <tr>
+                <td><strong>Architecture & Design</strong></td>
+                <td>25%</td>
+                <td>Did they choose the right components? Is the system scalable and highly available?</td>
+            </tr>
+            <tr>
+                <td><strong>Deep Dives & Problem Solving</strong></td>
+                <td>25%</td>
+                <td>Did they understand trade-offs? How well did they handle edge cases (e.g., concurrency, network failures)?</td>
+            </tr>
+            <tr>
+                <td><strong>Code Quality (LLD)</strong></td>
+                <td>20%</td>
+                <td>Clean Object-Oriented Design, use of SOLID principles and appropriate Design Patterns.</td>
+            </tr>
+            <tr>
+                <td><strong>Communication</strong></td>
+                <td>15%</td>
+                <td>Clear explanations, structured thinking, and receptiveness to hints.</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <div class="comparison">
+        <div class="side bad">
+            <h3>🚩 Common Red Flags (What Gets You Rejected)</h3>
+            <ul>
+                <li>Starting to draw architecture without asking any clarifying questions.</li>
+                <li>No mention of scalability or assuming a single server will handle everything.</li>
+                <li>Ignoring error handling, retries, or failure scenarios.</li>
+                <li>Monolithic thinking when distributed solutions are required.</li>
+                <li>Defensiveness when challenged, or failing to discuss trade-offs (e.g., "SQL is always better than NoSQL").</li>
+            </ul>
+        </div>
+        <div class="side good">
+            <h3>✅ Green Flags (What Impresses Interviewers)</h3>
+            <ul>
+                <li>Structured approach (e.g., Requirements &rarr; API &rarr; High-Level &rarr; Deep Dive).</li>
+                <li>Proactive trade-off discussion (e.g., "We gain speed with Redis, but risk data loss if it crashes without persistence").</li>
+                <li>Mentioning monitoring, logging, and alerting in the design.</li>
+                <li>Quick back-of-the-envelope capacity estimations.</li>
+                <li>Clean, modular code with proper Object-Oriented principles.</li>
+            </ul>
+        </div>
+    </div>
+
+    <div class="page-nav">
+      <a href="../lld/design-patterns/index.html" class="prev"><span class="label">← Previous</span><span class="title">Design Patterns</span></a>
+      <a href="../index.html" class="next"><span class="label">Next →</span><span class="title">Home</span></a>
+    </div>
+  </main>
+</div>
+<button class="scroll-top" aria-label="Scroll to top">↑</button>
+<script src="../js/main.js"></script>
+</body>
+</html>

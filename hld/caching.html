@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Caching — System Design Mastery</title>
+  <link rel="stylesheet" href="../css/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+</head>
+<body>
+<button class="menu-toggle" aria-label="Toggle menu">☰</button>
+<div class="page-wrapper">
+  <aside class="sidebar" id="sidebar"></aside>
+  <main class="main-content">
+    <div class="breadcrumb">
+      <a href="../index.html">Home</a>
+      <span class="sep">›</span>
+      High-Level Design
+      <span class="sep">›</span>
+      <strong>Caching</strong>
+    </div>
+
+    <h1>Caching</h1>
+
+    <section>
+      <h2>What is Caching?</h2>
+      <p>Caching is the practice of storing a copy of frequently accessed data in a temporary, extremely fast storage location (usually RAM) so that future requests for that data can be served much faster.</p>
+      
+      <p><strong>Real-world analogy:</strong> Imagine you want a glass of milk. Walking all the way to the grocery store every time you get thirsty takes too long (fetching from the Database). Instead, you buy a gallon and keep it in your fridge (the Cache). Now, getting milk takes seconds instead of minutes. Your fridge is a cache for the grocery store!</p>
+
+      <div class="jargon">📖 <strong>Cache Hit</strong>: When the requested data is found in the cache. Fast!</div>
+      <div class="jargon">📖 <strong>Cache Miss</strong>: When the requested data is NOT in the cache, forcing the system to fetch it from the slower, underlying database.</div>
+    </section>
+
+    <section>
+      <h2>Where can caching happen?</h2>
+      <p>Caching isn't just one box in a diagram; it happens at almost every layer of modern systems:</p>
+      <ul>
+        <li><strong>Client (Browser):</strong> Caching images, CSS, and JS files locally.</li>
+        <li><strong>CDN (Content Delivery Network):</strong> Caching static assets on servers geographically close to users.</li>
+        <li><strong>Server/App Level:</strong> In-memory caches (like Redis or Memcached) storing database query results or computed data.</li>
+        <li><strong>Database Level:</strong> Databases themselves cache frequently accessed pages in memory.</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>Caching Strategies</h2>
+      
+      <h3>1. Cache-Aside (Lazy Loading)</h3>
+      <p>The application first asks the cache. If data is there (hit), great. If not (miss), the application queries the DB, reads the data, puts it in the cache, and returns it. Good for read-heavy workloads.</p>
+      
+      <h3>2. Write-Through</h3>
+      <p>Every time the application writes data, it writes it to the cache AND the database simultaneously. Pro: Cache is always up-to-date. Con: Writes take longer.</p>
+
+      <h3>3. Write-Behind (Write-Back)</h3>
+      <p>The application writes data ONLY to the cache and immediately returns success to the user. A background process asynchronously writes the data to the DB later. Pro: Lightning fast writes. Con: Risk of data loss if the cache crashes before syncing.</p>
+      
+      <h3>4. Read-Through</h3>
+      <p>Similar to Cache-Aside, but the application only talks to the cache. If it's a miss, the cache component itself is responsible for fetching from the DB. Keeps application code cleaner.</p>
+    </section>
+
+    <section>
+      <h2>Visualizing Cache-Aside</h2>
+      <div class="diagram-container">
+        <div class="mermaid">
+          sequenceDiagram
+            participant App as Application
+            participant Cache as Redis Cache
+            participant DB as Database
+            
+            App->>Cache: 1. Get user profile
+            alt Cache Hit
+                Cache-->>App: Return profile data
+            else Cache Miss
+                Cache-->>App: Null / Not Found
+                App->>DB: 2. Query user profile
+                DB-->>App: Return profile data
+                App->>Cache: 3. Store data in cache
+            end
+        </div>
+        <p class="caption">Figure 1: The Cache-Aside pattern workflow.</p>
+      </div>
+    </section>
+
+    <section>
+      <h2>Cache Eviction Policies</h2>
+      <p>A cache is usually RAM, which is expensive and limited. When the cache is full, we must kick out old data to make room for new data. This is <strong>eviction</strong>.</p>
+      <ul>
+        <li><strong>LRU (Least Recently Used):</strong> Evict the item that hasn't been accessed for the longest time. (Most common).</li>
+        <li><strong>LFU (Least Frequently Used):</strong> Evict the item that has been accessed the fewest times overall.</li>
+        <li><strong>FIFO (First In, First Out):</strong> Evict the oldest item, regardless of how often it's used.</li>
+        <li><strong>TTL (Time To Live):</strong> Data automatically expires and deletes itself after a set time (e.g., 5 minutes).</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>Java 21 Code: LRU Cache Implementation</h2>
+      <p>Java's <code>LinkedHashMap</code> has a built-in mechanism that makes implementing an LRU cache incredibly easy.</p>
+      
+      <span class="code-label">Java</span>
+      <pre>
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.Optional;
+
+// A generic Cache interface
+interface Cache&lt;K, V&gt; {
+    void put(K key, V value);
+    Optional&lt;V&gt; get(K key);
+}
+
+// LRU Cache utilizing Java's LinkedHashMap
+class LRUCache&lt;K, V&gt; implements Cache&lt;K, V&gt; {
+    private final int capacity;
+    private final Map&lt;K, V&gt; internalCache;
+
+    public LRUCache(int capacity) {
+        this.capacity = capacity;
+        // The magic parameters: initialCapacity, loadFactor, accessOrder
+        // accessOrder = true means it orders by recently accessed, not insertion order!
+        this.internalCache = new LinkedHashMap&lt;&gt;(capacity, 0.75f, true) {
+            @Override
+            protected boolean removeEldestEntry(Map.Entry&lt;K, V&gt; eldest) {
+                // Automatically evict when size exceeds capacity
+                return size() > capacity;
+            }
+        };
+    }
+
+    @Override
+    public void put(K key, V value) {
+        internalCache.put(key, value);
+    }
+
+    @Override
+    public Optional&lt;V&gt; get(K key) {
+        return Optional.ofNullable(internalCache.get(key));
+    }
+    
+    public void printCache() {
+        System.out.println("Cache state: " + internalCache);
+    }
+}
+
+public class CacheDemo {
+    public static void main(String[] args) {
+        LRUCache&lt;String, String&gt; userCache = new LRUCache&lt;&gt;(3); // Max 3 items
+        
+        userCache.put("u1", "Alice");
+        userCache.put("u2", "Bob");
+        userCache.put("u3", "Charlie");
+        
+        // Cache is full. Now we access "u1", making it the MOST recently used.
+        userCache.get("u1");
+        
+        // Add a 4th item. This will trigger eviction of the LEAST recently used.
+        // Since u1 was just accessed, u2 is the oldest/least recently used!
+        userCache.put("u4", "Dave");
+        
+        userCache.printCache(); 
+        // Output will show: {u3=Charlie, u1=Alice, u4=Dave}. Bob (u2) was evicted!
+    }
+}
+      </pre>
+    </section>
+
+    <section>
+      <h2>Cache Invalidation: The Hardest Problem</h2>
+      <p>As the famous quote goes: <em>"There are only two hard things in Computer Science: cache invalidation and naming things."</em></p>
+      <p>If the data in your database changes, the data in your cache is now stale (incorrect). You must invalidate (delete) the cached copy so the next read fetches the fresh data. If this fails, users see old, wrong data.</p>
+    </section>
+
+    <section>
+      <h2>When NOT to cache</h2>
+      <ul>
+        <li>When data changes constantly (e.g., real-time stock prices). The overhead of constantly updating the cache is worse than just reading the DB.</li>
+        <li>When data is rarely read twice. (Caching implies reuse).</li>
+      </ul>
+    </section>
+
+    <div class="callout callout-success">
+      <strong>💡 Interview Tip:</strong>
+      In a design interview, mention <strong>Redis</strong> or <strong>Memcached</strong>. Propose using a <strong>Cache-Aside</strong> pattern with a <strong>TTL</strong> (Time-To-Live) on records to ensure stale data eventually expires automatically as a safety net.
+    </div>
+
+    <div class="page-nav">
+      <a href="load-balancing.html" class="prev"><span class="label">← Previous</span><span class="title">Load Balancing</span></a>
+      <a href="databases.html" class="next"><span class="label">Next →</span><span class="title">Databases & Sharding</span></a>
+    </div>
+  </main>
+</div>
+<button class="scroll-top" aria-label="Scroll to top">↑</button>
+<script src="../js/main.js"></script>
+<script>
+  mermaid.initialize({ startOnLoad: true, theme: 'default' });
+</script>
+</body>
+</html>

@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Microservices — System Design Mastery</title>
+  <link rel="stylesheet" href="../css/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+</head>
+<body>
+<button class="menu-toggle" aria-label="Toggle menu">☰</button>
+<div class="page-wrapper">
+  <aside class="sidebar" id="sidebar"></aside>
+  <main class="main-content">
+    <div class="breadcrumb">
+      <a href="../index.html">Home</a>
+      <span class="sep">›</span>
+      High Level Design
+      <span class="sep">›</span>
+      <strong>Microservices</strong>
+    </div>
+
+    <h1>Microservices vs Monoliths</h1>
+
+    <h2>What is a Monolith?</h2>
+    <p>A <strong>Monolithic Architecture</strong> is a traditional model of software design where all parts of the application (user interface, business logic, data access) are woven together into a single, indivisible unit and deployed as one large application.</p>
+    
+    <div class="callout callout-purple">
+      <strong>Real-World Analogy:</strong> A monolith is like a giant, traditional restaurant. The chefs, waiters, cashiers, and dishwashers all work in the same building. If the restaurant needs to close for plumbing repairs in the kitchen, the whole business stops.
+    </div>
+
+    <h2>What are Microservices?</h2>
+    <p><strong>Microservices Architecture</strong> breaks down the application into many small, loosely coupled, and independently deployable services. Each service represents a specific business function.</p>
+
+    <div class="callout callout-purple">
+      <strong>Real-World Analogy:</strong> Microservices are like a modern food court. You have a burger stall, a taco stall, and a coffee stall. They operate independently. If the coffee stall's espresso machine breaks, the burger and taco stalls can keep selling food. They just talk to each other when needed (e.g., using a shared cleaning service).
+    </div>
+
+    <h2>Comparison</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Feature</th>
+          <th>Monolith</th>
+          <th>Microservices</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Deployment</strong></td>
+          <td>Deploy the entire application at once. Slow and risky.</td>
+          <td>Deploy individual services independently. Fast and less risky.</td>
+        </tr>
+        <tr>
+          <td><strong>Scaling</strong></td>
+          <td>Must scale the whole app, even if only one feature needs it.</td>
+          <td>Scale only the services that have high traffic.</td>
+        </tr>
+        <tr>
+          <td><strong>Technology Stack</strong></td>
+          <td>Locked into a single language and framework.</td>
+          <td>Each service can use the best tool/language for the job.</td>
+        </tr>
+        <tr>
+          <td><strong>Complexity</strong></td>
+          <td>Codebase becomes a tangled "big ball of mud" over time.</td>
+          <td>Individual services are simple, but managing the network of them is complex.</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="diagram-container">
+      <div class="mermaid">
+        graph TD
+          subgraph Monolith
+            UI1[User Interface] --- BL[Business Logic: Orders, Users, Inventory]
+            BL --- DB1[(Single Database)]
+          end
+          
+          subgraph Microservices
+            UI2[User Interface]
+            UI2 --> API[API Gateway]
+            API --> S1(Order Service)
+            API --> S2(User Service)
+            API --> S3(Inventory Service)
+            S1 --> DB2[(Order DB)]
+            S2 --> DB3[(User DB)]
+            S3 --> DB4[(Inventory DB)]
+          end
+      </div>
+      <p class="caption">Figure 1: Monolith vs Microservices Architecture</p>
+    </div>
+
+    <h2>When to use which?</h2>
+    <div class="comparison">
+      <div class="side good">
+        <h3>Use a Monolith when:</h3>
+        <ul>
+          <li>You are a startup building an MVP (Minimum Viable Product).</li>
+          <li>Your team is small.</li>
+          <li>The domain logic is simple.</li>
+          <li>You need to move fast initially without devops overhead.</li>
+        </ul>
+      </div>
+      <div class="side good">
+        <h3>Use Microservices when:</h3>
+        <ul>
+          <li>The application is highly complex and large.</li>
+          <li>You have multiple large engineering teams working concurrently.</li>
+          <li>Different parts of the system need to scale differently.</li>
+          <li>You need high availability (one failure shouldn't take down everything).</li>
+        </ul>
+      </div>
+    </div>
+
+    <h2>Key Concepts in Microservices</h2>
+    
+    <h3>Service Communication</h3>
+    <p>How do microservices talk to each other?</p>
+    <ul>
+      <li><strong>Synchronous:</strong> Using HTTP/REST or gRPC. The caller waits for a response.</li>
+      <li><strong>Asynchronous:</strong> Using Message Queues (Kafka, RabbitMQ). The caller fires an event and forgets.</li>
+    </ul>
+
+    <h3>Service Discovery</h3>
+    <div class="jargon">📖 <strong>Service Discovery</strong>: Since services might have dynamic IP addresses, a registry keeps track of where every service lives so they can find each other.</div>
+
+    <h3>Data Management & Distributed Transactions</h3>
+    <p>In microservices, the rule is <strong>Database Per Service</strong>. Services should never share a database, otherwise they become tightly coupled. But how do you handle a transaction that spans multiple services (like placing an order, deducting inventory, and charging a card)?</p>
+    <div class="jargon">📖 <strong>Saga Pattern</strong>: A sequence of local transactions. If one step fails, the system runs <em>compensating transactions</em> to undo the previous steps (e.g., if charging the card fails, run a transaction to add the inventory back).</div>
+
+    <h2>Java 21 Code Example: Refactoring</h2>
+    <p>Let's look at how code changes from a Monolith to Microservices using Java 21's <code>sealed interfaces</code> and records.</p>
+    
+    <span class="code-label">Java</span>
+    <pre>
+// ==========================================
+// 1. THE MONOLITH APPROACH
+// Everything in one place, calling methods directly.
+// ==========================================
+class MonolithEcommerceApp {
+    
+    public void checkout(String userId, String itemId) {
+        // Direct, tight coupling
+        boolean inStock = checkInventory(itemId);
+        if (inStock) {
+            boolean paid = chargeUser(userId, 50.0);
+            if (paid) {
+                createOrder(userId, itemId);
+                System.out.println("Monolith: Order placed successfully.");
+            }
+        }
+    }
+    
+    private boolean checkInventory(String itemId) { return true; }
+    private boolean chargeUser(String userId, double amount) { return true; }
+    private void createOrder(String userId, String itemId) {}
+}
+
+// ==========================================
+// 2. THE MICROSERVICES APPROACH
+// Services are isolated and communicate via explicit boundaries.
+// ==========================================
+
+// Domain Models using Records
+record Item(String id, double price) {}
+record User(String id) {}
+record Order(String orderId, String userId, String itemId) {}
+
+// A sealed interface represents network communication results
+sealed interface NetworkResponse&lt;T&gt; permits Success, Failure {}
+record Success&lt;T&gt;(T data) implements NetworkResponse&lt;T&gt; {}
+record Failure&lt;T&gt;(String error) implements NetworkResponse&lt;T&gt; {}
+
+// Service 1: Inventory
+class InventoryMicroservice {
+    public NetworkResponse&lt;Boolean&gt; reserveItem(String itemId) {
+        // Simulating checking database
+        return new Success&lt;&gt;(true);
+    }
+}
+
+// Service 2: Payment
+class PaymentMicroservice {
+    public NetworkResponse&lt;Boolean&gt; processPayment(String userId, double amount) {
+        return new Success&lt;&gt;(true);
+    }
+}
+
+// Service 3: Order (The Orchestrator)
+class OrderMicroservice {
+    private final InventoryMicroservice inventoryService;
+    private final PaymentMicroservice paymentService;
+
+    // In reality, these would be HTTP or gRPC clients, not direct references
+    public OrderMicroservice(InventoryMicroservice inv, PaymentMicroservice pay) {
+        this.inventoryService = inv;
+        this.paymentService = pay;
+    }
+
+    public void placeOrder(String userId, String itemId) {
+        // Java 21 Pattern Matching with switch
+        var inventoryStatus = inventoryService.reserveItem(itemId);
+        
+        switch (inventoryStatus) {
+            case Success&lt;Boolean&gt; s when s.data() == true -&gt; {
+                
+                var paymentStatus = paymentService.processPayment(userId, 50.0);
+                
+                switch (paymentStatus) {
+                    case Success&lt;Boolean&gt; p when p.data() == true -&gt; {
+                        System.out.println("Microservices: Order placed successfully.");
+                        // Save to local order DB
+                    }
+                    case Success&lt;Boolean&gt; p -&gt; System.out.println("Payment declined.");
+                    case Failure&lt;Boolean&gt; f -&gt; System.out.println("Payment service down: " + f.error());
+                }
+            }
+            case Success&lt;Boolean&gt; s -&gt; System.out.println("Item out of stock.");
+            case Failure&lt;Boolean&gt; f -&gt; System.out.println("Inventory service down: " + f.error());
+        }
+    }
+}
+
+public class MicroserviceDemo {
+    public static void main(String[] args) {
+        new MonolithEcommerceApp().checkout("user123", "item456");
+        
+        var inventory = new InventoryMicroservice();
+        var payment = new PaymentMicroservice();
+        var order = new OrderMicroservice(inventory, payment);
+        order.placeOrder("user123", "item456");
+    }
+}
+    </pre>
+
+    <h2>Challenges of Microservices</h2>
+    <ul>
+      <li><strong>Distributed Debugging:</strong> A single request might travel through 5 different services. Tracing an error is hard.</li>
+      <li><strong>Network Latency:</strong> Method calls in a monolith are instantaneous. Network calls between microservices take time and can fail.</li>
+      <li><strong>Operational Overhead:</strong> You need complex infrastructure (Kubernetes, CI/CD pipelines, monitoring) to manage dozens of services.</li>
+    </ul>
+
+    <div class="callout callout-info">
+      <strong>Interview Tip:</strong> Never say "Microservices are always better." The correct architectural answer is always "It depends." Emphasize that microservices solve organizational scaling problems but introduce massive technical complexity.
+    </div>
+
+    <div class="page-nav">
+      <a href="message-queues.html" class="prev"><span class="label">← Previous</span><span class="title">Message Queues</span></a>
+      <a href="api-gateway.html" class="next"><span class="label">Next →</span><span class="title">API Gateway</span></a>
+    </div>
+  </main>
+</div>
+<button class="scroll-top" aria-label="Scroll to top">↑</button>
+<script src="../js/main.js"></script>
+</body>
+</html>

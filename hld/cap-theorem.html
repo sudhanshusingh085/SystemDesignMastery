@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CAP Theorem — System Design Mastery</title>
+  <link rel="stylesheet" href="../css/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+</head>
+<body>
+<button class="menu-toggle" aria-label="Toggle menu">☰</button>
+<div class="page-wrapper">
+  <aside class="sidebar" id="sidebar"></aside>
+  <main class="main-content">
+    <div class="breadcrumb">
+      <a href="../index.html">Home</a>
+      <span class="sep">›</span>
+      High-Level Design
+      <span class="sep">›</span>
+      <strong>CAP Theorem</strong>
+    </div>
+
+    <h1>CAP Theorem</h1>
+
+    <section>
+      <h2>What is a Distributed System?</h2>
+      <p>Before understanding CAP, we must understand distributed systems. A distributed system is a group of independent computers (nodes) that appear to the user as a single, coherent system. They talk to each other over a network.</p>
+    </section>
+
+    <section>
+      <h2>The CAP Theorem Explained</h2>
+      <p>The CAP theorem states that in a distributed data store, you can only guarantee <strong>two out of the three</strong> following characteristics simultaneously:</p>
+      
+      <ol class="step">
+        <li class="step-content">
+          <strong>C - Consistency:</strong> Every read receives the most recent write. If you update your profile picture on Node A, and your friend looks at your profile on Node B a millisecond later, they must see the new picture. Everyone sees the exact same data at the same time.
+        </li>
+        <li class="step-content">
+          <strong>A - Availability:</strong> Every request receives a non-error response. The system is always up and running, even if some nodes fail.
+        </li>
+        <li class="step-content">
+          <strong>P - Partition Tolerance:</strong> The system continues to operate despite an arbitrary number of messages being dropped or delayed by the network between nodes. (i.e., a network wire gets cut).
+        </li>
+      </ol>
+
+      <div class="callout callout-purple">
+        <strong>The Harsh Reality:</strong> In modern distributed systems running on the internet, network failures are inevitable. Therefore, you <em>must</em> support Partition Tolerance (P). This means the real choice is between Consistency (C) and Availability (A).
+      </div>
+    </section>
+
+    <section>
+      <h2>The Real-World Analogy: Two Librarians</h2>
+      <p>Imagine a library with two branches across town (Node A and Node B). They share the same catalog over a phone line (Network).</p>
+      <p>A customer goes to Branch A and borrows the last copy of "Harry Potter". Librarian A updates her ledger and tries to call Librarian B to tell him the book is gone. But suddenly, the phone lines go down! (<strong>Network Partition!</strong>).</p>
+      
+      <p>At that exact moment, a customer walks into Branch B and asks Librarian B to borrow "Harry Potter". Librarian B has a choice to make:</p>
+      
+      <ul>
+        <li><strong>Choice 1 (Choose Consistency - CP):</strong> Librarian B says, "Sorry, my phone is down, I can't verify if this book is truly available, so I have to close the library until the phones are fixed." <em>(System is Consistent, but Not Available)</em>.</li>
+        <li><strong>Choice 2 (Choose Availability - AP):</strong> Librarian B says, "According to my ledger it's available, here you go!" He loans out a book he doesn't actually have, creating a conflict later. <em>(System is Available, but Not Consistent)</em>.</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>System Classifications</h2>
+      <div class="diagram-container">
+        <div class="mermaid">
+          flowchart TD
+            NetworkFail{Network Partition Happens!}
+            NetworkFail --> |Refuse request\nto stay safe| CP[CP System\nConsistent & Partition Tolerant]
+            NetworkFail --> |Accept request\nrisk stale data| AP[AP System\nAvailable & Partition Tolerant]
+            
+            style CP fill:#e6f3ff,stroke:#0066cc
+            style AP fill:#e6ffe6,stroke:#009933
+        </div>
+      </div>
+
+      <h3>CP Systems (Consistency + Partition Tolerance)</h3>
+      <p>Used when data accuracy is critical, like financial transactions. If a node loses connection, it will return an error rather than risk showing outdated bank balances. <em>Examples: MongoDB, HBase, Redis, etcd.</em></p>
+
+      <h3>AP Systems (Availability + Partition Tolerance)</h3>
+      <p>Used when system uptime is more important than showing the absolute latest data. If Facebook shows you a post that is 5 seconds old instead of 1 second old, it's fine as long as the site doesn't crash. <em>Examples: Cassandra, DynamoDB, CouchDB.</em></p>
+
+      <h3>CA Systems (Consistency + Availability)</h3>
+      <p>This implies no partition tolerance, which means all data lives on a single machine. It is not truly distributed. <em>Examples: Traditional single-node PostgreSQL or MySQL.</em></p>
+    </section>
+
+    <section>
+      <h2>Java 21 Code: Simulating CAP</h2>
+      <p>Let's model two database nodes. When the network partition happens, we dictate how the node responds based on its CAP configuration.</p>
+      
+      <span class="code-label">Java</span>
+      <pre>
+import java.util.Optional;
+
+// Enum representing the system's choice during a partition
+enum CAP_Mode {
+    CP_CONSISTENT, AP_AVAILABLE
+}
+
+// Represents a node in our distributed system
+class DBNode {
+    private String name;
+    private String data = "Initial State";
+    private boolean networkPartitionActive = false;
+    private CAP_Mode mode;
+
+    public DBNode(String name, CAP_Mode mode) {
+        this.name = name;
+        this.mode = mode;
+    }
+
+    public void setNetworkPartition(boolean broken) {
+        this.networkPartitionActive = broken;
+    }
+
+    // Simulate reading data
+    public Optional&lt;String&gt; readData() {
+        if (networkPartitionActive) {
+            return switch (mode) {
+                // In CP mode, we refuse to serve stale data during a network split
+                case CP_CONSISTENT -> {
+                    System.out.println(name + " [CP Mode]: ERROR - Cannot guarantee consistency. Returning Null.");
+                    yield Optional.empty(); 
+                }
+                // In AP mode, we return whatever data we have, even if it might be stale
+                case AP_AVAILABLE -> {
+                    System.out.println(name + " [AP Mode]: SUCCESS - Returning stale data.");
+                    yield Optional.of(data);
+                }
+            };
+        }
+        System.out.println(name + ": SUCCESS - Network is healthy.");
+        return Optional.of(data);
+    }
+}
+
+public class CAPDemo {
+    public static void main(String[] args) {
+        DBNode bankNode = new DBNode("Banking-DB", CAP_Mode.CP_CONSISTENT);
+        DBNode socialNode = new DBNode("SocialMedia-DB", CAP_Mode.AP_AVAILABLE);
+
+        System.out.println("--- Normal Operation (No Partition) ---");
+        bankNode.readData();
+        socialNode.readData();
+
+        System.out.println("\n--- Network Cable Cut! (Partition Occurs) ---");
+        bankNode.setNetworkPartition(true);
+        socialNode.setNetworkPartition(true);
+
+        bankNode.readData();   // Fails to maintain consistency
+        socialNode.readData(); // Succeeds, but might be stale
+    }
+}
+      </pre>
+    </section>
+
+    <section>
+      <h2>Beyond CAP: PACELC Theorem</h2>
+      <p>CAP only talks about what happens <em>during a failure</em> (a partition). But what happens during normal operation? The PACELC theorem extends CAP:</p>
+      <p><strong>PAC</strong>: If there is a Partition (P), trade off Availability (A) and Consistency (C).<br>
+      <strong>ELC</strong>: Else (E), during normal operation, trade off Latency (L) and Consistency (C).</p>
+      <p>For example, if you want high Consistency during normal operations, you must endure higher Latency (waiting for all nodes to acknowledge a write).</p>
+    </section>
+
+    <div class="callout callout-success">
+      <strong>💡 Interview Tip:</strong>
+      When designing a system, explicitly state your choice. "Since we are building a payment gateway, we need strong consistency, so we will favor a CP system. But for the user comments section, we will favor an AP system for high availability."
+    </div>
+
+    <div class="page-nav">
+      <a href="databases.html" class="prev"><span class="label">← Previous</span><span class="title">Databases & Sharding</span></a>
+      <a href="consistent-hashing.html" class="next"><span class="label">Next →</span><span class="title">Consistent Hashing</span></a>
+    </div>
+  </main>
+</div>
+<button class="scroll-top" aria-label="Scroll to top">↑</button>
+<script src="../js/main.js"></script>
+<script>
+  mermaid.initialize({ startOnLoad: true, theme: 'default' });
+</script>
+</body>
+</html>

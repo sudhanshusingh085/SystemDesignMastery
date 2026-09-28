@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LLD Principles — Beyond SOLID — System Design Mastery</title>
+  <link rel="stylesheet" href="../css/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+</head>
+<body>
+<button class="menu-toggle" aria-label="Toggle menu">☰</button>
+<div class="page-wrapper">
+  <aside class="sidebar" id="sidebar"></aside>
+  <main class="main-content">
+    <div class="breadcrumb">
+      <a href="../index.html">Home</a>
+      <span class="sep">›</span>
+      Low Level Design
+      <span class="sep">›</span>
+      <strong>LLD Principles</strong>
+    </div>
+
+    <h1>LLD Principles — Beyond SOLID</h1>
+    
+    <div class="callout callout-info">
+      <strong>💡 What to expect:</strong> Everyone knows SOLID, but true system design mastery requires understanding other core principles. This page covers the essential principles with analogies and Java 21 code.
+    </div>
+
+    <h2>1. DRY (Don't Repeat Yourself)</h2>
+    <div class="jargon">📖 <strong>DRY</strong>: Every piece of knowledge must have a single, unambiguous, authoritative representation within a system.</div>
+    
+    <p><strong>Analogy:</strong> If your company changes its logo, you don't want to update it on 50 different pages. You update it in one central logo file that everything else references.</p>
+
+    <div class="comparison">
+      <div class="side bad">
+        <h3>❌ BAD: Repetitive Code</h3>
+        <pre>
+public void registerUser(String email, String phone) {
+    if (email == null || !email.contains("@")) {
+        throw new IllegalArgumentException("Invalid email");
+    }
+    // save user...
+}
+
+public void updateEmail(String email) {
+    if (email == null || !email.contains("@")) {
+        throw new IllegalArgumentException("Invalid email");
+    }
+    // update email...
+}
+        </pre>
+      </div>
+      <div class="side good">
+        <h3>✅ GOOD: Reusable Logic</h3>
+        <pre>
+public class Validator {
+    public static void validateEmail(String email) {
+        if (email == null || !email.contains("@")) {
+            throw new IllegalArgumentException("Invalid email");
+        }
+    }
+}
+
+public void registerUser(String email, String phone) {
+    Validator.validateEmail(email);
+    // save user...
+}
+        </pre>
+      </div>
+    </div>
+
+    <h2>2. KISS (Keep It Simple, Stupid)</h2>
+    <div class="jargon">📖 <strong>KISS</strong>: Most systems work best if they are kept simple rather than made complicated. Simplicity should be a key goal.</div>
+    
+    <p><strong>Analogy:</strong> A Swiss Army Knife with 100 tools is useless if it's too heavy to carry. A simple pocket knife often does the job better.</p>
+
+    <div class="comparison">
+      <div class="side bad">
+        <h3>❌ BAD: Over-engineered</h3>
+        <pre>
+// Over-engineered Calculator
+public interface OperationStrategy {
+    int execute(int a, int b);
+}
+public class AdditionStrategy implements OperationStrategy {
+    public int execute(int a, int b) { return a + b; }
+}
+public class CalculatorContext {
+    private OperationStrategy strategy;
+    // ... setup and execute ...
+}
+        </pre>
+      </div>
+      <div class="side good">
+        <h3>✅ GOOD: Simple</h3>
+        <pre>
+// Just what we need
+public class Calculator {
+    public int add(int a, int b) {
+        return a + b;
+    }
+}
+        </pre>
+      </div>
+    </div>
+
+    <h2>3. YAGNI (You Aren't Gonna Need It)</h2>
+    <div class="jargon">📖 <strong>YAGNI</strong>: Always implement things when you actually need them, never when you just foresee that you need them.</div>
+    
+    <p><strong>Analogy:</strong> Buying snow chains for your car when you live in Miami, just in case you ever decide to drive to Alaska in winter. Don't waste money and space.</p>
+
+    <div class="comparison">
+      <div class="side bad">
+        <h3>❌ BAD: Speculative Features</h3>
+        <pre>
+// Building a complex plugin architecture for a simple Todo app
+public abstract class AbstractTodoPluginLoader {
+    protected List&lt;Plugin&gt; plugins;
+    public abstract void initializePlugins();
+    public abstract void executePluginLifecycleHooks();
+}
+        </pre>
+      </div>
+      <div class="side good">
+        <h3>✅ GOOD: Immediate Needs</h3>
+        <pre>
+// Simple Todo App, extend later if requested
+public class TodoService {
+    public void addTodo(String task) {
+        // just add it to DB
+    }
+}
+        </pre>
+      </div>
+    </div>
+
+    <h2>4. Law of Demeter (Don't Talk to Strangers)</h2>
+    <div class="jargon">📖 <strong>Law of Demeter</strong>: A module should not know about the inner workings of the objects it manipulates. Only talk to your immediate friends.</div>
+    
+    <p><strong>Analogy:</strong> When you buy a coffee, you hand the barista your credit card. You don't hand them your wallet and tell them to open it and take out the card.</p>
+
+    <div class="comparison">
+      <div class="side bad">
+        <h3>❌ BAD: Train Wreck</h3>
+        <pre>
+public void processDelivery(Order order) {
+    // Talking to strangers
+    String city = order.getCustomer().getAddress().getCity();
+    System.out.println("Shipping to: " + city);
+}
+        </pre>
+      </div>
+      <div class="side good">
+        <h3>✅ GOOD: Delegation</h3>
+        <pre>
+public void processDelivery(Order order) {
+    // Order delegates the request
+    String city = order.getDeliveryCity();
+    System.out.println("Shipping to: " + city);
+}
+
+// Inside Order class:
+public String getDeliveryCity() {
+    return this.customer.getDeliveryCity();
+}
+        </pre>
+      </div>
+    </div>
+
+    <h2>5. Composition over Inheritance</h2>
+    <div class="jargon">📖 <strong>Composition over Inheritance</strong>: Classes should achieve polymorphic behavior and code reuse by their composition (by containing instances of other classes that implement the desired functionality) rather than inheritance from a base or parent class.</div>
+    
+    <p><strong>Analogy:</strong> Instead of breeding a bird and a horse to get a flying horse (Inheritance), you attach jetpacks to a horse (Composition). Much more flexible!</p>
+
+    <div class="comparison">
+      <div class="side bad">
+        <h3>❌ BAD: Deep Inheritance</h3>
+        <pre>
+class Animal {}
+class FlyingAnimal extends Animal {}
+class Bird extends FlyingAnimal {}
+
+// Wait, Ostriches can't fly... we have a problem.
+class Ostrich extends Bird {
+    @Override 
+    public void fly() { throw new UnsupportedOperationException(); }
+}
+        </pre>
+      </div>
+      <div class="side good">
+        <h3>✅ GOOD: Composition via Interfaces</h3>
+        <pre>
+// Java 21 interface with Strategy
+interface FlyBehavior {
+    void fly();
+}
+class FlyWithWings implements FlyBehavior {
+    public void fly() { System.out.println("Flap flap"); }
+}
+class NoFly implements FlyBehavior {
+    public void fly() { System.out.println("Can't fly"); }
+}
+
+class Bird {
+    private final FlyBehavior flyBehavior;
+    public Bird(FlyBehavior flyBehavior) {
+        this.flyBehavior = flyBehavior;
+    }
+    public void performFly() {
+        flyBehavior.fly();
+    }
+}
+        </pre>
+      </div>
+    </div>
+
+    <h2>6. Tell, Don't Ask</h2>
+    <div class="jargon">📖 <strong>Tell, Don't Ask</strong>: You should tell objects what to do, rather than querying an object's state and making a decision on its behalf.</div>
+    
+    <p><strong>Analogy:</strong> Don't ask your dog if it's hungry, check its stomach fullness, and then manually place food in its mouth. Just tell the dog "Eat!" and provide food; the dog handles the rest.</p>
+
+    <div class="comparison">
+      <div class="side bad">
+        <h3>❌ BAD: Asking for state</h3>
+        <pre>
+public void applyDiscount(Order order) {
+    if (order.getTotalAmount() > 100 && !order.isDiscountApplied()) {
+        order.setTotalAmount(order.getTotalAmount() * 0.9);
+        order.setDiscountApplied(true);
+    }
+}
+        </pre>
+      </div>
+      <div class="side good">
+        <h3>✅ GOOD: Telling to execute</h3>
+        <pre>
+public void applyDiscount(Order order) {
+    // The Order class handles its own state and rules
+    order.applyLoyaltyDiscount();
+}
+        </pre>
+      </div>
+    </div>
+
+    <h2>7. Principle of Least Surprise</h2>
+    <div class="jargon">📖 <strong>Principle of Least Surprise</strong>: The design of software should match the user's/developer's expectations. Functions should do exactly what their names imply.</div>
+    
+    <p>If a method is named <code>getUser()</code>, it should return a user. It should NOT also delete the user or send an email.</p>
+
+    <h2>8. Separation of Concerns</h2>
+    <div class="jargon">📖 <strong>Separation of Concerns</strong>: A program should be divided into distinct sections, such that each section addresses a separate concern.</div>
+    
+    <p>Keep your UI logic separate from your business logic, which should be separate from your database logic.</p>
+
+    <h2>9. Summary</h2>
+    <table>
+      <tr><th>Principle</th><th>One-line Description</th></tr>
+      <tr><td><strong>DRY</strong></td><td>Don't copy-paste code; use single sources of truth.</td></tr>
+      <tr><td><strong>KISS</strong></td><td>Keep solutions as simple as possible.</td></tr>
+      <tr><td><strong>YAGNI</strong></td><td>Don't build features until you actually need them.</td></tr>
+      <tr><td><strong>Law of Demeter</strong></td><td>Don't chain method calls deep into other objects.</td></tr>
+      <tr><td><strong>Composition > Inheritance</strong></td><td>Use 'has-a' interfaces instead of deep 'is-a' class hierarchies.</td></tr>
+      <tr><td><strong>Tell, Don't Ask</strong></td><td>Tell objects to do work, don't micromanage their internal state.</td></tr>
+      <tr><td><strong>Least Surprise</strong></td><td>Code should do exactly what its name suggests.</td></tr>
+      <tr><td><strong>Separation of Concerns</strong></td><td>Keep different responsibilities in different layers/classes.</td></tr>
+    </table>
+
+    <div class="callout callout-purple">
+      <strong>🎯 Interview Tip:</strong> In LLD interviews, interviewers look for these principles just as much as design patterns. If you use Composition over Inheritance, explicitly tell the interviewer: "I'm using composition here because it gives us more flexibility at runtime." It shows seniority.
+    </div>
+
+    <div class="page-nav">
+      <a href="../concurrency/index.html" class="prev"><span class="label">← Previous</span><span class="title">Concurrency</span></a>
+      <a href="../machine-coding/index.html" class="next"><span class="label">Next →</span><span class="title">Machine Coding</span></a>
+    </div>
+  </main>
+</div>
+<button class="scroll-top" aria-label="Scroll to top">↑</button>
+<script src="../js/main.js"></script>
+</body>
+</html>

@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tic-Tac-Toe — System Design Mastery</title>
+  <link rel="stylesheet" href="../../css/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+</head>
+<body>
+<button class="menu-toggle" aria-label="Toggle menu">☰</button>
+<div class="page-wrapper">
+  <aside class="sidebar" id="sidebar"></aside>
+  <main class="main-content">
+    <div class="breadcrumb">
+      <a href="../../index.html">Home</a>
+      <span class="sep">›</span>
+      LLD
+      <span class="sep">›</span>
+      <a href="../case-studies.html">Case Studies</a>
+      <span class="sep">›</span>
+      <strong>Tic-Tac-Toe</strong>
+    </div>
+
+    <h1>Design Tic-Tac-Toe (LLD)</h1>
+
+    <div class="callout callout-info">
+      <strong>Scenario:</strong> Design a flexible Tic-Tac-Toe game supporting an NxN board, turn-based play, and win/draw detection.
+    </div>
+
+    <h2>1. What is Tic-Tac-Toe System?</h2>
+    <p>A simpler board game, but designing it flexibly means it should easily scale from a 3x3 grid to an NxN grid. We need a way to track the <div class="jargon">📖 <strong>Grid</strong>: A 2D array holding the state of the board.</div> and dynamically evaluate win conditions.</p>
+
+    <h2>2. What problem does it solve?</h2>
+    <ul>
+      <li>Scaling: Hardcoding checks for exactly 3 rows/cols is brittle.</li>
+      <li>Modularity: Decoupling input handling from game logic.</li>
+    </ul>
+
+    <h2>3. How does it work?</h2>
+    <div class="diagram-container">
+      <div class="mermaid">
+        classDiagram
+          class TicTacToeGame {
+            +Board board
+            +Player[] players
+            +playGame()
+          }
+          class Board {
+            +int size
+            +Symbol[][] grid
+            +placeSymbol()
+            +isFull()
+          }
+          class WinChecker {
+            <<interface>>
+            +checkWin(Board, Symbol)
+          }
+          TicTacToeGame --> Board
+          TicTacToeGame --> WinChecker
+          TicTacToeGame --> InputHandler
+      </div>
+      <p class="caption">Figure 1: Structure of scalable Tic-Tac-Toe</p>
+    </div>
+
+    <h2>4. Java 21 Implementation</h2>
+    <span class="code-label">Java</span>
+    <pre>
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Scanner;
+
+enum Symbol { X, O, EMPTY }
+
+// Record for immutable grid coordinates
+record Cell(int row, int col) {}
+
+// Record for historical moves (used for Undo functionality)
+record Move(Cell cell, Symbol symbol) {}
+
+// SOLID: SRP — The board only stores state and knows if it's full.
+class Board {
+    private final int size;
+    private final Symbol[][] grid;
+
+    public Board(int size) {
+        this.size = size;
+        this.grid = new Symbol[size][size];
+        for (int i = 0; i < size; i++) {
+            for (int j = 0; j < size; j++) {
+                grid[i][j] = Symbol.EMPTY;
+            }
+        }
+    }
+
+    public int getSize() { return size; }
+    public Symbol getSymbol(int r, int c) { return grid[r][c]; }
+
+    public boolean placeSymbol(Cell cell, Symbol symbol) {
+        if (cell.row() < 0 || cell.row() >= size || cell.col() < 0 || cell.col() >= size) return false;
+        if (grid[cell.row()][cell.col()] != Symbol.EMPTY) return false;
+        
+        grid[cell.row()][cell.col()] = symbol;
+        return true;
+    }
+
+    public boolean isFull() {
+        for (int i = 0; i < size; i++) {
+            for (int j = 0; j < size; j++) {
+                if (grid[i][j] == Symbol.EMPTY) return false;
+            }
+        }
+        return true;
+    }
+
+    public void display() {
+        for (int i = 0; i < size; i++) {
+            for (int j = 0; j < size; j++) {
+                System.out.print((grid[i][j] == Symbol.EMPTY ? "-" : grid[i][j]) + " ");
+            }
+            System.out.println();
+        }
+    }
+}
+
+// SOLID: OCP — New win rules (like a 'Corners Win' variant) can be added without modifying the core Game.
+interface WinChecker {
+    boolean checkWin(Board board, Symbol symbol);
+}
+
+class StandardWinChecker implements WinChecker {
+    @Override
+    public boolean checkWin(Board board, Symbol symbol) {
+        int n = board.getSize();
+        
+        // Check rows and cols
+        for (int i = 0; i < n; i++) {
+            boolean rowWin = true, colWin = true;
+            for (int j = 0; j < n; j++) {
+                if (board.getSymbol(i, j) != symbol) rowWin = false;
+                if (board.getSymbol(j, i) != symbol) colWin = false;
+            }
+            if (rowWin || colWin) return true;
+        }
+
+        // Check diagonals
+        boolean diag1 = true, diag2 = true;
+        for (int i = 0; i < n; i++) {
+            if (board.getSymbol(i, i) != symbol) diag1 = false;
+            if (board.getSymbol(i, n - 1 - i) != symbol) diag2 = false;
+        }
+
+        return diag1 || diag2;
+    }
+}
+
+class Player {
+    private String name;
+    private Symbol symbol;
+    
+    public Player(String name, Symbol symbol) {
+        this.name = name;
+        this.symbol = symbol;
+    }
+    public Symbol getSymbol() { return symbol; }
+    public String getName() { return name; }
+}
+
+// Sealed interfaces guarantee exhaustive pattern matching checks in Java 21+ switch statements
+sealed interface GameState permits Playing, Won, Draw {}
+record Playing(Player currentPlayer) implements GameState {}
+record Won(Player winner) implements GameState {}
+record Draw() implements GameState {}
+
+// SOLID: DIP — We depend on an abstraction for input, not concrete console Scanners.
+interface InputHandler {
+    Cell getMove(Player p);
+}
+
+class ConsoleInputHandler implements InputHandler {
+    private Scanner scanner = new Scanner(System.in);
+    @Override
+    public Cell getMove(Player p) {
+        System.out.println(p.getName() + "'s turn. Enter row and col:");
+        int r = scanner.nextInt();
+        int c = scanner.nextInt();
+        return new Cell(r, c);
+    }
+}
+
+// Design Pattern: Command (Memento-like usage)
+class GameHistory {
+    private List<Move> moves = new ArrayList<>();
+    public void addMove(Move m) { moves.add(m); }
+    // undo functionality could go here
+}
+
+// Design Pattern: Facade & Template Method for the game loop
+class TicTacToeGame {
+    private Board board;
+    private Player[] players;
+    private int turn;
+    private WinChecker winChecker;
+    private InputHandler inputHandler;
+    private GameState state;
+
+    public TicTacToeGame(int size, Player p1, Player p2, InputHandler inputHandler) {
+        this.board = new Board(size);
+        this.players = new Player[]{p1, p2};
+        this.turn = 0;
+        this.winChecker = new StandardWinChecker();
+        this.inputHandler = inputHandler;
+        this.state = new Playing(players[0]);
+    }
+
+    public void start() {
+        while (state instanceof Playing playingState) {
+            board.display();
+            Player current = playingState.currentPlayer();
+            Cell cell = inputHandler.getMove(current);
+            
+            if (!board.placeSymbol(cell, current.getSymbol())) {
+                System.out.println("Invalid move, try again.");
+                continue;
+            }
+
+            if (winChecker.checkWin(board, current.getSymbol())) {
+                state = new Won(current);
+            } else if (board.isFull()) {
+                state = new Draw();
+            } else {
+                turn = 1 - turn;
+                state = new Playing(players[turn]);
+            }
+        }
+        
+        board.display();
+        
+        // Java 21 Pattern Matching for switch
+        switch (state) {
+            case Won w -> System.out.println(w.winner().getName() + " wins!");
+            case Draw d -> System.out.println("It's a draw!");
+            case Playing p -> {} // unreachable
+        }
+    }
+}
+
+public class Main {
+    public static void main(String[] args) {
+        // Run with a simulated input for testing or actual ConsoleInputHandler
+    }
+}
+    </pre>
+
+    <h2>5. Why is it recommended / When to use it?</h2>
+    <p>By extracting <code>WinChecker</code>, we handle an NxN board without deeply nested, hardcoded arrays. The <code>InputHandler</code> injection ensures we can easily adapt the game for a web UI or mobile app without changing the core game logic.</p>
+
+    <div class="callout callout-purple">
+      <strong>Interview Tip:</strong> Interviewers love scalable implementations. Always ask: "Does the board have to be 3x3?" Designing it for NxN from the start scores major points.
+    </div>
+
+    <div class="page-nav">
+      <a href="chess.html" class="prev"><span class="label">← Previous</span><span class="title">Chess Game</span></a>
+      <a href="vending-machine.html" class="next"><span class="label">Next →</span><span class="title">Vending Machine</span></a>
+    </div>
+  </main>
+</div>
+<button class="scroll-top" aria-label="Scroll to top">↑</button>
+<script src="../../js/main.js"></script>
+</body>
+</html>

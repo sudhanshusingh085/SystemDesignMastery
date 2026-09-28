@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Food Ordering System — System Design Mastery</title>
+  <link rel="stylesheet" href="../../css/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+</head>
+<body>
+<button class="menu-toggle" aria-label="Toggle menu">☰</button>
+<div class="page-wrapper">
+  <aside class="sidebar" id="sidebar"></aside>
+  <main class="main-content">
+    <div class="breadcrumb">
+      <a href="../../index.html">Home</a>
+      <span class="sep">›</span>
+      LLD
+      <span class="sep">›</span>
+      Case Studies
+      <span class="sep">›</span>
+      <strong>Food Ordering System</strong>
+    </div>
+
+    <h1>Design a Food Ordering System (Swiggy/DoorDash/Zomato)</h1>
+
+    <section class="card">
+        <h2>What is a Food Ordering System?</h2>
+        <p>A food ordering system connects hungry customers with restaurants and delivery drivers. Think of it as a digital mall food court where you can see all menus, pick what you want, pay, and have someone run it to your house.</p>
+        <div class="jargon">📖 <strong>Three-sided marketplace</strong>: A business model that brings together three distinct groups of users. In this case: Customers, Restaurants, and Delivery Drivers.</div>
+        <p>In this system, we need to handle the entire lifecycle of an order: from browsing the menu, adding items to a cart, placing the order, tracking its status, and handling the payment and delivery assignment.</p>
+    </section>
+
+    <section class="card">
+        <h2>What Problem Does It Solve?</h2>
+        <p>Before these apps, you had to collect paper menus, call the restaurant, hope they deliver to your area, and pay in cash. The app solves discovery (finding food), logistics (delivery), and transactions (payments) seamlessly.</p>
+    </section>
+
+    <section class="card">
+        <h2>How Does It Work?</h2>
+        <p>The system is built on states and transitions. When an order is placed, it moves through a pipeline. We use the State pattern to manage this lifecycle, Strategy pattern to assign drivers, and Observer pattern to notify users.</p>
+        
+        <div class="diagram-container">
+            <div class="mermaid">
+                stateDiagram-v2
+                    [*] --> Placed : Customer checks out
+                    Placed --> Confirmed : Restaurant accepts
+                    Confirmed --> Preparing : Chef starts cooking
+                    Preparing --> ReadyForPickup : Food is packed
+                    ReadyForPickup --> OutForDelivery : Driver picks up
+                    OutForDelivery --> Delivered : Customer receives food
+                    Placed --> Cancelled : Restaurant busy
+                    Confirmed --> Cancelled : Item unavailable
+            </div>
+            <p class="caption">Figure 1: The Order State Machine</p>
+        </div>
+    </section>
+
+    <section class="card">
+        <h2>Low-Level Design (Java 21)</h2>
+        <p>Here is the complete object-oriented design using Java 21 features like records, sealed interfaces, and pattern matching.</p>
+        
+        <span class="code-label">Java</span>
+<pre><code>import java.time.LocalDateTime;
+import java.util.*;
+
+// SOLID: Single Responsibility — these records just hold data
+record RestaurantId(String id) {}
+record MenuItem(String id, String name, String description, double price, String category, boolean isAvailable) {}
+
+class Restaurant {
+    private final RestaurantId id;
+    private final String name;
+    private final String address;
+    private final List&lt;MenuItem&gt; menu;
+    private boolean isOpen;
+    private double rating;
+    
+    public Restaurant(RestaurantId id, String name, String address, List&lt;MenuItem&gt; menu) {
+        this.id = id;
+        this.name = name;
+        this.address = address;
+        this.menu = new ArrayList&lt;&gt;(menu);
+        this.isOpen = true;
+    }
+    
+    // Getters and setters...
+}
+
+class User {
+    private String id;
+    private String name;
+    // ... basic user details
+}
+
+record CartItem(MenuItem item, int quantity) {}
+
+// SOLID: Single Responsibility — this class only handles Cart logic
+class Cart {
+    private final List&lt;CartItem&gt; items = new ArrayList&lt;&gt;();
+    
+    public void addItem(MenuItem item, int quantity) {
+        items.add(new CartItem(item, quantity));
+    }
+    
+    public void removeItem(MenuItem item) {
+        items.removeIf(ci -&gt; ci.item().id().equals(item.id()));
+    }
+    
+    public double getTotal() {
+        return items.stream()
+                .mapToDouble(ci -&gt; ci.item().price() * ci.quantity())
+                .sum();
+    }
+    
+    public List&lt;CartItem&gt; getItems() {
+        return List.copyOf(items);
+    }
+}
+
+// Design Pattern: State — Models the exact states an order can be in
+sealed interface OrderStatus permits Placed, Confirmed, Preparing, ReadyForPickup, OutForDelivery, Delivered, Cancelled {
+    // We could add transition methods here if using a full State Pattern implementation
+}
+record Placed() implements OrderStatus {}
+record Confirmed() implements OrderStatus {}
+record Preparing() implements OrderStatus {}
+record ReadyForPickup() implements OrderStatus {}
+record OutForDelivery(String driverId) implements OrderStatus {}
+record Delivered() implements OrderStatus {}
+record Cancelled(String reason) implements OrderStatus {}
+
+// OOP: Composition — Order owns CartItems
+class Order {
+    private final String orderId;
+    private final User customer;
+    private final Restaurant restaurant;
+    private final List&lt;CartItem&gt; items;
+    private final double totalAmount;
+    private OrderStatus status;
+    private final LocalDateTime orderTime;
+    
+    public Order(String orderId, User customer, Restaurant restaurant, List&lt;CartItem&gt; items, double totalAmount) {
+        this.orderId = orderId;
+        this.customer = customer;
+        this.restaurant = restaurant;
+        this.items = List.copyOf(items); // Defensive copy
+        this.totalAmount = totalAmount;
+        this.status = new Placed();
+        this.orderTime = LocalDateTime.now();
+    }
+    
+    public void setStatus(OrderStatus newStatus) {
+        this.status = newStatus;
+    }
+    
+    public OrderStatus getStatus() { return status; }
+    public String getOrderId() { return orderId; }
+}
+
+// Design Pattern: State Machine — Manages transitions securely
+class OrderStateMachine {
+    public void transition(Order order, OrderStatus newStatus) {
+        OrderStatus current = order.getStatus();
+        
+        // Java 21 Pattern Matching for switch
+        boolean isValid = switch(current) {
+            case Placed p -&gt; newStatus instanceof Confirmed || newStatus instanceof Cancelled;
+            case Confirmed c -&gt; newStatus instanceof Preparing || newStatus instanceof Cancelled;
+            case Preparing p -&gt; newStatus instanceof ReadyForPickup;
+            case ReadyForPickup r -&gt; newStatus instanceof OutForDelivery;
+            case OutForDelivery o -&gt; newStatus instanceof Delivered;
+            case Delivered d -&gt; false; // Terminal state
+            case Cancelled c -&gt; false; // Terminal state
+        };
+        
+        if (isValid) {
+            order.setStatus(newStatus);
+        } else {
+            throw new IllegalStateException("Invalid state transition from " + current.getClass().getSimpleName() + " to " + newStatus.getClass().getSimpleName());
+        }
+    }
+}
+
+class Driver {
+    private String id;
+    private String name;
+    private boolean isAvailable;
+    private double rating;
+    // Getters and setters...
+}
+
+// Design Pattern: Strategy — interchangeable algorithms for driver assignment
+interface DeliveryAssignmentStrategy {
+    Driver assignDriver(Order order, List&lt;Driver&gt; availableDrivers);
+}
+
+class NearestDriverStrategy implements DeliveryAssignmentStrategy {
+    @Override
+    public Driver assignDriver(Order order, List&lt;Driver&gt; availableDrivers) {
+        // Logic to find nearest driver based on GPS coordinates
+        return availableDrivers.get(0); // Dummy return
+    }
+}
+
+class HighestRatingDriverStrategy implements DeliveryAssignmentStrategy {
+    @Override
+    public Driver assignDriver(Order order, List&lt;Driver&gt; availableDrivers) {
+        // Sort by rating descending
+        return availableDrivers.stream()
+                .max(Comparator.comparingDouble(Driver::getRating))
+                .orElse(null);
+    }
+}
+
+// SOLID: Dependency Inversion Principle (DIP) — depend on abstractions
+interface PaymentProcessor {
+    boolean processPayment(Order order);
+}
+
+// Design Pattern: Observer — Pub/Sub for order updates
+interface OrderObserver {
+    void onOrderUpdated(Order order);
+}
+
+class CustomerNotifier implements OrderObserver {
+    @Override
+    public void onOrderUpdated(Order order) {
+        System.out.println("Push Notification to Customer: Order " + order.getOrderId() + " is now " + order.getStatus().getClass().getSimpleName());
+    }
+}
+
+class RestaurantNotifier implements OrderObserver {
+    @Override
+    public void onOrderUpdated(Order order) {
+        System.out.println("Restaurant Tablet Alert: Order " + order.getOrderId() + " updated.");
+    }
+}
+
+// Design Pattern: Facade — simplifies the complex interactions
+class OrderService {
+    private final OrderStateMachine stateMachine;
+    private final DeliveryAssignmentStrategy driverStrategy;
+    private final PaymentProcessor paymentProcessor;
+    private final List&lt;OrderObserver&gt; observers = new ArrayList&lt;&gt;();
+    private final List&lt;Driver&gt; activeDrivers = new ArrayList&lt;&gt;(); // Mock DB
+    
+    public OrderService(DeliveryAssignmentStrategy strategy, PaymentProcessor processor) {
+        this.stateMachine = new OrderStateMachine();
+        this.driverStrategy = strategy;
+        this.paymentProcessor = processor;
+    }
+    
+    public void addObserver(OrderObserver observer) {
+        observers.add(observer);
+    }
+    
+    private void notifyObservers(Order order) {
+        for (OrderObserver obs : observers) {
+            obs.onOrderUpdated(order);
+        }
+    }
+    
+    public Order placeOrder(User user, Restaurant restaurant, Cart cart) {
+        Order order = new Order(UUID.randomUUID().toString(), user, restaurant, cart.getItems(), cart.getTotal());
+        
+        if (paymentProcessor.processPayment(order)) {
+            System.out.println("Payment successful! Order placed.");
+            notifyObservers(order);
+            return order;
+        } else {
+            throw new RuntimeException("Payment failed!");
+        }
+    }
+    
+    public void acceptOrder(Order order) {
+        stateMachine.transition(order, new Confirmed());
+        notifyObservers(order);
+    }
+    
+    public void markReadyForPickup(Order order) {
+        stateMachine.transition(order, new Preparing());
+        stateMachine.transition(order, new ReadyForPickup());
+        
+        Driver assigned = driverStrategy.assignDriver(order, activeDrivers);
+        if (assigned != null) {
+            stateMachine.transition(order, new OutForDelivery(assigned.getId()));
+        }
+        notifyObservers(order);
+    }
+}
+
+public class Main {
+    public static void main(String[] args) {
+        // Setup System
+        OrderService service = new OrderService(new NearestDriverStrategy(), order -&gt; true);
+        service.addObserver(new CustomerNotifier());
+        service.addObserver(new RestaurantNotifier());
+        
+        // Dummy Data
+        User user = new User();
+        Restaurant rest = new Restaurant(new RestaurantId("r1"), "Burger King", "123 Main St", List.of());
+        Cart cart = new Cart();
+        cart.addItem(new MenuItem("m1", "Whopper", "Burger", 5.99, "Mains", true), 2);
+        
+        // Execute Flow
+        Order order = service.placeOrder(user, rest, cart);
+        service.acceptOrder(order);
+        service.markReadyForPickup(order);
+    }
+}
+</code></pre>
+    </section>
+    
+    <div class="callout callout-info">
+        <h3>Interview Tip</h3>
+        <p>In LLD interviews, always highlight your use of the <strong>State Pattern</strong> for anything with a lifecycle (Orders, Deliveries, Rides). It prevents invalid transitions like a cancelled order becoming "Delivered". Using Java 21's <strong>Sealed Interfaces</strong> makes this structurally safe at compile-time!</p>
+    </div>
+
+    <div class="page-nav">
+      <a href="../index.html" class="prev"><span class="label">← Previous</span><span class="title">LLD Home</span></a>
+      <a href="payment-system.html" class="next"><span class="label">Next →</span><span class="title">Payment System</span></a>
+    </div>
+  </main>
+</div>
+<button class="scroll-top" aria-label="Scroll to top">↑</button>
+<script src="../../js/main.js"></script>
+</body>
+</html>

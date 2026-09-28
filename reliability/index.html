@@ -1,0 +1,230 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Reliability & Fault Tolerance — System Design Mastery</title><link rel="stylesheet" href="../css/style.css"><script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script></head><body>
+<button class="menu-toggle">☰</button>
+<div class="page-wrapper"><aside class="sidebar" id="sidebar"></aside>
+<main class="main-content">
+<div class="breadcrumb"><a href="../index.html">Home</a><span class="sep">›</span><strong>Reliability & Fault Tolerance</strong></div>
+
+<h1>Reliability & Fault Tolerance — Building Systems That Don't Break</h1>
+
+<div class="callout callout-info">
+  <strong>1. What is Reliability?</strong><br>
+  Reliability means that a system continues to work correctly, even when parts of it fail. 
+  <p><strong>Real-World Analogy:</strong> An airplane has backup engines. If one engine fails mid-flight, the plane doesn't crash; the backup engine takes over, allowing the plane to land safely.</p>
+</div>
+
+<h2>2. Circuit Breaker Pattern</h2>
+<p>The <span class="jargon">Circuit Breaker</span> pattern prevents a system from repeatedly trying to execute an operation that's likely to fail. It stops calling a failing service to give it time to recover.</p>
+<p><strong>Real-World Analogy:</strong> An electrical circuit breaker in your house cuts the power when there's an overload to prevent a fire.</p>
+
+<div class="diagram-container">
+<div class="mermaid">
+stateDiagram-v2
+    CLOSED --> OPEN : Failure Threshold Reached
+    OPEN --> HALF_OPEN : Timeout Expires
+    HALF_OPEN --> CLOSED : Success
+    HALF_OPEN --> OPEN : Failure
+</div>
+<p class="caption">Figure 1: Circuit Breaker States</p>
+</div>
+
+<span class="code-label">Java 21</span>
+<pre>
+public class CircuitBreakerDemo {
+    // Java 21 sealed interface for states
+    sealed interface State permits Closed, Open, HalfOpen {}
+    record Closed() implements State {}
+    record Open(long openedAt) implements State {}
+    record HalfOpen() implements State {}
+
+    public class CircuitBreaker {
+        private State state = new Closed();
+        private int failureCount = 0;
+        private final int threshold = 3;
+        private final long timeoutMs = 5000;
+
+        public void recordFailure() {
+            if (state instanceof Closed) {
+                failureCount++;
+                if (failureCount >= threshold) {
+                    state = new Open(System.currentTimeMillis());
+                }
+            } else if (state instanceof HalfOpen) {
+                state = new Open(System.currentTimeMillis());
+            }
+        }
+
+        public boolean allowRequest() {
+            return switch (state) {
+                case Closed c -> true;
+                case Open o -> {
+                    if (System.currentTimeMillis() - o.openedAt() > timeoutMs) {
+                        state = new HalfOpen();
+                        yield true;
+                    }
+                    yield false;
+                }
+                case HalfOpen h -> true;
+            };
+        }
+    }
+}
+</pre>
+
+<h2>3. Retry with Exponential Backoff</h2>
+<p>If a request fails temporarily, try again. But instead of hammering the system, wait longer between each retry (exponential backoff) and add randomness (jitter) to prevent thundering herd problems.</p>
+
+<span class="code-label">Java 21</span>
+<pre>
+import java.util.concurrent.ThreadLocalRandom;
+
+public class RetryHandler {
+    private final int maxRetries = 3;
+    private final long initialDelayMs = 100;
+    private final double multiplier = 2.0;
+    
+    public void executeWithRetry(Runnable action) {
+        int attempt = 0;
+        long delay = initialDelayMs;
+        
+        while (attempt < maxRetries) {
+            try {
+                action.run();
+                return; // Success
+            } catch (Exception e) {
+                attempt++;
+                if (attempt == maxRetries) throw e;
+                
+                // Add jitter (randomness) to avoid thundering herd
+                long jitter = ThreadLocalRandom.current().nextLong(delay / 2);
+                sleep(delay + jitter);
+                delay *= multiplier;
+            }
+        }
+    }
+    
+    private void sleep(long millis) {
+        try { Thread.sleep(millis); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+    }
+}
+</pre>
+
+<h2>4. Timeout</h2>
+<p>Never wait forever for a response. If a service is hanging, it can lock up your threads.</p>
+<p><strong>Real-World Analogy:</strong> A restaurant customer leaves if they've been waiting for their food for over an hour.</p>
+
+<span class="code-label">Java 21</span>
+<pre>
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
+
+public class TimeoutWrapper {
+    public void executeWithTimeout() {
+        CompletableFuture&lt;String&gt; future = CompletableFuture.supplyAsync(() -> {
+            // Long running network call
+            return "Result";
+        });
+        
+        // Java 21 CompletableFuture timeout support
+        future.orTimeout(2, TimeUnit.SECONDS)
+              .exceptionally(ex -> {
+                  System.out.println("Operation timed out!");
+                  return "Fallback Response";
+              });
+    }
+}
+</pre>
+
+<h2>5. Bulkhead Pattern</h2>
+<p>Isolate different parts of your application so a failure in one area doesn't cascade and take down the entire system.</p>
+<p><strong>Real-World Analogy:</strong> Ship compartments. If the hull is breached in one compartment, water doesn't flood the whole ship.</p>
+
+<span class="code-label">Java 21</span>
+<pre>
+import java.util.concurrent.Semaphore;
+
+public class BulkheadExecutor {
+    // Only allow 5 concurrent requests to Payment Service
+    private final Semaphore paymentBulkhead = new Semaphore(5);
+    
+    public void processPayment(Runnable task) {
+        if (paymentBulkhead.tryAcquire()) {
+            try {
+                task.run();
+            } finally {
+                paymentBulkhead.release();
+            }
+        } else {
+            throw new RuntimeException("Payment service is too busy!");
+        }
+    }
+}
+</pre>
+
+<h2>6. Failover</h2>
+<p>Automatically switching to a redundant or standby system upon failure.</p>
+<div class="diagram-container">
+<div class="mermaid">
+graph LR
+    A[Client] -->|Traffic| B[Load Balancer]
+    B -->|Primary (Active)| C[Server 1]
+    B -.->|Failover (Passive)| D[Server 2]
+    C -.->|Heartbeat fails| B
+</div>
+<p class="caption">Figure 2: Active-Passive Failover</p>
+</div>
+
+<h2>7. Redundancy</h2>
+<p>Having backup components. <strong>N+1 redundancy</strong> means you have the required N components plus 1 backup.</p>
+
+<h2>8. Health Checks</h2>
+<p>Load balancers need to know if a server is alive before sending it traffic.</p>
+<span class="code-label">Java 21</span>
+<pre>
+import java.util.List;
+
+public class HealthCheckDemo {
+    interface HealthCheck {
+        boolean isHealthy();
+    }
+    
+    record DatabaseHealthCheck() implements HealthCheck {
+        public boolean isHealthy() { return true; /* ping DB */ }
+    }
+    
+    record CompositeHealthCheck(List&lt;HealthCheck&gt; checks) implements HealthCheck {
+        public boolean isHealthy() {
+            // Pattern matching / lambda combo
+            return checks.stream().allMatch(HealthCheck::isHealthy);
+        }
+    }
+}
+</pre>
+
+<h2>9. Graceful Degradation</h2>
+<p>If a non-critical feature fails, return a partial result instead of crashing the whole page.</p>
+<p><strong>Real-World Analogy:</strong> Netflix might show you cached, generic movie recommendations if their personalized recommendation service goes down, rather than showing a blank screen.</p>
+
+<h2>10. Chaos Engineering</h2>
+<p>Intentionally breaking things in production to test resilience. Best example: <strong>Netflix Chaos Monkey</strong>, which randomly terminates EC2 instances to ensure the system survives.</p>
+
+<h2>11. Summary</h2>
+<table class="comparison">
+  <tr><th>Pattern</th><th>Purpose</th><th>Analogy</th></tr>
+  <tr><td>Circuit Breaker</td><td>Stop making doomed requests</td><td>House electrical breaker</td></tr>
+  <tr><td>Retry + Backoff</td><td>Recover from transient errors</td><td>Calling a busy phone line later</td></tr>
+  <tr><td>Timeout</td><td>Don't wait indefinitely</td><td>Leaving a slow restaurant</td></tr>
+  <tr><td>Bulkhead</td><td>Isolate failures</td><td>Ship watertight compartments</td></tr>
+</table>
+
+<div class="callout callout-purple">
+  <strong>Interview Tip:</strong><br>
+  Always mention failure scenarios in your system design interviews. "What if the cache goes down?" or "What if the DB node fails?" Showing you thought of failure handling sets you apart as a senior engineer.
+</div>
+
+<div class="page-nav">
+<a href="#" class="prev"><span class="label">← Previous</span><span class="title">Introduction</span></a>
+<a href="../observability/index.html" class="next"><span class="label">Next →</span><span class="title">Observability</span></a>
+</div>
+</main></div>
+<button class="scroll-top">↑</button>
+<script src="../js/main.js"></script></body></html>

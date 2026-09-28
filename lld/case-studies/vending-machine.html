@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Vending Machine — System Design Mastery</title>
+  <link rel="stylesheet" href="../../css/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+</head>
+<body>
+<button class="menu-toggle" aria-label="Toggle menu">☰</button>
+<div class="page-wrapper">
+  <aside class="sidebar" id="sidebar"></aside>
+  <main class="main-content">
+    <div class="breadcrumb">
+      <a href="../../index.html">Home</a>
+      <span class="sep">›</span>
+      LLD
+      <span class="sep">›</span>
+      <a href="../case-studies.html">Case Studies</a>
+      <span class="sep">›</span>
+      <strong>Vending Machine</strong>
+    </div>
+
+    <h1>Design a Vending Machine (LLD)</h1>
+
+    <div class="callout callout-info">
+      <strong>Scenario:</strong> Design a vending machine that takes coins/notes, dispenses items, handles stock, gives change, and supports an admin mode.
+    </div>
+
+    <h2>1. What is a Vending Machine System?</h2>
+    <p>A vending machine is a classic example of a <div class="jargon">📖 <strong>Finite State Machine (FSM)</strong>: A system that can only be in one of a finite number of states at any given time, and transitions between them based on events.</div></p>
+
+    <h2>2. What problem does it solve?</h2>
+    <ul>
+      <li>Prevents illegal operations (e.g., dispensing a product without payment).</li>
+      <li>Cleanly manages behavior that drastically changes depending on the system's current situation.</li>
+    </ul>
+
+    <h2>3. How does it work?</h2>
+    <div class="diagram-container">
+      <div class="mermaid">
+        stateDiagram-v2
+          [*] --> IdleState
+          IdleState --> HasMoneyState : Insert Coin
+          HasMoneyState --> HasMoneyState : Insert More Coin
+          HasMoneyState --> DispensingState : Select Product (Sufficient Funds)
+          HasMoneyState --> IdleState : Cancel
+          DispensingState --> IdleState : Dispense & Return Change
+          IdleState --> MaintenanceState : Enter Admin Mode
+          MaintenanceState --> IdleState : Exit Admin Mode
+      </div>
+      <p class="caption">Figure 1: State transitions of the Vending Machine</p>
+    </div>
+
+    <h2>4. Java 21 Implementation</h2>
+    <p>We heavily leverage the <strong>State Pattern</strong> here. Using Java 21's <code>sealed interface</code> allows us to strictly bound the states our machine can enter.</p>
+
+    <span class="code-label">Java</span>
+    <pre>
+import java.util.Map;
+import java.util.HashMap;
+
+enum Coin { PENNY(1), NICKEL(5), DIME(10), QUARTER(25); 
+    final int value;
+    Coin(int v) { this.value = v; }
+}
+enum Note { ONE(100), FIVE(500), TEN(1000); 
+    final int value;
+    Note(int v) { this.value = v; }
+}
+
+record Product(String name, int priceInCents, int quantity) {}
+
+// SOLID: SRP — Inventory just manages stock.
+class Inventory {
+    private Map<String, Product> items = new HashMap<>();
+    public void addProduct(Product p) { items.put(p.name(), p); }
+    public boolean isAvailable(String name) {
+        return items.containsKey(name) && items.get(name).quantity() > 0;
+    }
+    public Product getProduct(String name) { return items.get(name); }
+    public void decrementStock(String name) {
+        Product p = items.get(name);
+        items.put(name, new Product(p.name(), p.priceInCents(), p.quantity() - 1));
+    }
+}
+
+// Design Pattern: STATE — the star of this design!
+// Defines exactly what the machine can DO in any state.
+sealed interface VendingMachineState permits IdleState, HasMoneyState, DispensingState, MaintenanceState {
+    void insertMoney(VendingMachine machine, int amount);
+    void selectProduct(VendingMachine machine, String productName);
+    void cancel(VendingMachine machine);
+    void dispense(VendingMachine machine);
+}
+
+class IdleState implements VendingMachineState {
+    @Override
+    public void insertMoney(VendingMachine machine, int amount) {
+        machine.addBalance(amount);
+        machine.setState(new HasMoneyState());
+    }
+    @Override
+    public void selectProduct(VendingMachine machine, String productName) {
+        System.out.println("Please insert money first.");
+    }
+    @Override
+    public void cancel(VendingMachine machine) {
+        System.out.println("Nothing to cancel.");
+    }
+    @Override
+    public void dispense(VendingMachine machine) {
+        System.out.println("Payment required.");
+    }
+}
+
+class HasMoneyState implements VendingMachineState {
+    @Override
+    public void insertMoney(VendingMachine machine, int amount) {
+        machine.addBalance(amount);
+    }
+    @Override
+    public void selectProduct(VendingMachine machine, String productName) {
+        Inventory inv = machine.getInventory();
+        if (!inv.isAvailable(productName)) {
+            System.out.println("Out of stock.");
+            return;
+        }
+        Product p = inv.getProduct(productName);
+        if (machine.getBalance() < p.priceInCents()) {
+            System.out.println("Insufficient funds. Need " + (p.priceInCents() - machine.getBalance()) + " more.");
+        } else {
+            machine.setSelectedProduct(p);
+            machine.setState(new DispensingState());
+            machine.dispense(); // Auto trigger dispensing
+        }
+    }
+    @Override
+    public void cancel(VendingMachine machine) {
+        System.out.println("Returning balance: " + machine.getBalance());
+        machine.clearBalance();
+        machine.setState(new IdleState());
+    }
+    @Override
+    public void dispense(VendingMachine machine) {
+        System.out.println("Select a product first.");
+    }
+}
+
+class DispensingState implements VendingMachineState {
+    @Override
+    public void insertMoney(VendingMachine machine, int amount) { System.out.println("Wait, dispensing..."); }
+    @Override
+    public void selectProduct(VendingMachine machine, String productName) { System.out.println("Wait, dispensing..."); }
+    @Override
+    public void cancel(VendingMachine machine) { System.out.println("Too late to cancel."); }
+    
+    @Override
+    public void dispense(VendingMachine machine) {
+        Product p = machine.getSelectedProduct();
+        machine.getInventory().decrementStock(p.name());
+        int change = machine.getBalance() - p.priceInCents();
+        System.out.println("Dispensing " + p.name());
+        if (change > 0) {
+            System.out.println("Returning change: " + change);
+        }
+        machine.clearBalance();
+        machine.setState(new IdleState());
+    }
+}
+
+class MaintenanceState implements VendingMachineState {
+    @Override
+    public void insertMoney(VendingMachine m, int a) { System.out.println("Machine in maintenance."); }
+    @Override
+    public void selectProduct(VendingMachine m, String p) { System.out.println("Machine in maintenance."); }
+    @Override
+    public void cancel(VendingMachine m) { System.out.println("Machine in maintenance."); }
+    @Override
+    public void dispense(VendingMachine m) { System.out.println("Machine in maintenance."); }
+    
+    public void refill(VendingMachine machine, Product p) {
+        machine.getInventory().addProduct(p);
+    }
+    public void finishMaintenance(VendingMachine machine) {
+        machine.setState(new IdleState());
+    }
+}
+
+// SOLID: OCP — VendingMachine delegates behavior to state objects.
+// Context class
+class VendingMachine {
+    private VendingMachineState state;
+    private Inventory inventory;
+    private int currentBalance;
+    private Product selectedProduct;
+
+    public VendingMachine() {
+        this.inventory = new Inventory();
+        this.state = new IdleState();
+        this.currentBalance = 0;
+    }
+
+    public void setState(VendingMachineState state) { this.state = state; }
+    public Inventory getInventory() { return inventory; }
+    public void addBalance(int amt) { currentBalance += amt; }
+    public int getBalance() { return currentBalance; }
+    public void clearBalance() { currentBalance = 0; }
+    public void setSelectedProduct(Product p) { this.selectedProduct = p; }
+    public Product getSelectedProduct() { return selectedProduct; }
+
+    // Delegation to state
+    public void insertCoin(Coin c) { state.insertMoney(this, c.value); }
+    public void insertNote(Note n) { state.insertMoney(this, n.value); }
+    public void selectProduct(String name) { state.selectProduct(this, name); }
+    public void cancel() { state.cancel(this); }
+    public void dispense() { state.dispense(this); }
+}
+
+public class Main {
+    public static void main(String[] args) {
+        VendingMachine vm = new VendingMachine();
+        vm.getInventory().addProduct(new Product("Soda", 150, 10)); // $1.50
+        
+        vm.insertNote(Note.ONE);
+        vm.insertCoin(Coin.QUARTER);
+        vm.insertCoin(Coin.QUARTER); // Total 150
+        
+        vm.selectProduct("Soda"); // Should dispense successfully
+    }
+}
+    </pre>
+
+    <h2>5. Why is it recommended / When to use it?</h2>
+    <p>Using the State pattern completely eliminates massive `if-else` blocks or `switch` statements scattered across the codebase. It ensures that behaviors isolated to a specific state (like returning change while dispensing) cannot be accidentally invoked in another state.</p>
+
+    <div class="callout callout-purple">
+      <strong>Interview Tip:</strong> The State pattern is arguably the most common answer expected for any Vending Machine or ATM interview question. If you write massive if-else logic here, it is a big red flag for interviewers.
+    </div>
+
+    <div class="page-nav">
+      <a href="tic-tac-toe.html" class="prev"><span class="label">← Previous</span><span class="title">Tic-Tac-Toe</span></a>
+      <a href="../../glossary.html" class="next"><span class="label">Next →</span><span class="title">Glossary</span></a>
+    </div>
+  </main>
+</div>
+<button class="scroll-top" aria-label="Scroll to top">↑</button>
+<script src="../../js/main.js"></script>
+</body>
+</html>

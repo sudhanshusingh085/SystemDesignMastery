@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Structural Design Patterns — System Design Mastery</title>
+  <link rel="stylesheet" href="../../css/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+</head>
+<body>
+<button class="menu-toggle" aria-label="Toggle menu">☰</button>
+<div class="page-wrapper">
+  <aside class="sidebar" id="sidebar"></aside>
+  <main class="main-content">
+    <div class="breadcrumb">
+      <a href="../../index.html">Home</a>
+      <span class="sep">›</span>
+      <a href="../index.html">Low-Level Design</a>
+      <span class="sep">›</span>
+      <a href="index.html">Design Patterns</a>
+      <span class="sep">›</span>
+      <strong>Structural Patterns</strong>
+    </div>
+
+    <h1>Structural Design Patterns</h1>
+    <p>Structural patterns explain how to assemble objects and classes into larger structures, while keeping these structures flexible and efficient.</p>
+
+    <!-- Adapter -->
+    <section>
+      <h2>1. Adapter</h2>
+      <p>Allows objects with incompatible interfaces to collaborate.</p>
+      <div class="jargon">📖 <strong>Analogy</strong>: A travel power adapter — plugs a US plug into an EU socket.</div>
+      
+      <span class="code-label">Java 21</span>
+      <pre>
+public interface Printer {
+    void print(String text);
+}
+
+// Incompatible legacy class
+public class LegacyPrinter {
+    public void printDocument(String document) {
+        System.out.println("Legacy Print: " + document);
+    }
+}
+
+// Adapter
+public class PrinterAdapter implements Printer {
+    private final LegacyPrinter legacyPrinter;
+
+    public PrinterAdapter(LegacyPrinter legacyPrinter) {
+        this.legacyPrinter = legacyPrinter;
+    }
+
+    @Override
+    public void print(String text) {
+        legacyPrinter.printDocument(text);
+    }
+}
+      </pre>
+    </section>
+
+    <!-- Decorator -->
+    <section>
+      <h2>2. Decorator</h2>
+      <p>Lets you attach new behaviors to objects by placing these objects inside special wrapper objects that contain the behaviors.</p>
+      <div class="jargon">📖 <strong>Analogy</strong>: Adding toppings to coffee. Start with a base coffee, then dynamically add milk, sugar, or whipped cream.</div>
+      
+      <span class="code-label">Java 21</span>
+      <pre>
+public interface Coffee {
+    double getCost();
+    String getDescription();
+}
+
+public class BaseCoffee implements Coffee {
+    public double getCost() { return 2.0; }
+    public String getDescription() { return "Simple Coffee"; }
+}
+
+public abstract class CoffeeDecorator implements Coffee {
+    protected final Coffee decoratedCoffee;
+
+    public CoffeeDecorator(Coffee coffee) {
+        this.decoratedCoffee = coffee;
+    }
+    public double getCost() { return decoratedCoffee.getCost(); }
+    public String getDescription() { return decoratedCoffee.getDescription(); }
+}
+
+public class MilkDecorator extends CoffeeDecorator {
+    public MilkDecorator(Coffee coffee) { super(coffee); }
+    
+    @Override
+    public double getCost() { return super.getCost() + 0.5; }
+    
+    @Override
+    public String getDescription() { return super.getDescription() + ", Milk"; }
+}
+      </pre>
+    </section>
+
+    <!-- Facade -->
+    <section>
+      <h2>3. Facade</h2>
+      <p>Provides a simplified interface to a library, a framework, or any other complex set of classes.</p>
+      <div class="jargon">📖 <strong>Analogy</strong>: A hotel concierge. You just say 'I want a restaurant reservation' and they handle all the complex internal steps.</div>
+      
+      <span class="code-label">Java 21</span>
+      <pre>
+class DVDPlayer { void on() {} void play() {} }
+class Projector { void on() {} void setInput() {} }
+class Lights { void dim() {} }
+
+public class HomeTheaterFacade {
+    private final DVDPlayer dvd;
+    private final Projector projector;
+    private final Lights lights;
+
+    public HomeTheaterFacade(DVDPlayer dvd, Projector projector, Lights lights) {
+        this.dvd = dvd;
+        this.projector = projector;
+        this.lights = lights;
+    }
+
+    public void watchMovie() {
+        System.out.println("Get ready to watch a movie...");
+        lights.dim();
+        projector.on();
+        projector.setInput();
+        dvd.on();
+        dvd.play();
+    }
+}
+      </pre>
+    </section>
+
+    <!-- Proxy -->
+    <section>
+      <h2>4. Proxy</h2>
+      <p>Provides a substitute or placeholder for another object to control access to it.</p>
+      <div class="jargon">📖 <strong>Analogy</strong>: A security guard checking your ID before you enter a building.</div>
+      
+      <span class="code-label">Java 21</span>
+      <pre>
+public interface Image {
+    void display();
+}
+
+public class RealImage implements Image {
+    private String filename;
+    
+    public RealImage(String filename) {
+        this.filename = filename;
+        loadFromDisk();
+    }
+    
+    private void loadFromDisk() {
+        System.out.println("Loading " + filename);
+    }
+    
+    public void display() {
+        System.out.println("Displaying " + filename);
+    }
+}
+
+public class ImageProxy implements Image {
+    private RealImage realImage;
+    private String filename;
+    
+    public ImageProxy(String filename) {
+        this.filename = filename;
+    }
+    
+    public void display() {
+        // Lazy loading
+        if (realImage == null) {
+            realImage = new RealImage(filename);
+        }
+        realImage.display();
+    }
+}
+      </pre>
+    </section>
+
+    <div class="page-nav">
+      <a href="creational.html" class="prev"><span class="label">← Previous</span><span class="title">Creational Patterns</span></a>
+      <a href="behavioral.html" class="next"><span class="label">Next →</span><span class="title">Behavioral Patterns</span></a>
+    </div>
+  </main>
+</div>
+<button class="scroll-top" aria-label="Scroll to top">↑</button>
+<script src="../../js/main.js"></script>
+</body>
+</html>

@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Client & Server — System Design Mastery</title>
+  <link rel="stylesheet" href="../css/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+</head>
+<body>
+<button class="menu-toggle" aria-label="Toggle menu">☰</button>
+<div class="page-wrapper">
+  <aside class="sidebar" id="sidebar"></aside>
+  <main class="main-content">
+    <div class="breadcrumb">
+      <a href="../index.html">Home</a>
+      <span class="sep">›</span>
+      Fundamentals
+      <span class="sep">›</span>
+      <strong>Client & Server</strong>
+    </div>
+
+    <h1>Client & Server Architecture</h1>
+    
+    <p>Every time you use the internet, whether to watch a video, send a message, or read this very article, you are participating in the <strong>Client-Server model</strong>. It is the fundamental building block of web architecture.</p>
+
+    <h2>What is a Client?</h2>
+    <div class="jargon">📖 <strong>Client</strong>: A device or software application that requests data or services from another system.</div>
+    <p>Your smartphone, your laptop, your web browser (like Chrome or Safari), and even smart TVs are clients. They don't generate the data themselves; they ask for it. The client is the thing you interact with directly.</p>
+
+    <h2>What is a Server?</h2>
+    <div class="jargon">📖 <strong>Server</strong>: A powerful computer running specialized software that waits for requests from clients and sends back the appropriate data.</div>
+    <p>A server is essentially a computer that is always turned on, connected to a fast internet connection, and programmed to <em>serve</em>. When you ask to see a web page, the server is the machine that finds that page and sends it back to you.</p>
+
+    <div class="callout callout-info">
+      <strong>Real-World Analogy: The Restaurant</strong><br>
+      Imagine you are at a restaurant.<br>
+      • <strong>You (The Client):</strong> You sit at the table and look at the menu. You <em>request</em> food.<br>
+      • <strong>The Kitchen (The Server):</strong> The kitchen receives your order, prepares the food, and sends it back. It <em>responds</em> to your request.<br>
+      • <strong>The Waiter (The Network):</strong> The waiter carries your request to the kitchen and brings the food back to you.
+    </div>
+
+    <h2>How do they talk? Request & Response</h2>
+    <p>Communication between a client and a server happens in a strict two-step dance:</p>
+    <ol>
+      <li><strong>Request:</strong> The client asks the server for something.</li>
+      <li><strong>Response:</strong> The server answers the client, either providing the data or explaining why it couldn't (like an error message).</li>
+    </ol>
+
+    <h2>What is HTTP?</h2>
+    <p>If a client speaks English and a server speaks French, they can't communicate. They need a common language. On the web, that common language is <strong>HTTP</strong>.</p>
+    <div class="jargon">📖 <strong>HTTP (HyperText Transfer Protocol)</strong>: The set of rules that defines how messages are formatted and transmitted across the web.</div>
+    <p>When you type `http://` or `https://` in your browser, you are telling the browser to use this specific language to talk to the server.</p>
+
+    <h2>What is an API?</h2>
+    <p>A server might be capable of thousands of different things. How does the client know what to ask for? It uses an API.</p>
+    <div class="jargon">📖 <strong>API (Application Programming Interface)</strong>: A set of defined rules that allows one piece of software to communicate with another. It acts like a menu in a restaurant, listing all the available operations.</div>
+
+    <h2>The Big Picture Diagram</h2>
+    <p>Let's look at the full journey of data from a client, through a server, to a database.</p>
+
+    <div class="diagram-container">
+      <div class="mermaid">
+        sequenceDiagram
+            actor Client as Client (Browser)
+            participant Server as Web Server
+            participant DB as Database
+            
+            Client->>Server: 1. HTTP Request (Get User Profile)
+            Server->>DB: 2. Query (Select user where id=1)
+            DB-->>Server: 3. Result (User Data)
+            Server-->>Client: 4. HTTP Response (HTML/JSON Profile)
+      </div>
+      <p class="caption">Figure 1: The Request-Response Cycle</p>
+    </div>
+
+    <h2>What happens when you type google.com?</h2>
+    <p>This is a classic interview question! Let's break it down simply:</p>
+    <div class="step">
+      <div class="step-number">1</div>
+      <div class="step-content">You type `google.com` (Client action).</div>
+    </div>
+    <div class="step">
+      <div class="step-number">2</div>
+      <div class="step-content">Your computer finds the IP Address of Google's servers.</div>
+    </div>
+    <div class="step">
+      <div class="step-number">3</div>
+      <div class="step-content">Your browser sends an HTTP Request to that IP Address.</div>
+    </div>
+    <div class="step">
+      <div class="step-number">4</div>
+      <div class="step-content">Google's Server receives the request, builds the search page HTML.</div>
+    </div>
+    <div class="step">
+      <div class="step-number">5</div>
+      <div class="step-content">The Server sends an HTTP Response containing the HTML back to your browser.</div>
+    </div>
+    <div class="step">
+      <div class="step-number">6</div>
+      <div class="step-content">Your browser renders the HTML onto your screen.</div>
+    </div>
+
+    <h2>Java 21 Code: A Simple Client-Server Program</h2>
+    <p>Java includes built-in tools to create HTTP servers and clients. Here is a simple example using the modern Java HTTP Client and the lightweight HttpServer.</p>
+
+    <span class="code-label">Java</span>
+    <pre>
+import com.sun.net.httpserver.HttpServer;
+import java.io.IOException;
+import java.io.OutputStream;
+import java.net.InetSocketAddress;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+
+/**
+ * Demonstrates a basic Client-Server interaction in Java.
+ */
+public class ClientServerExample {
+
+    // 1. Define the Server
+    public static void startServer() throws IOException {
+        // Create a server listening on port 8080
+        HttpServer server = HttpServer.create(new InetSocketAddress(8080), 0);
+        
+        // Define an API endpoint (context) at "/hello"
+        server.createContext("/hello", exchange -> {
+            String responseMessage = "Hello from the Java 21 Server!";
+            
+            // Send HTTP 200 OK status and the length of the message
+            exchange.sendResponseHeaders(200, responseMessage.getBytes().length);
+            
+            // Write the response body
+            try (OutputStream os = exchange.getResponseBody()) {
+                os.write(responseMessage.getBytes());
+            }
+        });
+        
+        // Start the server in the background
+        server.setExecutor(null); 
+        server.start();
+        System.out.println("Server started on port 8080...");
+    }
+
+    // 2. Define the Client
+    public static void makeClientRequest() throws Exception {
+        // Create a modern Java HttpClient
+        try (HttpClient client = HttpClient.newHttpClient()) {
+            
+            // Build the HTTP Request
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create("http://localhost:8080/hello"))
+                    .GET()
+                    .build();
+
+            // Send the request and get the response
+            System.out.println("Client sending request to /hello...");
+            HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+
+            // Print the result
+            System.out.println("Client received Status Code: " + response.statusCode());
+            System.out.println("Client received Body: " + response.body());
+        }
+    }
+
+    public static void main(String[] args) throws Exception {
+        startServer();
+        
+        // Wait a tiny bit to ensure server is up
+        Thread.sleep(500); 
+        
+        makeClientRequest();
+        
+        System.exit(0);
+    }
+}
+    </pre>
+
+    <div class="callout callout-warn">
+      <strong>Important:</strong> In the real world, servers handle thousands of concurrent requests, meaning they need robust multithreading. Modern Java handles this beautifully with <em>Virtual Threads</em>, introduced in Java 21, which allow millions of lightweight threads to run simultaneously.
+    </div>
+
+    <div class="page-nav">
+      <a href="what-is-system-design.html" class="prev"><span class="label">← Previous</span><span class="title">What is System Design?</span></a>
+      <a href="networking-basics.html" class="next"><span class="label">Next →</span><span class="title">Networking Basics</span></a>
+    </div>
+  </main>
+</div>
+<button class="scroll-top" aria-label="Scroll to top">↑</button>
+<script src="../js/main.js"></script>
+</body>
+</html>

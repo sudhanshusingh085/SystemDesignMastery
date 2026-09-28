@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Design a Notification System — System Design Mastery</title>
+  <link rel="stylesheet" href="../../css/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+</head>
+<body>
+<button class="menu-toggle" aria-label="Toggle menu">☰</button>
+<div class="page-wrapper">
+  <aside class="sidebar" id="sidebar"></aside>
+  <main class="main-content">
+    <div class="breadcrumb">
+      <a href="../../index.html">Home</a>
+      <span class="sep">›</span>
+      HLD
+      <span class="sep">›</span>
+      Case Studies
+      <span class="sep">›</span>
+      <strong>Notification System</strong>
+    </div>
+
+    <h1>Design a Notification System</h1>
+    <p>A notification system alerts users via various channels (Push, SMS, Email) about important events, messages, or promotions.</p>
+
+    <div class="jargon">📖 <strong>Idempotency</strong>: The property of certain operations in mathematics and computer science whereby they can be applied multiple times without changing the result beyond the initial application. (e.g., ensuring a user isn't notified twice for the same event).</div>
+
+    <h2>Step 1 — Requirements</h2>
+    <div class="card">
+      <h3>Functional Requirements</h3>
+      <ul>
+        <li>Send notifications via Push (iOS/Android), SMS, and Email.</li>
+        <li>Respect user preferences (opt-outs, quiet hours).</li>
+        <li>Support templating for messages.</li>
+      </ul>
+      
+      <h3>Non-functional Requirements</h3>
+      <ul>
+        <li>High reliability (at-least-once delivery).</li>
+        <li>Low latency (&lt; 5 seconds delay for urgent messages).</li>
+        <li>Scale: 10 Million notifications per day.</li>
+      </ul>
+    </div>
+
+    <h2>Step 2 — Architecture</h2>
+    <p>Below is the high-level design of our notification system.</p>
+
+    <div class="diagram-container">
+      <div class="mermaid">
+        graph LR
+          API[API Gateway] --> Validate[Validator]
+          Validate --> PQ[Priority Queue]
+          PQ --> Worker[Workers]
+          Worker --> Push[Push Channel]
+          Worker --> SMS[SMS Channel]
+          Worker --> Email[Email Channel]
+          Worker -- Fails --> DLQ[Dead Letter Queue]
+      </div>
+      <p class="caption">Figure 1: High Level Architecture of Notification System</p>
+    </div>
+
+    <h2>Step 3 — Deep Dive</h2>
+    
+    <h3>Deduplication</h3>
+    <p>We must ensure we don't spam users with the same notification. We can generate a unique ID for each notification event and use a cache (like Redis) to store this ID for a short period. Before sending, we check if the ID exists in the cache.</p>
+    
+    <h3>Priority Queues</h3>
+    <p>Not all notifications are equal. OTPs and security alerts are high priority and should bypass marketing emails. We use different message queues (e.g., Kafka topics or RabbitMQ queues) based on priority.</p>
+
+    <h2>Step 4 — Implementation (Java 21)</h2>
+    <span class="code-label">Java</span>
+    <pre>
+import java.util.concurrent.TimeUnit;
+
+// Java 21 Record for Notification
+public record Notification(String id, String userId, String message, NotificationType type) {}
+
+enum NotificationType { URGENT, PROMOTIONAL, TRANSACTIONAL }
+
+// Sealed interface for notification channels
+public sealed interface NotificationChannel permits PushChannel, SmsChannel, EmailChannel {
+    boolean send(Notification notification);
+}
+
+final class PushChannel implements NotificationChannel {
+    @Override public boolean send(Notification n) { 
+        System.out.println("Sending Push: " + n.message()); return true; 
+    }
+}
+final class SmsChannel implements NotificationChannel {
+    @Override public boolean send(Notification n) { 
+        System.out.println("Sending SMS: " + n.message()); return true; 
+    }
+}
+final class EmailChannel implements NotificationChannel {
+    @Override public boolean send(Notification n) { 
+        System.out.println("Sending Email: " + n.message()); return true; 
+    }
+}
+
+class DeduplicationFilter {
+    public boolean isDuplicate(String notificationId) {
+        // Check Redis or Cache to see if notificationId was processed recently
+        return false;
+    }
+}
+
+class RetryHandler {
+    private static final int MAX_RETRIES = 3;
+
+    public void executeWithRetry(Runnable action) {
+        int attempt = 0;
+        while (attempt &lt; MAX_RETRIES) {
+            try {
+                action.run();
+                return; // Success
+            } catch (Exception e) {
+                attempt++;
+                try {
+                    // Exponential backoff
+                    Thread.sleep((long) Math.pow(2, attempt) * 1000);
+                } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                }
+            }
+        }
+        System.err.println("Failed after max retries. Sending to DLQ.");
+    }
+}
+
+public class NotificationWorker {
+    private final DeduplicationFilter filter = new DeduplicationFilter();
+    private final RetryHandler retryHandler = new RetryHandler();
+
+    public void processNotification(Notification n, NotificationChannel channel) {
+        if (filter.isDuplicate(n.id())) {
+            return;
+        }
+
+        retryHandler.executeWithRetry(() -&gt; {
+            boolean success = channel.send(n);
+            if (!success) throw new RuntimeException("Delivery failed");
+        });
+    }
+}
+    </pre>
+
+    <h2>Step 5 — Optimization</h2>
+    <ul>
+        <li><strong>Batch Processing:</strong> Batch non-urgent notifications (like weekly digests) to save bandwidth and compute.</li>
+        <li><strong>Timezone Awareness:</strong> Don't send promotional notifications at 3 AM in the user's local timezone.</li>
+        <li><strong>Analytics:</strong> Track delivery, open, and click rates to improve notification templates.</li>
+    </ul>
+
+    <div class="callout callout-info">
+      <strong>💡 Interview Tip:</strong> Always mention a Dead Letter Queue (DLQ) for failed notifications. This shows you think about error handling and system reliability in the real world.
+    </div>
+
+    <div class="page-nav">
+      <a href="news-feed.html" class="prev"><span class="label">← Previous</span><span class="title">News Feed</span></a>
+      <a href="../../lld/index.html" class="next"><span class="label">Next →</span><span class="title">LLD Overview</span></a>
+    </div>
+  </main>
+</div>
+<button class="scroll-top" aria-label="Scroll to top">↑</button>
+<script src="../../js/main.js"></script>
+</body>
+</html>

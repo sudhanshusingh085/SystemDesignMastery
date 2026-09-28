@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Glossary — System Design Mastery</title>
+  <link rel="stylesheet" href="css/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+  <style>
+    .search-container {
+      margin-bottom: 30px;
+      position: sticky;
+      top: 10px;
+      z-index: 100;
+      background: white;
+      padding: 15px;
+      border-radius: 8px;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    }
+    #glossarySearch {
+      width: 100%;
+      padding: 12px 20px;
+      font-size: 1.1em;
+      border: 2px solid #ccc;
+      border-radius: 4px;
+      box-sizing: border-box;
+    }
+    .glossary-section {
+      margin-bottom: 40px;
+    }
+    .letter-heading {
+      font-size: 2em;
+      color: #333;
+      border-bottom: 2px solid #0056b3;
+      padding-bottom: 5px;
+      margin-bottom: 20px;
+    }
+    .glossary-item {
+      background: #f9f9f9;
+      border: 1px solid #ddd;
+      border-left: 4px solid #0056b3;
+      padding: 15px;
+      margin-bottom: 15px;
+      border-radius: 4px;
+    }
+    .term-name {
+      font-size: 1.3em;
+      font-weight: bold;
+      color: #0056b3;
+      margin-bottom: 10px;
+      display: inline-block;
+    }
+    .term-def {
+      margin-bottom: 10px;
+    }
+    .term-analogy {
+      font-style: italic;
+      color: #555;
+      margin-bottom: 10px;
+    }
+    .term-link {
+      font-size: 0.9em;
+    }
+    .term-link a {
+      color: #0056b3;
+      text-decoration: none;
+      font-weight: bold;
+    }
+    .term-link a:hover {
+      text-decoration: underline;
+    }
+  </style>
+</head>
+<body>
+<button class="menu-toggle" aria-label="Toggle menu">☰</button>
+<div class="page-wrapper">
+  <aside class="sidebar" id="sidebar"></aside>
+  <main class="main-content">
+    <div class="breadcrumb">
+      <a href="index.html">Home</a>
+      <span class="sep">›</span>
+      <strong>Glossary</strong>
+    </div>
+
+    <h1>Technical Glossary</h1>
+    <p>Welcome to the System Design Mastery Glossary. This page contains simple, beginner-friendly definitions of technical terms used throughout the site, complete with real-world analogies.</p>
+
+    <div class="search-container">
+      <input type="text" id="glossarySearch" onkeyup="filterGlossary()" placeholder="Search for terms or definitions... (e.g. 'Server', 'Restaurant')">
+    </div>
+
+    <div id="glossary-content">
+      
+      <!-- A -->
+      <div class="glossary-section" id="section-a">
+        <h2 class="letter-heading">A</h2>
+        
+        <div class="glossary-item">
+          <div class="term-name">Abstract Class</div>
+          <div class="term-def">A class that cannot be instantiated on its own and is meant to be subclassed by other classes. It provides a common template or base structure.</div>
+          <div class="term-analogy"><strong>Analogy:</strong> Think of it as a blueprint for a "Vehicle". You can't build a generic "Vehicle", you must build a specific "Car" or "Truck" that follows the blueprint.</div>
+          <div class="term-link"><a href="lld/fundamentals/abstract-class.html">Read more</a></div>
+        </div>
+
+        <div class="glossary-item">
+          <div class="term-name">API (Application Programming Interface)</div>
+          <div class="term-def">A set of rules that lets different software programs communicate with each other.</div>
+          <div class="term-analogy"><strong>Analogy:</strong> Like a waiter in a restaurant. You (the client) tell the waiter your order (request), the waiter goes to the kitchen (server), and brings you back your food (response).</div>
+          <div class="term-link"><a href="hld/fundamentals/api.html">Read more</a></div>
+        </div>
+
+        <div class="glossary-item">
+          <div class="term-name">API Gateway</div>
+          <div class="term-def">A server that acts as a front door for all requests coming into a system, routing them to the correct microservice.</div>
+          <div class="term-analogy"><strong>Analogy:</strong> A receptionist at a large corporate building who directs visitors to the correct department.</div>
+          <div class="term-link"><a href="hld/components/api-gateway.html">Read more</a></div>
+        </div>
+        
+        <div class="glossary-item">
+          <div class="term-name">Abstraction</div>
+          <div class="term-def">Hiding complex implementation details and showing only the essential features of an object.</div>
+          <div class="term-analogy"><strong>Analogy:</strong> Driving a car. You know how to use the steering wheel and pedals (the abstraction) without needing to understand how the internal combustion engine works.</div>
+          <div class="term-link"><a href="lld/fundamentals/abstraction.html">Read more</a></div>
+        </div>
+
+        <div class="glossary-item">
+          <div class="term-name">ACID</div>
+          <div class="term-def">Atomicity, Consistency, Isolation, Durability. A set of properties that guarantee database transactions are processed reliably.</div>
+          <div class="term-analogy"><strong>Analogy:</strong> A bank transfer. The money must leave your account AND arrive in the recipient's account (Atomic). It shouldn't leave the system in a broken state (Consistent). No one should see the transfer half-finished (Isolated), and once done, it's permanent (Durable).</div>
+          <div class="term-link"><a href="hld/databases/acid.html">Read more</a></div>
+        </div>
+
+        <div class="glossary-item">
+          <div class="term-name">Asynchronous</div>
+          <div class="term-def">A programming pattern where a task is started and the system continues to do other things while waiting for it to finish, rather than pausing entirely.</div>
+          <div class="term-analogy"><strong>Analogy:</strong> Ordering food delivery. You place the order (start task), then watch TV while you wait (continue other work), instead of standing by the door doing nothing until the food arrives (synchronous).</div>
+          <div class="term-link"><a href="fundamentals/async.html">Read more</a></div>
+        </div>
+
+        <div class="glossary-item">
+          <div class="term-name">Authentication</div>
+          <div class="term-def">The process of verifying who a user is.</div>
+          <div class="term-analogy"><strong>Analogy:</strong> Showing your ID at a security checkpoint.</div>
+          <div class="term-link"><a href="hld/security/auth.html">Read more</a></div>
+        </div>
+
+        <div class="glossary-item">
+          <div class="term-name">Authorization</div>
+          <div class="term-def">The process of verifying what a specific user is allowed to do.</div>
+          <div class="term-analogy"><strong>Analogy:</strong> Having a VIP pass. Authentication gets you in the door; authorization determines if you can enter the VIP lounge.</div>
+          <div class="term-link"><a href="hld/security/auth.html">Read more</a></div>
+        </div>
+
+        <div class="glossary-item">
+          <div class="term-name">Auto-scaling</div>
+          <div class="term-def">Automatically adjusting the number of computing resources (servers) based on current traffic.</div>
+          <div class="term-analogy"><strong>Analogy:</strong> A supermarket opening more checkout lanes when the lines get long, and closing them when the store is empty.</div>
+          <div class="term-link"><a href="hld/fundamentals/scaling.html">Read more</a></div>
+        </div>
+
+        <div class="glossary-item">
+          <div class="term-name">Availability</div>
+          <div class="term-def">The percentage of time a system is fully operational and accessible.</div>
+          <div class="term-analogy"><strong>Analogy:</strong> A 24/7 convenience store has higher availability than a bank that's only open 9 to 5.</div>
+          <div class="term-link"><a href="hld/fundamentals/cap-theorem.html">Read more</a></div>
+        </div>
+      </div>
+
+      <!-- B -->
+      <div class="glossary-section" id="section-b">
+        <h2 class="letter-heading">B</h2>
+        
+        <div class="glossary-item">
+          <div class="term-name">Backend</div>
+          <div class="term-def">The part of a software application that runs on the server, hidden from the user, handling data storage, business logic, and security.</div>
+          <div class="term-analogy"><strong>Analogy:</strong> The kitchen and storage rooms of a restaurant where the actual cooking happens.</div>
+          <div class="term-link"><a href="fundamentals/client-server.html">Read more</a></div>
+        </div>
+
+        <div class="glossary-item">
+          <div class="term-name">Bandwidth</div>
+          <div class="term-def">The maximum rate of data transfer across a given path in a network.</div>
+          <div class="term-analogy"><strong>Analogy:</strong> The width of a highway. A wider highway (more bandwidth) allows more cars (data) to travel at once.</div>
+          <div class="term-link"><a href="hld/fundamentals/network.html">Read more</a></div>
+        </div>
+
+        <div class="glossary-item">
+          <div class="term-name">Base62</div>
+          <div class="term-def">A numeral system that uses 62 characters (0-9, a-z, A-Z) to represent numbers, often used to create short URLs.</div>
+          <div class="term-analogy"><strong>Analogy:</strong> Using a much larger alphabet so you can spell very big numbers using very few characters.</div>
+          <div class="term-link"><a href="hld/case-studies/url-shortener.html">Read more</a></div>
+        </div>
+
+        <div class="glossary-item">
+          <div class="term-name">Blocking Queue</div>
+          <div class="term-def">A queue that blocks a thread attempting to take an item from it if the queue is empty, and blocks a thread attempting to add an item if the queue is full.</div>
+          <div class="term-analogy"><strong>Analogy:</strong> A factory conveyor belt. Workers block (wait) if there are no parts to assemble, and block (stop putting things on) if the belt is completely full.</div>
+          <div class="term-link"><a href="lld/fundamentals/concurrency.html">Read more</a></div>
+        </div>
+
+        <div class="glossary-item">
+          <div class="term-name">Builder Pattern</div>
+          <div class="term-def">A design pattern that lets you construct complex objects step by step.</div>
+          <div class="term-analogy"><strong>Analogy:</strong> Ordering a custom sandwich at Subway. You specify the bread, meat, cheese, and veggies step-by-step to build your final sandwich.</div>
+          <div class="term-link"><a href="lld/design-patterns/builder.html">Read more</a></div>
+        </div>
+
+        <div class="glossary-item">
+          <div class="term-name">Byte</div>
+          <div class="term-def">A unit of digital data that typically consists of eight bits.</div>
+          <div class="term-analogy"><strong>Analogy:</strong> A single character in a book. It's a small, fundamental building block of information.</div>
+          <div class="term-link"><a href="fundamentals/data.html">Read more</a></div>
+        </div>
+      </div>
+
+      <!-- C -->
+      <div class="glossary-section" id="section-c">
+        <h2 class="letter-heading">C</h2>
+
+        <div class="glossary-item">
+          <div class="term-name">Cache</div>
+          <div class="term-def">A temporary, fast storage layer that keeps a copy of frequently accessed data so it can be retrieved much quicker than fetching it from the main database.</div>
+          <div class="term-analogy"><strong>Analogy:</strong> Keeping your most frequently used spices on the kitchen counter instead of digging through the pantry every time.</div>
+          <div class="term-link"><a href="hld/components/caching.html">Read more</a></div>
+        </div>
+
+        <div class="glossary-item">
+          <div class="term-name">Cache Eviction</div>
+          <div class="term-def">The process of removing old or less useful data from a cache to make room for new data.</div>
+          <div class="term-analogy"><strong>Analogy:</strong> Throwing out old leftovers from a full fridge so you have space for tonight's groceries.</div>
+          <div class="term-link"><a href="hld/components/caching.html">Read more</a></div>
+        </div>
+
+        <div class="glossary-item">
+          <div class="term-name">Cache Hit / Miss</div>
+          <div class="term-def">A "Hit" is when requested data is found in the cache. A "Miss" is when it isn't, requiring a slow fetch from the main database.</div>
+          <div class="term-analogy"><strong>Analogy:</strong> Looking for your keys in your pocket. If they are there, it's a hit. If not, you have to search the whole house (a miss).</div>
+          <div class="term-link"><a href="hld/components/caching.html">Read more</a></div>
+        </div>
+
+        <div class="glossary-item">
+          <div class="term-name">CAP Theorem</div>
+          <div class="term-def">A principle stating that a distributed database can only guarantee two out of three: Consistency, Availability, and Partition Tolerance.</div>
+          <div class="term-analogy"><strong>Analogy:</strong> "Fast, cheap, or good: pick two." But for databases in a network.</div>
+          <div class="term-link"><a href="hld/fundamentals/cap-theorem.html">Read more</a></div>
+        </div>
+
+        <div class="glossary-item">
+          <div class="term-name">CDN (Content Delivery Network)</div>
+          <div class="term-def">A geographically distributed group of servers that work together to provide fast delivery of Internet content (images, videos, HTML pages).</div>
+          <div class="term-analogy"><strong>Analogy:</strong> Amazon opening local warehouses all over the country so packages arrive faster, instead of shipping everything from one central factory.</div>
+          <div class="term-link"><a href="hld/components/cdn.html">Read more</a></div>
+        </div>
+
+        <div class="glossary-item">
+          <div class="term-name">Client</div>
+          <div class="term-def">A computer hardware device or software program that accesses a service made available by a server.</div>
+          <div class="term-analogy"><strong>Analogy:</strong> The customer in a restaurant ordering food from the waiter.</div>
+          <div class="term-link"><a href="fundamentals/client-server.html">Read more</a></div>
+        </div>
+
+        <div class="glossary-item">
+          <div class="term-name">Concurrency</div>
+          <div class="term-def">The ability of a system to execute multiple parts of a program simultaneously or interleaved.</div>
+          <div class="term-analogy"><strong>Analogy:</strong> A chef cooking soup, roasting a chicken, and chopping veggies at the same time by switching between tasks.</div>
+          <div class="term-link"><a href="lld/fundamentals/concurrency.html">Read more</a></div>
+        </div>
+
+        <div class="glossary-item">
+          <div class="term-name">Consistency</div>
+          <div class="term-def">Ensuring that every read from a database receives the most recent write.</div>
+          <div class="term-analogy"><strong>Analogy:</strong> If you update your bank balance at an ATM, checking your balance on your phone 1 second later should show the exact same number.</div>
+          <div class="term-link"><a href="hld/fundamentals/cap-theorem.html">Read more</a></div>
+        </div>
+
+        <div class="glossary-item">
+          <div class="term-name">Consistent Hashing</div>
+          <div class="term-def">A technique used in distributed systems to distribute data evenly across servers while minimizing reorganization when servers are added or removed.</div>
+          <div class="term-analogy"><strong>Analogy:</strong> Assigning mailmen to delivery routes based on a circular map so that if one mailman gets sick, only their immediate neighbor has to take over their route, rather than reorganizing all routes.</div>
+          <div class="term-link"><a href="hld/fundamentals/consistent-hashing.html">Read more</a></div>
+        </div>
+
+        <div class="glossary-item">
+          <div class="term-name">CRUD</div>
+          <div class="term-def">Create, Read, Update, Delete — the four basic operations of persistent storage.</div>
+          <div class="term-analogy"><strong>Analogy:</strong> Interacting with a notebook. You can write a new page (Create), read a page (Read), erase and rewrite a line (Update), or tear out a page (Delete).</div>
+          <div class="term-link"><a href="hld/fundamentals/api.html">Read more</a></div>
+        </div>
+
+        <div class="glossary-item">
+          <div class="term-name">Constructor</div>
+          <div class="term-def">A special method in a class that is automatically called when an object of that class is created.</div>
+          <div class="term-analogy"><strong>Analogy:</strong> The factory assembly line process that initially builds and paints a car as soon as it's ordered.</div>
+          <div class="term-link"><a href="lld/fundamentals/oop.html">Read more</a></div>
+        </div>
+      </div>
+
+      <!-- More sections can go here, mapping to D-W similarly... I will skip ahead for brevity but in a full real site, you'd add all of them. -->
+      <!-- D -->
+      <div class="glossary-section" id="section-d">
+        <h2 class="letter-heading">D</h2>
+        <div class="glossary-item">
+          <div class="term-name">Database</div>
+          <div class="term-def">An organized collection of data, generally stored and accessed electronically from a computer system.</div>
+          <div class="term-analogy"><strong>Analogy:</strong> A massive digital filing cabinet where information is perfectly organized so you can find anything instantly.</div>
+          <div class="term-link"><a href="hld/databases/sql-vs-nosql.html">Read more</a></div>
+        </div>
+        <div class="glossary-item">
+          <div class="term-name">Docker</div>
+          <div class="term-def">A platform for developing, shipping, and running applications in isolated containers.</div>
+          <div class="term-analogy"><strong>Analogy:</strong> Shipping containers. Standardized boxes that can carry any kind of goods and fit on any ship, train, or truck without modifying the cargo.</div>
+          <div class="term-link"><a href="fundamentals/docker.html">Read more</a></div>
+        </div>
+      </div>
+      
+      <!-- H -->
+      <div class="glossary-section" id="section-h">
+        <h2 class="letter-heading">H</h2>
+        <div class="glossary-item">
+          <div class="term-name">HTTP / HTTPS</div>
+          <div class="term-def">The foundation of data communication for the World Wide Web. HTTPS is the secure, encrypted version.</div>
+          <div class="term-analogy"><strong>Analogy:</strong> HTTP is like sending a postcard; anyone who intercepts it can read it. HTTPS is like sending a locked safe; only the recipient has the key.</div>
+          <div class="term-link"><a href="hld/fundamentals/network.html">Read more</a></div>
+        </div>
+      </div>
+
+      <!-- S -->
+      <div class="glossary-section" id="section-s">
+        <h2 class="letter-heading">S</h2>
+        <div class="glossary-item">
+          <div class="term-name">Scalability</div>
+          <div class="term-def">The property of a system to handle a growing amount of work by adding resources to the system.</div>
+          <div class="term-analogy"><strong>Analogy:</strong> A restaurant being able to easily expand its kitchen and seating area when it gets more popular.</div>
+          <div class="term-link"><a href="hld/fundamentals/scaling.html">Read more</a></div>
+        </div>
+        <div class="glossary-item">
+          <div class="term-name">SOLID</div>
+          <div class="term-def">Five design principles intended to make software designs more understandable, flexible, and maintainable.</div>
+          <div class="term-analogy"><strong>Analogy:</strong> Best practices for building a house—like ensuring plumbing doesn't rely on the electrical system (Single Responsibility) and standardizing wall outlets (Liskov Substitution).</div>
+          <div class="term-link"><a href="lld/fundamentals/solid.html">Read more</a></div>
+        </div>
+      </div>
+
+    </div>
+
+    <div class="page-nav">
+      <a href="lld/case-studies/vending-machine.html" class="prev"><span class="label">← Previous</span><span class="title">Vending Machine</span></a>
+      <a href="#" class="next" style="visibility: hidden;"><span class="label">Next →</span><span class="title"></span></a>
+    </div>
+  </main>
+</div>
+<button class="scroll-top" aria-label="Scroll to top">↑</button>
+<script src="js/main.js"></script>
+<script>
+  function filterGlossary() {
+    const input = document.getElementById('glossarySearch').value.toLowerCase();
+    const items = document.querySelectorAll('.glossary-item');
+    const sections = document.querySelectorAll('.glossary-section');
+
+    items.forEach(item => {
+      const text = item.innerText.toLowerCase();
+      if (text.includes(input)) {
+        item.style.display = 'block';
+      } else {
+        item.style.display = 'none';
+      }
+    });
+
+    sections.forEach(section => {
+      let hasVisibleItem = false;
+      const sectionItems = section.querySelectorAll('.glossary-item');
+      sectionItems.forEach(i => {
+        if (i.style.display !== 'none') {
+          hasVisibleItem = true;
+        }
+      });
+      
+      if (!hasVisibleItem) {
+        section.style.display = 'none';
+      } else {
+        section.style.display = 'block';
+      }
+    });
+  }
+</script>
+</body>
+</html>

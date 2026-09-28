@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Behavioral Design Patterns — System Design Mastery</title>
+  <link rel="stylesheet" href="../../css/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+</head>
+<body>
+<button class="menu-toggle" aria-label="Toggle menu">☰</button>
+<div class="page-wrapper">
+  <aside class="sidebar" id="sidebar"></aside>
+  <main class="main-content">
+    <div class="breadcrumb">
+      <a href="../../index.html">Home</a>
+      <span class="sep">›</span>
+      <a href="../index.html">Low-Level Design</a>
+      <span class="sep">›</span>
+      <a href="index.html">Design Patterns</a>
+      <span class="sep">›</span>
+      <strong>Behavioral Patterns</strong>
+    </div>
+
+    <h1>Behavioral Design Patterns</h1>
+    <p>Behavioral patterns are concerned with algorithms and the assignment of responsibilities between objects.</p>
+
+    <!-- Observer -->
+    <section>
+      <h2>1. Observer</h2>
+      <p>Lets you define a subscription mechanism to notify multiple objects about any events that happen to the object they're observing.</p>
+      <div class="jargon">📖 <strong>Analogy</strong>: YouTube subscription. When a creator uploads a video, all subscribers get notified.</div>
+      
+      <span class="code-label">Java 21</span>
+      <pre>
+import java.util.ArrayList;
+import java.util.List;
+
+public interface Subscriber {
+    void update(String news);
+}
+
+public interface Publisher {
+    void subscribe(Subscriber s);
+    void unsubscribe(Subscriber s);
+    void notifySubscribers();
+}
+
+public class NewsAgency implements Publisher {
+    private List<Subscriber> subscribers = new ArrayList<>();
+    private String news;
+    
+    public void setNews(String news) {
+        this.news = news;
+        notifySubscribers();
+    }
+    
+    @Override
+    public void subscribe(Subscriber s) { subscribers.add(s); }
+    
+    @Override
+    public void unsubscribe(Subscriber s) { subscribers.remove(s); }
+    
+    @Override
+    public void notifySubscribers() {
+        for (Subscriber s : subscribers) {
+            s.update(news);
+        }
+    }
+}
+      </pre>
+    </section>
+
+    <!-- Strategy -->
+    <section>
+      <h2>2. Strategy</h2>
+      <p>Lets you define a family of algorithms, put each of them into a separate class, and make their objects interchangeable.</p>
+      <div class="jargon">📖 <strong>Analogy</strong>: Going to work. You can drive, bike, or take the bus. The destination is the same, but the strategy is different.</div>
+      
+      <span class="code-label">Java 21</span>
+      <pre>
+public interface PaymentStrategy {
+    void pay(int amount);
+}
+
+public class CreditCardPayment implements PaymentStrategy {
+    public void pay(int amount) { System.out.println("Paid " + amount + " using Credit Card."); }
+}
+
+public class PayPalPayment implements PaymentStrategy {
+    public void pay(int amount) { System.out.println("Paid " + amount + " using PayPal."); }
+}
+
+public class ShoppingCart {
+    private PaymentStrategy strategy;
+    
+    public void setPaymentStrategy(PaymentStrategy strategy) {
+        this.strategy = strategy;
+    }
+    
+    public void checkout(int amount) {
+        strategy.pay(amount);
+    }
+}
+      </pre>
+    </section>
+
+    <!-- Command -->
+    <section>
+      <h2>3. Command</h2>
+      <p>Turns a request into a stand-alone object that contains all information about the request.</p>
+      <div class="jargon">📖 <strong>Analogy</strong>: A restaurant order slip. The waiter doesn't cook; they write the command on a slip and pass it to the kitchen.</div>
+      
+      <span class="code-label">Java 21</span>
+      <pre>
+public interface Command {
+    void execute();
+    void undo();
+}
+
+public class BoldCommand implements Command {
+    private String text;
+    public void execute() { System.out.println("Making text bold: " + text); }
+    public void undo() { System.out.println("Reverting bold text: " + text); }
+}
+
+public class CommandHistory {
+    private java.util.Stack<Command> history = new java.util.Stack<>();
+    
+    public void executeCommand(Command c) {
+        c.execute();
+        history.push(c);
+    }
+    
+    public void undo() {
+        if (!history.isEmpty()) {
+            history.pop().undo();
+        }
+    }
+}
+      </pre>
+    </section>
+
+    <!-- State -->
+    <section>
+      <h2>4. State</h2>
+      <p>Lets an object alter its behavior when its internal state changes. It appears as if the object changed its class.</p>
+      <div class="jargon">📖 <strong>Analogy</strong>: A traffic light. It behaves differently when it is Red, Yellow, or Green.</div>
+      
+      <span class="code-label">Java 21</span>
+      <pre>
+public sealed interface VendingMachineState permits IdleState, HasMoneyState, DispensingState {
+    void insertMoney();
+    void dispenseProduct();
+}
+
+public final class IdleState implements VendingMachineState {
+    public void insertMoney() { System.out.println("Money inserted. State changed to HasMoney."); }
+    public void dispenseProduct() { System.out.println("Cannot dispense. Insert money first."); }
+}
+
+public final class HasMoneyState implements VendingMachineState {
+    public void insertMoney() { System.out.println("Already has money."); }
+    public void dispenseProduct() { System.out.println("Product dispensed. State changed to Dispensing."); }
+}
+
+public final class DispensingState implements VendingMachineState {
+    public void insertMoney() { System.out.println("Please wait. Dispensing product."); }
+    public void dispenseProduct() { System.out.println("Already dispensing."); }
+}
+      </pre>
+    </section>
+
+    <!-- Template Method -->
+    <section>
+      <h2>5. Template Method</h2>
+      <p>Defines the skeleton of an algorithm in the superclass but lets subclasses override specific steps of the algorithm without changing its structure.</p>
+      <div class="jargon">📖 <strong>Analogy</strong>: A recipe template. All cakes need mixing, baking, and decorating, but each cake type does it differently.</div>
+      
+      <span class="code-label">Java 21</span>
+      <pre>
+public abstract class DataParser {
+    // Template method
+    public final void parseDataAndProcess() {
+        readData();
+        processData();
+        writeData();
+    }
+    
+    protected abstract void readData();
+    protected abstract void processData();
+    
+    private void writeData() {
+        System.out.println("Writing data to database (common step).");
+    }
+}
+
+public class CsvParser extends DataParser {
+    protected void readData() { System.out.println("Reading CSV file."); }
+    protected void processData() { System.out.println("Processing CSV data."); }
+}
+
+public class JsonParser extends DataParser {
+    protected void readData() { System.out.println("Reading JSON file."); }
+    protected void processData() { System.out.println("Processing JSON data."); }
+}
+      </pre>
+    </section>
+
+    <div class="page-nav">
+      <a href="structural.html" class="prev"><span class="label">← Previous</span><span class="title">Structural Patterns</span></a>
+      <a href="../case-studies/parking-lot.html" class="next"><span class="label">Next →</span><span class="title">Parking Lot Case Study</span></a>
+    </div>
+  </main>
+</div>
+<button class="scroll-top" aria-label="Scroll to top">↑</button>
+<script src="../../js/main.js"></script>
+</body>
+</html>

@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Concurrency — Threads, Locks, and Parallel Execution — System Design Mastery</title>
+  <link rel="stylesheet" href="../css/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+</head>
+<body>
+<button class="menu-toggle" aria-label="Toggle menu">☰</button>
+<div class="page-wrapper">
+  <aside class="sidebar" id="sidebar"></aside>
+  <main class="main-content">
+    <div class="breadcrumb">
+      <a href="../index.html">Home</a>
+      <span class="sep">›</span>
+      Fundamentals
+      <span class="sep">›</span>
+      <strong>Concurrency</strong>
+    </div>
+
+    <h1>Concurrency — Threads, Locks, and Parallel Execution</h1>
+    
+    <div class="callout callout-info">
+      <strong>💡 What to expect:</strong> This guide covers everything from basic threads to Java 21 Virtual Threads, complete with real-world analogies, code, and common pitfalls.
+    </div>
+
+    <h2>1. What is Concurrency?</h2>
+    <div class="jargon">📖 <strong>Concurrency</strong>: The ability of a system to deal with multiple things at once (not necessarily doing them at the exact same time).</div>
+    
+    <p><strong>Analogy:</strong> Imagine one chef in a kitchen. They start boiling water for pasta, then while waiting, they chop vegetables, and then check the sauce. They are <strong>dealing</strong> with multiple dishes, even though they only have two hands and can only actively work on one thing at a specific millisecond.</p>
+
+    <div class="jargon">📖 <strong>Parallelism</strong>: Doing multiple things at the exact same time.</div>
+
+    <p><strong>Analogy:</strong> Imagine <strong>three</strong> chefs in the kitchen. One chef is boiling water, another is chopping vegetables, and the third is making the sauce. They are doing things at the exact same time.</p>
+
+    <h2>2. Threads</h2>
+    <div class="jargon">📖 <strong>Thread</strong>: The smallest unit of processing that can be performed in an OS. It is a path of execution within a program.</div>
+
+    <h3>Creating Threads in Java</h3>
+    <span class="code-label">Java 21</span>
+    <pre>
+// 1. Extending Thread class
+class MyThread extends Thread {
+    @Override
+    public void run() {
+        System.out.println("Thread running: " + Thread.currentThread().getName());
+    }
+}
+
+// 2. Implementing Runnable
+class MyRunnable implements Runnable {
+    @Override
+    public void run() {
+        System.out.println("Runnable running: " + Thread.currentThread().getName());
+    }
+}
+
+public class ThreadExample {
+    public static void main(String[] args) {
+        // Method 1
+        MyThread t1 = new MyThread();
+        t1.start();
+        
+        // Method 2
+        Thread t2 = new Thread(new MyRunnable());
+        t2.start();
+        
+        // Method 3 (Lambda - Modern approach)
+        Thread t3 = new Thread(() -> {
+            System.out.println("Lambda running: " + Thread.currentThread().getName());
+        });
+        t3.start();
+    }
+}
+    </pre>
+
+    <div class="diagram-container">
+      <div class="mermaid">
+        stateDiagram-v2
+          [*] --> New: new Thread()
+          New --> Runnable: start()
+          Runnable --> Running: Thread Scheduler selects
+          Running --> Runnable: yield(), time slice over
+          Running --> Waiting/Blocked: sleep(), wait(), join(), I/O
+          Waiting/Blocked --> Runnable: notify(), timeout, I/O done
+          Running --> Terminated: run() completes
+          Terminated --> [*]
+      </div>
+      <p class="caption">Figure 1: Thread Lifecycle</p>
+    </div>
+
+    <h2>3. Race Condition</h2>
+    <div class="jargon">📖 <strong>Race Condition</strong>: Occurs when two or more threads can access shared data and they try to change it at the same time.</div>
+
+    <p><strong>Analogy:</strong> Two people editing the same sentence in a Google Doc at the same time. One person types "Cat", the other types "Dog", and the final result is a mess like "CDaotg".</p>
+
+    <span class="code-label">Java 21</span>
+    <pre>
+public class RaceConditionExample {
+    private static int counter = 0;
+
+    public static void main(String[] args) throws InterruptedException {
+        Runnable incrementTask = () -> {
+            for (int i = 0; i < 10000; i++) {
+                counter++; // Not atomic! Actually 3 steps: read, increment, write
+            }
+        };
+
+        Thread t1 = new Thread(incrementTask);
+        Thread t2 = new Thread(incrementTask);
+
+        t1.start();
+        t2.start();
+
+        t1.join();
+        t2.join();
+
+        // Expectation: 20000
+        // Reality: 15342 (or some random number less than 20000)
+        System.out.println("Final counter: " + counter); 
+    }
+}
+    </pre>
+
+    <h2>4. synchronized / Locks</h2>
+    <p>To fix race conditions, we need to ensure only one thread can access the critical section at a time.</p>
+    
+    <p><strong>Analogy:</strong> A bathroom lock. Only one person can be in the bathroom. Others must wait outside until the key is returned.</p>
+
+    <span class="code-label">Java 21</span>
+    <pre>
+import java.util.concurrent.locks.ReentrantLock;
+
+public class LockExamples {
+    private int counter1 = 0;
+    private int counter2 = 0;
+    private int counter3 = 0;
+    private final Object lock = new Object();
+    private final ReentrantLock reentrantLock = new ReentrantLock();
+
+    // 1. Synchronized Method (Locks the whole instance)
+    public synchronized void increment1() {
+        counter1++;
+    }
+
+    // 2. Synchronized Block (More granular)
+    public void increment2() {
+        synchronized(lock) {
+            counter2++;
+        }
+    }
+
+    // 3. ReentrantLock (More flexible)
+    public void increment3() {
+        reentrantLock.lock();
+        try {
+            counter3++;
+        } finally {
+            reentrantLock.unlock(); // ALWAYS unlock in a finally block
+        }
+    }
+}
+    </pre>
+
+    <h3>Lock vs Synchronized</h3>
+    <table>
+      <tr><th>Feature</th><th>synchronized</th><th>ReentrantLock</th></tr>
+      <tr><td>Flexibility</td><td>Low (block scoped)</td><td>High (can lock/unlock in different methods)</td></tr>
+      <tr><td>Try-Lock</td><td>No</td><td>Yes (<code>tryLock()</code>)</td></tr>
+      <tr><td>Fairness</td><td>No</td><td>Yes (can be fair)</td></tr>
+    </table>
+
+    <h2>5. Deadlock</h2>
+    <div class="jargon">📖 <strong>Deadlock</strong>: When two or more threads are blocked forever, waiting for each other to release a lock.</div>
+
+    <p><strong>Analogy:</strong> Two people walking towards each other in a narrow hallway. Person A steps to the right, Person B steps to the left (their right). They are both blocked, waiting for the other to move.</p>
+
+    <span class="code-label">Java 21</span>
+    <pre>
+public class DeadlockExample {
+    private static final Object lock1 = new Object();
+    private static final Object lock2 = new Object();
+
+    public static void main(String[] args) {
+        Thread t1 = new Thread(() -> {
+            synchronized (lock1) {
+                System.out.println("Thread 1: Holding lock 1...");
+                try { Thread.sleep(100); } catch (InterruptedException e) {}
+                System.out.println("Thread 1: Waiting for lock 2...");
+                synchronized (lock2) {
+                    System.out.println("Thread 1: Holding lock 1 & 2...");
+                }
+            }
+        });
+
+        Thread t2 = new Thread(() -> {
+            synchronized (lock2) { // To fix deadlock, acquire lock1 here instead!
+                System.out.println("Thread 2: Holding lock 2...");
+                try { Thread.sleep(100); } catch (InterruptedException e) {}
+                System.out.println("Thread 2: Waiting for lock 1...");
+                synchronized (lock1) {
+                    System.out.println("Thread 2: Holding lock 1 & 2...");
+                }
+            }
+        });
+
+        t1.start();
+        t2.start();
+    }
+}
+    </pre>
+
+    <h2>6. Semaphore</h2>
+    <div class="jargon">📖 <strong>Semaphore</strong>: Maintains a set of permits. It restricts the number of threads that can access a resource.</div>
+
+    <p><strong>Analogy:</strong> A parking lot with 5 spots. If 5 cars are in, the 6th car must wait at the gate until a car leaves and returns the ticket (permit).</p>
+
+    <span class="code-label">Java 21</span>
+    <pre>
+import java.util.concurrent.Semaphore;
+
+public class SemaphoreExample {
+    // Only 3 threads can access the resource at the same time
+    private static final Semaphore semaphore = new Semaphore(3);
+
+    public static void accessResource(int threadId) {
+        try {
+            semaphore.acquire();
+            System.out.println("Thread " + threadId + " acquired permit. Available: " + semaphore.availablePermits());
+            Thread.sleep(2000); // Simulate work
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        } finally {
+            System.out.println("Thread " + threadId + " releasing permit.");
+            semaphore.release();
+        }
+    }
+
+    public static void main(String[] args) {
+        for (int i = 1; i <= 6; i++) {
+            final int id = i;
+            new Thread(() -> accessResource(id)).start();
+        }
+    }
+}
+    </pre>
+
+    <h2>7. Thread Pool / ExecutorService</h2>
+    <p>Creating threads is expensive. Instead of creating a new thread for every task, we use a pool of worker threads.</p>
+
+    <span class="code-label">Java 21</span>
+    <pre>
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+
+public class ThreadPoolExample {
+    public static void main(String[] args) {
+        // Create a pool of 3 fixed threads
+        try (ExecutorService executor = Executors.newFixedThreadPool(3)) {
+            
+            for (int i = 1; i <= 10; i++) {
+                final int taskId = i;
+                executor.submit(() -> {
+                    System.out.println("Task " + taskId + " running on " + Thread.currentThread().getName());
+                });
+            }
+        } // ExecutorService implements AutoCloseable in modern Java, so it shuts down automatically here
+    }
+}
+    </pre>
+
+    <h2>8. CompletableFuture</h2>
+    <p>Modern Java's way of handling asynchronous programming. It allows chaining operations without blocking.</p>
+
+    <span class="code-label">Java 21</span>
+    <pre>
+import java.util.concurrent.CompletableFuture;
+
+public class CompletableFutureExample {
+    public static void main(String[] args) {
+        CompletableFuture&lt;String&gt; future = CompletableFuture.supplyAsync(() -> {
+            // Simulate network call
+            try { Thread.sleep(1000); } catch (InterruptedException e) {}
+            return "User123";
+        }).thenApply(user -> {
+            // Transform data
+            return user.toUpperCase();
+        }).exceptionally(ex -> {
+            // Handle errors
+            System.out.println("Error: " + ex.getMessage());
+            return "UNKNOWN";
+        });
+
+        // Non-blocking, main thread continues...
+        
+        // Wait for result for demonstration
+        System.out.println("Result: " + future.join());
+    }
+}
+    </pre>
+
+    <h2>9. Virtual Threads (Java 21)</h2>
+    <div class="jargon">📖 <strong>Virtual Threads</strong>: Lightweight threads introduced in Java 21 (Project Loom). They reduce the effort of writing, maintaining, and observing high-throughput concurrent applications.</div>
+
+    <p><strong>Game Changer:</strong> You can create millions of virtual threads. They are not tied 1:1 to OS threads. Blocking a virtual thread (e.g., waiting for DB) does NOT block the OS thread.</p>
+
+    <span class="code-label">Java 21</span>
+    <pre>
+import java.util.concurrent.Executors;
+
+public class VirtualThreadsExample {
+    public static void main(String[] args) {
+        // Creating a single virtual thread
+        Thread vThread = Thread.ofVirtual().start(() -> {
+            System.out.println("Hello from Virtual Thread! " + Thread.currentThread());
+        });
+
+        // Using ExecutorService with Virtual Threads
+        try (var executor = Executors.newVirtualThreadPerTaskExecutor()) {
+            for (int i = 0; i < 100_000; i++) { // 100,000 threads! No problem.
+                final int taskId = i;
+                executor.submit(() -> {
+                    try {
+                        Thread.sleep(1000); // Does NOT block OS thread
+                    } catch (InterruptedException e) {}
+                });
+            }
+        }
+    }
+}
+    </pre>
+
+    <h2>10. Concurrent Collections</h2>
+    <p>Standard collections (ArrayList, HashMap) are not thread-safe. Java provides thread-safe alternatives in <code>java.util.concurrent</code>.</p>
+
+    <span class="code-label">Java 21</span>
+    <pre>
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.LinkedBlockingQueue;
+
+public class ProducerConsumerExample {
+    public static void main(String[] args) {
+        // Thread-safe queue
+        BlockingQueue&lt;String&gt; queue = new LinkedBlockingQueue&lt;&gt;(5);
+
+        Thread producer = new Thread(() -> {
+            try {
+                for (int i = 0; i < 10; i++) {
+                    queue.put("Item " + i); // Blocks if queue is full
+                    System.out.println("Produced: Item " + i);
+                }
+            } catch (InterruptedException e) {}
+        });
+
+        Thread consumer = new Thread(() -> {
+            try {
+                for (int i = 0; i < 10; i++) {
+                    String item = queue.take(); // Blocks if queue is empty
+                    System.out.println("Consumed: " + item);
+                }
+            } catch (InterruptedException e) {}
+        });
+
+        producer.start();
+        consumer.start();
+    }
+}
+    </pre>
+
+    <h2>11. Atomic Variables</h2>
+    <p>Classes like <code>AtomicInteger</code> use Compare-And-Swap (CAS) instructions to be thread-safe without using locks. This is much faster than <code>synchronized</code> for simple counters.</p>
+
+    <span class="code-label">Java 21</span>
+    <pre>
+import java.util.concurrent.atomic.AtomicInteger;
+
+public class AtomicExample {
+    private static AtomicInteger atomicCounter = new AtomicInteger(0);
+
+    public static void main(String[] args) throws InterruptedException {
+        Runnable task = () -> {
+            for (int i = 0; i < 10000; i++) {
+                atomicCounter.incrementAndGet(); // Thread-safe and fast!
+            }
+        };
+
+        Thread t1 = new Thread(task);
+        Thread t2 = new Thread(task);
+
+        t1.start(); t2.start();
+        t1.join(); t2.join();
+
+        System.out.println("Result: " + atomicCounter.get()); // Exactly 20000
+    }
+}
+    </pre>
+
+    <h2>12. Summary: When to use what</h2>
+    <table>
+      <tr><th>Scenario</th><th>Best Tool</th></tr>
+      <tr><td>Simple counter/flag</td><td><code>AtomicInteger</code> / <code>AtomicBoolean</code></td></tr>
+      <tr><td>Complex critical section</td><td><code>ReentrantLock</code></td></tr>
+      <tr><td>Rate limiting / Permits</td><td><code>Semaphore</code></td></tr>
+      <tr><td>I/O heavy web server</td><td>Java 21 <strong>Virtual Threads</strong></td></tr>
+      <tr><td>Chaining async operations</td><td><code>CompletableFuture</code></td></tr>
+      <tr><td>Producer / Consumer pattern</td><td><code>BlockingQueue</code></td></tr>
+    </table>
+
+    <div class="callout callout-purple">
+      <strong>🎯 Interview Tip:</strong> Interviewers love asking about deadlocks and how to prevent them. Always remember the simplest fix for a deadlock: ensure all threads acquire locks in the <strong>same global order</strong>. Also, mention Java 21 Virtual Threads as a modern solution for scaling I/O bound applications!
+    </div>
+
+    <div class="page-nav">
+      <a href="../fundamentals/index.html" class="prev"><span class="label">← Previous</span><span class="title">Fundamentals Overview</span></a>
+      <a href="lld-principles/index.html" class="next"><span class="label">Next →</span><span class="title">LLD Principles</span></a>
+    </div>
+  </main>
+</div>
+<button class="scroll-top" aria-label="Scroll to top">↑</button>
+<script src="../js/main.js"></script>
+</body>
+</html>

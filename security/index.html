@@ -1,0 +1,144 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Security — System Design Mastery</title><link rel="stylesheet" href="../css/style.css"><script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script></head><body>
+<button class="menu-toggle">☰</button>
+<div class="page-wrapper"><aside class="sidebar" id="sidebar"></aside>
+<main class="main-content">
+<div class="breadcrumb"><a href="../index.html">Home</a><span class="sep">›</span><strong>Security</strong></div>
+
+<h1>Security — Protecting Your System</h1>
+
+<div class="callout callout-info">
+  <strong>1. Authentication vs Authorization</strong><br>
+  <ul>
+    <li><strong>Authentication (AuthN):</strong> Who are you? (Verifying identity).</li>
+    <li><strong>Authorization (AuthZ):</strong> What are you allowed to do? (Checking permissions).</li>
+  </ul>
+  <p><strong>Real-World Analogy:</strong> At an airport, showing your passport to security is Authentication. Your boarding pass dictating which specific plane you can board is Authorization.</p>
+</div>
+
+<h2>2. Password Hashing</h2>
+<p>Never store plain text passwords! Always hash them using a strong algorithm like BCrypt, and add a <span class="jargon">salt</span> (random data) to prevent rainbow table attacks.</p>
+
+<span class="code-label">Java 21</span>
+<pre>
+import java.security.MessageDigest;
+import java.security.SecureRandom;
+import java.util.Base64;
+
+public class PasswordHasher {
+    // Simplified hashing example (In real apps use BCrypt/Argon2)
+    public record HashedResult(String hash, String salt) {}
+
+    public HashedResult hash(String password) throws Exception {
+        byte[] salt = new byte[16];
+        new SecureRandom().nextBytes(salt);
+        
+        MessageDigest md = MessageDigest.getInstance("SHA-256");
+        md.update(salt);
+        byte[] hashedPassword = md.digest(password.getBytes());
+        
+        return new HashedResult(
+            Base64.getEncoder().encodeToString(hashedPassword),
+            Base64.getEncoder().encodeToString(salt)
+        );
+    }
+}
+</pre>
+
+<h2>3. JWT (JSON Web Token)</h2>
+<p>A JWT is a stateless way to prove who you are. It consists of 3 parts: Header, Payload (claims), and Signature. The server verifies the signature to ensure the token wasn't tampered with.</p>
+
+<div class="diagram-container">
+<div class="mermaid">
+sequenceDiagram
+    Client->>Server: 1. Login (username, password)
+    Server-->>Client: 2. Return JWT
+    Client->>Server: 3. Request Profile (Header: Authorization: Bearer <JWT>)
+    Server-->>Server: 4. Verify Signature
+    Server-->>Client: 5. Return Profile Data
+</div>
+<p class="caption">Figure 1: JWT Authentication Flow</p>
+</div>
+
+<h2>4. OAuth 2.0</h2>
+<p>An authorization framework that lets third-party apps access user data without giving them the password (e.g., "Login with Google").</p>
+
+<div class="diagram-container">
+<div class="mermaid">
+sequenceDiagram
+    App->>User: Request Permission
+    User->>Google: Grants Permission
+    Google-->>App: Authorization Code
+    App->>Google: Exchange Code for Access Token
+    Google-->>App: Access Token
+    App->>Resource Server: Get User Profile (Access Token)
+</div>
+<p class="caption">Figure 2: OAuth 2.0 Flow</p>
+</div>
+
+<h2>5. HTTPS / TLS</h2>
+<p>Encrypts data in transit. It uses Asymmetric encryption (public/private keys) to securely exchange a Symmetric key, which is then used to encrypt the actual data.</p>
+<p><strong>Real-World Analogy:</strong> Sending a locked box to a friend, but sending the key separately through a trusted courier.</p>
+
+<h2>6. CORS (Cross-Origin Resource Sharing)</h2>
+<p>Browsers block requests to different domains for security. Servers use CORS headers (e.g., <code>Access-Control-Allow-Origin</code>) to explicitly permit certain domains to make requests.</p>
+
+<h2>7. SQL Injection</h2>
+<p>Malicious users input SQL commands into your fields to manipulate your database. Always use <span class="jargon">Parameterized Queries</span> or Prepared Statements.</p>
+
+<div class="comparison">
+    <div class="side bad">
+        <strong>BAD (Vulnerable)</strong>
+        <pre>String query = "SELECT * FROM users WHERE name = '" + userInput + "'";
+// If userInput is "' OR '1'='1", it fetches everyone!</pre>
+    </div>
+    <div class="side good">
+        <strong>GOOD (Secure)</strong>
+        <pre>PreparedStatement stmt = conn.prepareStatement(
+    "SELECT * FROM users WHERE name = ?");
+stmt.setString(1, userInput);</pre>
+    </div>
+</div>
+
+<h2>8. XSS (Cross-Site Scripting) & 9. CSRF</h2>
+<ul>
+    <li><strong>XSS:</strong> Attackers inject malicious JavaScript into your site. Prevent by sanitizing user input and escaping outputs.</li>
+    <li><strong>CSRF (Cross-Site Request Forgery):</strong> Tricking a logged-in user's browser to perform unwanted actions. Prevent using Anti-CSRF tokens.</li>
+</ul>
+
+<h2>10. API Security</h2>
+<p>Protecting your backend endpoints.</p>
+<span class="code-label">Java 21</span>
+<pre>
+public class ApiSecurity {
+    // Java 21 pattern matching in switch
+    public boolean authorizeRequest(String role, String endpoint) {
+        return switch (role) {
+            case "ADMIN" -> true;
+            case "USER" -> endpoint.startsWith("/api/public/");
+            case null, default -> false;
+        };
+    }
+}
+</pre>
+
+<h2>11. Principle of Least Privilege</h2>
+<p>Users and systems should only have the minimum permissions necessary to do their job.</p>
+
+<h2>12. Encryption at Rest vs In Transit</h2>
+<ul>
+    <li><strong>In Transit:</strong> Encrypting data over the network (HTTPS/TLS).</li>
+    <li><strong>At Rest:</strong> Encrypting data stored on disks or databases (AES-256).</li>
+</ul>
+
+<div class="callout callout-purple">
+  <strong>Interview Tip:</strong><br>
+  Always mention security in interviews. If asked to design a system, proactively say: "For security, we will use HTTPS for in-transit encryption, and encrypt PII (Personally Identifiable Information) at rest." It shows maturity.
+</div>
+
+<div class="page-nav">
+<a href="../observability/index.html" class="prev"><span class="label">← Previous</span><span class="title">Observability</span></a>
+<a href="../scalability/index.html" class="next"><span class="label">Next →</span><span class="title">Scalability</span></a>
+</div>
+</main></div>
+<button class="scroll-top">↑</button>
+<script src="../js/main.js"></script></body></html>

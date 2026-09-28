@@ -1,0 +1,564 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>OOP Fundamentals — Complete Deep Dive — System Design Mastery</title>
+  <link rel="stylesheet" href="../css/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+</head>
+<body>
+<button class="menu-toggle" aria-label="Toggle menu">☰</button>
+<div class="page-wrapper">
+  <aside class="sidebar" id="sidebar"></aside>
+  <main class="main-content">
+    <div class="breadcrumb">
+      <a href="../index.html">Home</a>
+      <span class="sep">›</span>
+      Fundamentals
+      <span class="sep">›</span>
+      <strong>OOP Fundamentals</strong>
+    </div>
+
+    <h1>Object-Oriented Programming (OOP) Fundamentals — Complete Deep Dive</h1>
+    <p>Object-Oriented Programming is a paradigm based on the concept of "objects", which can contain data and code. Let's dive deep into the fundamental concepts of OOP in Java 21.</p>
+
+    <div class="card">
+      <h2>1. Class & Object</h2>
+      <p><strong>What is it?</strong> A class is a blueprint, and an object is an actual instance created from that blueprint.</p>
+      <div class="jargon">📖 <strong>Class</strong>: A template or blueprint that defines the state (fields) and behavior (methods) of a certain type of item.</div>
+      <div class="jargon">📖 <strong>Object</strong>: A specific instance of a class, existing in memory with its own unique state.</div>
+      
+      <h3>Real-World Analogy</h3>
+      <p>Think of a class as a <strong>cookie cutter</strong>. It defines the shape of a cookie. The objects are the actual <strong>cookies</strong> you bake using that cutter. You can make many cookies from one cutter.</p>
+      
+      <div class="diagram-container">
+        <div class="mermaid">
+          graph LR
+            A[Cookie Cutter (Class)] --> B[Cookie 1 (Object)]
+            A --> C[Cookie 2 (Object)]
+            A --> D[Cookie 3 (Object)]
+        </div>
+        <p class="caption">Figure 1: Class vs Object</p>
+      </div>
+
+      <span class="code-label">Java</span>
+      <pre>
+public class Dog {
+    // Fields (State)
+    private String name;
+    private String breed;
+    private int age;
+
+    // Constructor
+    public Dog(String name, String breed, int age) {
+        this.name = name;
+        this.breed = breed;
+        this.age = age;
+    }
+
+    // Methods (Behavior)
+    public void bark() {
+        System.out.println(name + " says: Woof!");
+    }
+}
+
+public class Main {
+    public static void main(String[] args) {
+        // Creating objects (instantiation)
+        Dog myDog = new Dog("Buddy", "Golden Retriever", 3);
+        Dog neighborDog = new Dog("Max", "German Shepherd", 5);
+
+        myDog.bark(); // Buddy says: Woof!
+    }
+}
+      </pre>
+    </div>
+
+    <div class="card">
+      <h2>2. Encapsulation</h2>
+      <p><strong>What is it?</strong> Bundling data and methods that operate on that data within a single unit, and restricting direct access to some of the object's components.</p>
+      <div class="jargon">📖 <strong>Encapsulation</strong>: Hiding internal state and requiring all interaction to be performed through an object's methods.</div>
+
+      <h3>Real-World Analogy</h3>
+      <p>A <strong>car dashboard</strong> hides the complex engine mechanics. You press a button to start the car, but you don't need to manually ignite fuel. You only interact with the exposed, safe controls.</p>
+
+      <div class="diagram-container">
+        <div class="mermaid">
+          graph TD
+            A[Client Code] -->|Allowed via Methods| B[Public Interface]
+            B -->|Manages| C[Private Data / Internal Logic]
+            A -.->|Blocked| C
+        </div>
+        <p class="caption">Figure 2: Encapsulation</p>
+      </div>
+
+      <span class="code-label">Java</span>
+      <pre>
+public class BankAccount {
+    // Private state: hidden from the outside world
+    private double balance;
+
+    public BankAccount(double initialBalance) {
+        if (initialBalance >= 0) {
+            this.balance = initialBalance;
+        }
+    }
+
+    // Public method: controlled access to internal state
+    public void deposit(double amount) {
+        if (amount > 0) {
+            balance += amount;
+            System.out.println("Deposited: $" + amount);
+        } else {
+            System.out.println("Invalid deposit amount.");
+        }
+    }
+
+    public void withdraw(double amount) {
+        if (amount > 0 && balance >= amount) {
+            balance -= amount;
+            System.out.println("Withdrawn: $" + amount);
+        } else {
+            System.out.println("Insufficient funds or invalid amount.");
+        }
+    }
+
+    // Read-only access
+    public double getBalance() {
+        return balance;
+    }
+}
+      </pre>
+    </div>
+
+    <div class="card">
+      <h2>3. Abstraction</h2>
+      <p><strong>What is it?</strong> Hiding complex implementation details and showing only the essential features of an object.</p>
+      <div class="jargon">📖 <strong>Abstraction</strong>: The process of simplifying complex reality by modeling classes appropriate to the problem, exposing only what is necessary.</div>
+
+      <h3>Real-World Analogy</h3>
+      <p>Using an <strong>ATM</strong>. You interact with a screen and buttons to withdraw cash. You don't see or need to understand the complex internal wiring, network requests to the bank, and mechanical cash dispensing mechanisms.</p>
+
+      <div class="diagram-container">
+        <div class="mermaid">
+          graph LR
+            A[User] -->|Interacts with| B[ATM Interface]
+            B -->|Hides complex logic| C[Bank Servers & Mechanics]
+        </div>
+        <p class="caption">Figure 3: Abstraction</p>
+      </div>
+
+      <span class="code-label">Java</span>
+      <pre>
+// Abstract class defines the concept but hides implementation
+public abstract class Shape {
+    protected String color;
+
+    public Shape(String color) {
+        this.color = color;
+    }
+
+    // Abstract method: what to do, not how to do it
+    public abstract double area();
+    
+    public void display() {
+        System.out.println("This is a " + color + " shape.");
+    }
+}
+
+// Concrete classes provide the specific implementation
+public class Circle extends Shape {
+    private double radius;
+
+    public Circle(String color, double radius) {
+        super(color);
+        this.radius = radius;
+    }
+
+    @Override
+    public double area() {
+        return Math.PI * radius * radius;
+    }
+}
+
+public class Rectangle extends Shape {
+    private double length, width;
+
+    public Rectangle(String color, double length, double width) {
+        super(color);
+        this.length = length;
+        this.width = width;
+    }
+
+    @Override
+    public double area() {
+        return length * width;
+    }
+}
+      </pre>
+    </div>
+
+    <div class="card">
+      <h2>4. Inheritance</h2>
+      <p><strong>What is it?</strong> A mechanism where a new class derives properties and behaviors (methods) from an existing class.</p>
+      <div class="jargon">📖 <strong>Inheritance</strong>: Establishing an "is-a" relationship to promote code reuse.</div>
+
+      <h3>Real-World Analogy</h3>
+      <p>A child <strong>inherits</strong> traits (like eye color or surname) from their parents, but can also have their own unique traits or behaviors.</p>
+
+      <div class="diagram-container">
+        <div class="mermaid">
+          classDiagram
+            Animal <|-- Dog
+            Dog <|-- GoldenRetriever
+            class Animal{
+              +eat()
+            }
+            class Dog{
+              +bark()
+            }
+            class GoldenRetriever{
+              +fetch()
+            }
+        </div>
+        <p class="caption">Figure 4: Inheritance Hierarchy</p>
+      </div>
+      
+      <p><strong>Types of Inheritance:</strong></p>
+      <ul>
+        <li><strong>Single:</strong> Class B extends Class A.</li>
+        <li><strong>Multilevel:</strong> Class C extends Class B, which extends Class A.</li>
+        <li><strong>Hierarchical:</strong> Class B and Class C both extend Class A.</li>
+        <li><em>Note: Java does not support Multiple Class Inheritance (where a class extends multiple classes) to avoid the Diamond Problem, though a class can implement multiple interfaces.</em></li>
+      </ul>
+
+      <span class="code-label">Java</span>
+      <pre>
+public class Animal {
+    public void eat() {
+        System.out.println("This animal is eating.");
+    }
+}
+
+// Single Inheritance
+public class Dog extends Animal {
+    public void bark() {
+        System.out.println("Woof!");
+    }
+}
+
+// Multilevel Inheritance
+public class GoldenRetriever extends Dog {
+    public void fetch() {
+        System.out.println("Fetching the ball!");
+    }
+}
+      </pre>
+    </div>
+
+    <div class="card">
+      <h2>5. Polymorphism</h2>
+      <p><strong>What is it?</strong> The ability of a single interface or method to take on multiple forms.</p>
+      <div class="jargon">📖 <strong>Polymorphism</strong>: "Many forms." Treating objects of different classes through a common interface or superclass.</div>
+
+      <h3>Real-World Analogy</h3>
+      <p>The word <strong>'draw'</strong> means different things depending on the context. To an artist, it means creating a picture. To a cowboy, it means pulling out a gun. The action is the same, but the behavior changes.</p>
+
+      <div class="diagram-container">
+        <div class="mermaid">
+          graph TD
+            A[Method 'draw'] -->|Artist| B[Creates Art]
+            A -->|Cowboy| C[Pulls Gun]
+        </div>
+        <p class="caption">Figure 5: Polymorphism</p>
+      </div>
+
+      <p><strong>Types of Polymorphism:</strong></p>
+      <ul>
+        <li><strong>Compile-time (Method Overloading):</strong> Multiple methods with the same name but different parameters in the same class.</li>
+        <li><strong>Runtime (Method Overriding):</strong> A subclass provides a specific implementation of a method already provided by its parent class.</li>
+      </ul>
+
+      <span class="code-label">Java</span>
+      <pre>
+// 1. Compile-time Polymorphism (Overloading)
+public class Calculator {
+    public int add(int a, int b) {
+        return a + b;
+    }
+    
+    // Same method name, different parameters
+    public double add(double a, double b) {
+        return a + b;
+    }
+}
+
+// 2. Runtime Polymorphism (Overriding)
+public class Main {
+    public static void main(String[] args) {
+        // Using the Shape hierarchy from earlier
+        Shape s1 = new Circle("Red", 5.0);
+        Shape s2 = new Rectangle("Blue", 4.0, 5.0);
+        
+        // Polymorphic calls: java decides at runtime which area() to call
+        printArea(s1);
+        printArea(s2);
+    }
+    
+    public static void printArea(Shape shape) {
+        // shape.area() behaves differently depending on the actual object type
+        System.out.println("Area: " + shape.area());
+    }
+}
+      </pre>
+    </div>
+
+    <div class="card">
+      <h2>6. Association</h2>
+      <p><strong>What is it?</strong> A relationship where two objects are related, but they have independent lifecycles. They can exist without each other.</p>
+
+      <h3>Real-World Analogy</h3>
+      <p>A <strong>teacher and a student</strong>. A teacher teaches many students, and a student can have many teachers. Both can exist independently.</p>
+
+      <div class="diagram-container">
+        <div class="mermaid">
+          classDiagram
+            Teacher "1" -- "*" Student : teaches
+        </div>
+        <p class="caption">Figure 6: Association</p>
+      </div>
+
+      <span class="code-label">Java</span>
+      <pre>
+public class Student {
+    private String name;
+    
+    public Student(String name) { this.name = name; }
+    public String getName() { return name; }
+}
+
+public class Teacher {
+    private String name;
+    
+    public Teacher(String name) { this.name = name; }
+    
+    // Association: Teacher interacts with Student, but doesn't own them
+    public void teach(Student student) {
+        System.out.println(this.name + " is teaching " + student.getName());
+    }
+}
+      </pre>
+    </div>
+
+    <div class="card">
+      <h2>7. Aggregation</h2>
+      <p><strong>What is it?</strong> A specialized form of association indicating a "HAS-A" relationship, but the child object can exist independently of the parent object. It represents a weak ownership.</p>
+
+      <h3>Real-World Analogy</h3>
+      <p>A <strong>university department and professors</strong>. A department HAS professors. If the department closes, the professors still exist and can join another department.</p>
+
+      <div class="diagram-container">
+        <div class="mermaid">
+          classDiagram
+            Department o-- Professor
+        </div>
+        <p class="caption">Figure 7: Aggregation</p>
+      </div>
+
+      <span class="code-label">Java</span>
+      <pre>
+import java.util.List;
+
+public class Professor {
+    private String name;
+    public Professor(String name) { this.name = name; }
+}
+
+public class Department {
+    private String name;
+    // Aggregation: Department has Professors, but they are passed in from outside
+    private List<Professor> professors;
+
+    public Department(String name, List<Professor> professors) {
+        this.name = name;
+        this.professors = professors;
+    }
+}
+      </pre>
+    </div>
+
+    <div class="card">
+      <h2>8. Composition</h2>
+      <p><strong>What is it?</strong> A strict "HAS-A" relationship where the child object's lifecycle depends strictly on the parent object. If the parent dies, the child dies.</p>
+
+      <h3>Real-World Analogy</h3>
+      <p>A <strong>house and its rooms</strong>. A house HAS rooms. If the house is demolished, the rooms cease to exist.</p>
+
+      <div class="diagram-container">
+        <div class="mermaid">
+          classDiagram
+            House *-- Room
+        </div>
+        <p class="caption">Figure 8: Composition</p>
+      </div>
+
+      <span class="code-label">Java</span>
+      <pre>
+import java.util.ArrayList;
+import java.util.List;
+
+class Room {
+    private String name;
+    public Room(String name) { this.name = name; }
+}
+
+public class House {
+    private List<Room> rooms;
+
+    public House() {
+        // Composition: Rooms are created INSIDE the House.
+        // They die when the House is garbage collected.
+        rooms = new ArrayList<>();
+        rooms.add(new Room("Living Room"));
+        rooms.add(new Room("Bedroom"));
+    }
+}
+      </pre>
+    </div>
+
+    <div class="card">
+      <h2>9. Association vs Aggregation vs Composition</h2>
+      
+      <table>
+        <thead>
+          <tr>
+            <th>Concept</th>
+            <th>Relationship Type</th>
+            <th>Lifecycle Dependency</th>
+            <th>Example</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Association</td>
+            <td>Uses-a / Interacts-with</td>
+            <td>Independent</td>
+            <td>Doctor and Patient</td>
+          </tr>
+          <tr>
+            <td>Aggregation</td>
+            <td>Has-a (Weak)</td>
+            <td>Independent</td>
+            <td>Car and Passengers</td>
+          </tr>
+          <tr>
+            <td>Composition</td>
+            <td>Part-of (Strong)</td>
+            <td>Dependent (Parent dies, child dies)</td>
+            <td>Car and Engine</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="diagram-container">
+        <div class="mermaid">
+          classDiagram
+            Teacher -- Student : Association
+            Department o-- Professor : Aggregation
+            House *-- Room : Composition
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>10. Coupling</h2>
+      <p><strong>What is it?</strong> How much one class depends on the internal details of another class.</p>
+      <div class="jargon">📖 <strong>Coupling</strong>: The degree of interdependence between software modules. Tight = bad, Loose = good.</div>
+
+      <h3>Real-World Analogy</h3>
+      <p>A <strong>lamp hardwired</strong> into the wall is tightly coupled. If the lamp breaks, you have to tear the wall open. A <strong>lamp with a plug</strong> is loosely coupled. You can easily unplug it and plug in a different lamp.</p>
+
+      <div class="comparison">
+        <div class="side bad">
+          <h3>Tightly Coupled (Bad)</h3>
+          <pre>
+// OrderService directly depends on MySQL
+public class OrderService {
+    private MySqlDatabase db;
+
+    public OrderService() {
+        this.db = new MySqlDatabase();
+    }
+}
+          </pre>
+        </div>
+        <div class="side good">
+          <h3>Loosely Coupled (Good)</h3>
+          <pre>
+// OrderService depends on an Interface
+public class OrderService {
+    private Database db;
+
+    public OrderService(Database db) {
+        this.db = db;
+    }
+}
+          </pre>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>11. Cohesion</h2>
+      <p><strong>What is it?</strong> How closely related the responsibilities of a single class are. A highly cohesive class does one thing well.</p>
+      <div class="jargon">📖 <strong>Cohesion</strong>: The degree to which elements inside a module belong together. High = good, Low = bad.</div>
+
+      <h3>Real-World Analogy</h3>
+      <p>A <strong>Swiss Army Knife</strong> has low cohesion (does a bit of everything: cutting, screwing, filing). A <strong>dedicated power drill</strong> has high cohesion (does exactly one job exceptionally well).</p>
+
+      <div class="comparison">
+        <div class="side bad">
+          <h3>Low Cohesion (Bad)</h3>
+          <pre>
+public class UserService {
+    public void createUser() { ... }
+    public void sendEmail() { ... }
+    public void logError() { ... }
+    public void connectToDb() { ... }
+}
+          </pre>
+        </div>
+        <div class="side good">
+          <h3>High Cohesion (Good)</h3>
+          <pre>
+public class UserService {
+    private EmailService emailService;
+    private UserRepository repo;
+    
+    public void createUser() { 
+        // delegate to dedicated classes
+    }
+}
+          </pre>
+        </div>
+      </div>
+    </div>
+
+    <div class="card callout callout-purple">
+      <h2>12. Summary: Coupling vs Cohesion</h2>
+      <p>The ultimate goal in system design and OOP is to achieve <strong>Low Coupling</strong> and <strong>High Cohesion</strong>. Modules should be independent of each other, but highly focused on their single responsibility.</p>
+      
+      <p>In the case study sections (Parking Lot, Chess, etc.), look for comments like <code>// OOP: Composition — Engine cannot exist without Car</code>. These principles form the bedrock of scalable software architecture.</p>
+    </div>
+
+    <div class="page-nav">
+      <a href="../index.html" class="prev"><span class="label">← Previous</span><span class="title">Home</span></a>
+      <a href="../java-design/index.html" class="next"><span class="label">Next →</span><span class="title">Java 21 Design Fundamentals</span></a>
+    </div>
+  </main>
+</div>
+<button class="scroll-top" aria-label="Scroll to top">↑</button>
+<script src="../js/main.js"></script>
+</body>
+</html>

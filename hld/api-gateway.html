@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>API Gateway — System Design Mastery</title>
+  <link rel="stylesheet" href="../css/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+</head>
+<body>
+<button class="menu-toggle" aria-label="Toggle menu">☰</button>
+<div class="page-wrapper">
+  <aside class="sidebar" id="sidebar"></aside>
+  <main class="main-content">
+    <div class="breadcrumb">
+      <a href="../index.html">Home</a>
+      <span class="sep">›</span>
+      High Level Design
+      <span class="sep">›</span>
+      <strong>API Gateway</strong>
+    </div>
+
+    <h1>API Gateway</h1>
+
+    <h2>What is an API Gateway?</h2>
+    <p>An <strong>API Gateway</strong> is a server that acts as the single entry point into an application's backend architecture. It sits between the clients (mobile apps, web browsers) and the internal microservices.</p>
+    
+    <div class="callout callout-purple">
+      <strong>Real-World Analogy: The Receptionist or Bouncer</strong><br>
+      Imagine a large corporate building with many departments (microservices). When visitors (clients) enter, they don't wander the halls looking for the right office. They go to the Receptionist (API Gateway). The receptionist checks their ID (Authentication), gives them a visitor badge (Authorization), and directs them to the correct floor (Routing). If someone is behaving badly, the bouncer throws them out (Rate Limiting).
+    </div>
+
+    <h2>Why do we need one?</h2>
+    <p>In a microservices architecture, exposing every individual service directly to the public internet is a nightmare:</p>
+    <ul>
+      <li>Clients would have to know the IP address of dozens of services.</li>
+      <li>Every service would have to implement its own authentication and security.</li>
+      <li>It would be impossible to monitor overall traffic centrally.</li>
+    </ul>
+
+    <h2>Core Functions of an API Gateway</h2>
+    <ol>
+      <li><strong>Request Routing:</strong> Inspects the URL and forwards the request to the appropriate microservice (e.g., <code>/users</code> goes to UserService, <code>/orders</code> goes to OrderService).</li>
+      <li><strong>Authentication & Authorization:</strong> Verifies JWT tokens or API keys before letting the request through.</li>
+      <li><strong>Rate Limiting:</strong> Prevents abuse or DDoS attacks by limiting how many requests a user can make in a given timeframe.</li>
+      <li><strong>Load Balancing:</strong> Distributes incoming requests across multiple instances of a backend service.</li>
+      <li><strong>Response Transformation:</strong> Modifying the data before sending it back (e.g., converting XML to JSON).</li>
+      <li><strong>Caching:</strong> Storing frequent responses at the gateway to reduce load on the backend.</li>
+      <li><strong>Logging & Monitoring:</strong> Providing a centralized place to track all incoming traffic and response times.</li>
+    </ol>
+
+    <div class="diagram-container">
+      <div class="mermaid">
+        graph LR
+          C1(Mobile App) --> AG[API Gateway]
+          C2(Web Browser) --> AG
+          
+          AG --/users--> S1(User Service)
+          AG --/orders--> S2(Order Service)
+          AG --/pay--> S3(Payment Service)
+          
+          subgraph Backend Microservices
+            S1
+            S2
+            S3
+          end
+      </div>
+      <p class="caption">Figure 1: The API Gateway acting as a single entry point.</p>
+    </div>
+
+    <h2>Rate Limiting Algorithms</h2>
+    <p>Rate limiting is one of the most important jobs of a gateway. Here are common ways to do it:</p>
+    <ul>
+      <li><strong>Token Bucket:</strong> A bucket holds tokens. Each request costs one token. Tokens are refilled at a constant rate. Allows short bursts of traffic.</li>
+      <li><strong>Leaky Bucket:</strong> Requests go into a queue (bucket) and are processed at a constant fixed rate. Smooths out traffic spikes.</li>
+      <li><strong>Fixed Window Counter:</strong> Counts requests in a fixed time window (e.g., 1:00 to 1:01). Prone to spikes at the edges of the windows.</li>
+      <li><strong>Sliding Window Log:</strong> Keeps a timestamp of every request. Very accurate, but consumes a lot of memory.</li>
+      <li><strong>Sliding Window Counter:</strong> A hybrid that is memory efficient and avoids the edge-spike problem.</li>
+    </ul>
+
+    <h2>Java 21 Code Example</h2>
+    <p>Let's build a mini API Gateway with routing and a Token Bucket rate limiter using modern Java.</p>
+    
+    <span class="code-label">Java</span>
+    <pre>
+import java.time.Instant;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
+
+public class ApiGatewayDemo {
+
+    // --- 1. Rate Limiting Logic ---
+    
+    interface RateLimiter {
+        boolean isAllowed(String clientId);
+    }
+
+    /**
+     * A simple Token Bucket Rate Limiter
+     */
+    static class TokenBucketRateLimiter implements RateLimiter {
+        private final int maxTokens;
+        private final long refillRateMs;
+        
+        // Storing state per client
+        private final Map&lt;String, ClientState&gt; clientStates = new HashMap&lt;&gt;();
+
+        record ClientState(AtomicInteger tokens, long lastRefillTime) {}
+
+        public TokenBucketRateLimiter(int maxTokens, long refillRateMs) {
+            this.maxTokens = maxTokens;
+            this.refillRateMs = refillRateMs;
+        }
+
+        @Override
+        public synchronized boolean isAllowed(String clientId) {
+            long now = Instant.now().toEpochMilli();
+            
+            // Get or create state for client
+            var state = clientStates.computeIfAbsent(clientId, 
+                id -&gt; new ClientState(new AtomicInteger(maxTokens), now));
+
+            // Refill tokens based on time passed
+            long timePassed = now - state.lastRefillTime();
+            int tokensToAdd = (int) (timePassed / refillRateMs);
+            
+            if (tokensToAdd &gt; 0) {
+                int newTokens = Math.min(maxTokens, state.tokens().get() + tokensToAdd);
+                state.tokens().set(newTokens);
+                // Update time in map (requires creating new record since it's immutable)
+                clientStates.put(clientId, new ClientState(state.tokens(), now));
+            }
+
+            // Consume a token if available
+            if (state.tokens().get() &gt; 0) {
+                state.tokens().decrementAndGet();
+                return true;
+            }
+            return false;
+        }
+    }
+
+    // --- 2. Microservice Mock ---
+    
+    interface Microservice {
+        String handle(String request);
+    }
+    
+    static class UserService implements Microservice {
+        public String handle(String request) { return "User Data from backend"; }
+    }
+    
+    static class OrderService implements Microservice {
+        public String handle(String request) { return "Order Data from backend"; }
+    }
+
+    // --- 3. The API Gateway ---
+
+    static class ApiGateway {
+        private final RateLimiter rateLimiter;
+        private final Map&lt;String, Microservice&gt; routingTable = new HashMap&lt;&gt;();
+
+        public ApiGateway(RateLimiter rateLimiter) {
+            this.rateLimiter = rateLimiter;
+            // Register routes
+            routingTable.put("/users", new UserService());
+            routingTable.put("/orders", new OrderService());
+        }
+
+        public String routeRequest(String clientId, String path) {
+            // Step 1: Rate Limiting
+            if (!rateLimiter.isAllowed(clientId)) {
+                return "HTTP 429: Too Many Requests (Rate limit exceeded for " + clientId + ")";
+            }
+
+            // Step 2: Routing
+            // Java 21 Pattern Matching and concise switch would be cool, 
+            // but map lookup is faster for routing
+            Microservice service = routingTable.get(path);
+            
+            if (service != null) {
+                return "HTTP 200: " + service.handle(path);
+            } else {
+                return "HTTP 404: Route Not Found";
+            }
+        }
+    }
+
+    public static void main(String[] args) throws InterruptedException {
+        // Allows 2 requests, refills 1 token every 1000ms
+        RateLimiter limiter = new TokenBucketRateLimiter(2, 1000);
+        ApiGateway gateway = new ApiGateway(limiter);
+
+        String client = "user_abc_123";
+
+        System.out.println(gateway.routeRequest(client, "/users"));   // Allowed
+        System.out.println(gateway.routeRequest(client, "/orders"));  // Allowed
+        System.out.println(gateway.routeRequest(client, "/users"));   // Blocked (Bucket empty)
+        
+        System.out.println("Waiting for bucket to refill...");
+        Thread.sleep(1100); 
+        
+        System.out.println(gateway.routeRequest(client, "/users"));   // Allowed again
+    }
+}
+    </pre>
+
+    <h2>Popular Tools</h2>
+    <ul>
+      <li><strong>Kong:</strong> Highly scalable, open-source API Gateway.</li>
+      <li><strong>AWS API Gateway:</strong> Fully managed AWS service.</li>
+      <li><strong>Nginx / HAProxy:</strong> Traditional reverse proxies that are often configured to act as API gateways.</li>
+    </ul>
+
+    <div class="callout callout-info">
+      <strong>Interview Tip:</strong> API Gateways can become a single point of failure and a bottleneck. Always mention that the API Gateway itself needs to be horizontally scaled and deployed across multiple Availability Zones.
+    </div>
+
+    <div class="page-nav">
+      <a href="microservices.html" class="prev"><span class="label">← Previous</span><span class="title">Microservices</span></a>
+      <a href="cdn.html" class="next"><span class="label">Next →</span><span class="title">CDN</span></a>
+    </div>
+  </main>
+</div>
+<button class="scroll-top" aria-label="Scroll to top">↑</button>
+<script src="../js/main.js"></script>
+</body>
+</html>

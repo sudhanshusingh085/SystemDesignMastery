@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Content Delivery Network (CDN) — System Design Mastery</title>
+  <link rel="stylesheet" href="../css/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+</head>
+<body>
+<button class="menu-toggle" aria-label="Toggle menu">☰</button>
+<div class="page-wrapper">
+  <aside class="sidebar" id="sidebar"></aside>
+  <main class="main-content">
+    <div class="breadcrumb">
+      <a href="../index.html">Home</a>
+      <span class="sep">›</span>
+      High Level Design
+      <span class="sep">›</span>
+      <strong>CDN</strong>
+    </div>
+
+    <h1>Content Delivery Network (CDN)</h1>
+
+    <h2>What is a CDN?</h2>
+    <p>A <strong>Content Delivery Network (CDN)</strong> is a geographically distributed network of proxy servers. Its goal is to provide high availability and high performance by distributing services spatially relative to end-users.</p>
+    
+    <div class="callout callout-purple">
+      <strong>Real-World Analogy: Amazon Warehouses</strong><br>
+      Imagine you order a book from an online store whose only warehouse is in New York. If you live in Tokyo, that book will take days to arrive. To fix this, the store opens smaller warehouses in Tokyo, London, and Sydney, stocking them with the most popular books. Now, when you order in Tokyo, the book is shipped from the local Tokyo warehouse and arrives in a few hours. A CDN does exactly this, but for digital files.
+    </div>
+
+    <h2>Why do we need CDNs?</h2>
+    <p>Physics matters. Data traveling over fiber-optic cables is fast, but it is bounded by the speed of light. Sending a large image from a server in London to a user in Australia introduces noticeable delay (latency). CDNs solve this.</p>
+    <ul>
+      <li><strong>Speed:</strong> Content is served from a server physically close to the user (an Edge Server).</li>
+      <li><strong>Reduced Server Load:</strong> The CDN absorbs massive amounts of traffic, saving your main server (Origin Server) from being overwhelmed.</li>
+      <li><strong>Reliability & Security:</strong> CDNs can handle hardware failures better due to their distributed nature and provide protection against DDoS attacks.</li>
+    </ul>
+
+    <h2>What goes on a CDN?</h2>
+    <p>CDNs are designed for <strong>Static Content</strong> — files that don't change per user. This includes:</p>
+    <ul>
+      <li>Images, Videos, and Audio</li>
+      <li>CSS stylesheets and JavaScript files</li>
+      <li>HTML pages (if they are static)</li>
+    </ul>
+    <p><em>Dynamic content</em> (like a user's bank account balance) is usually fetched directly from the Origin Server, though modern CDNs have features to optimize this too.</p>
+
+    <h2>How a CDN Works (Step-by-Step)</h2>
+    <div class="step">
+      <div class="step-number">1</div>
+      <div class="step-content">
+        A user in Paris visits a website. The browser requests an image (e.g., <code>logo.png</code>).
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-number">2</div>
+      <div class="step-content">
+        Through DNS routing, the request is directed to the nearest CDN <strong>Edge Server</strong> in Europe.
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-number">3</div>
+      <div class="step-content">
+        If the Edge Server has <code>logo.png</code> cached (a cache hit), it returns it immediately.
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-number">4</div>
+      <div class="step-content">
+        If not (a cache miss), the Edge Server requests the file from your <strong>Origin Server</strong>, caches it for future users, and returns it to the user.
+      </div>
+    </div>
+
+    <div class="diagram-container">
+      <div class="mermaid">
+        graph TD
+          subgraph Without CDN
+            U1(User Asia) ---> OS[Origin Server USA]
+            U2(User Europe) ---> OS
+            U3(User USA) -> OS
+          end
+          
+          subgraph With CDN
+            U4(User Asia) -> C1((CDN Edge Asia))
+            U5(User Europe) -> C2((CDN Edge Europe))
+            U6(User USA) -> C3((CDN Edge USA))
+            
+            C1 -. Cache Miss .-> OS2[Origin Server USA]
+            C2 -. Cache Miss .-> OS2
+            C3 -. Cache Miss .-> OS2
+          end
+      </div>
+      <p class="caption">Figure 1: How a CDN reduces the distance data travels.</p>
+    </div>
+
+    <h2>Push vs Pull CDNs</h2>
+    <ul>
+      <li><strong>Pull CDN:</strong> The most common. The edge server "pulls" the file from the origin server the first time a user requests it. Great for content with varying popularity.</li>
+      <li><strong>Push CDN:</strong> You manually upload (push) the content to the CDN servers ahead of time. Good for large files (like software updates or games) that you know millions of people will download at the exact same time.</li>
+    </ul>
+
+    <h2>Java 21 Code Example: Simulating a CDN</h2>
+    <p>Here is a simulation of how a CDN routes requests geographically and handles cache misses.</p>
+    
+    <span class="code-label">Java</span>
+    <pre>
+import java.util.HashMap;
+import java.util.Map;
+
+public class CdnSimulation {
+
+    // --- Core Components ---
+
+    /**
+     * The Origin Server - Holds the absolute truth and all files.
+     */
+    static class OriginServer {
+        private final Map&lt;String, String&gt; database = new HashMap&lt;&gt;();
+
+        public OriginServer() {
+            database.put("/images/logo.png", "[Binary data of logo]");
+            database.put("/css/style.css", "body { color: black; }");
+        }
+
+        public String fetchFile(String path) {
+            System.out.println("  [ORIGIN SERVER] Serving file from main database: " + path);
+            // Simulate network delay
+            try { Thread.sleep(500); } catch (InterruptedException e) {}
+            return database.getOrDefault(path, "404 Not Found");
+        }
+    }
+
+    /**
+     * A CDN Edge Node located in a specific region.
+     */
+    static class CdnNode {
+        private final String region;
+        private final OriginServer origin;
+        private final Map&lt;String, String&gt; cache = new HashMap&lt;&gt;();
+
+        public CdnNode(String region, OriginServer origin) {
+            this.region = region;
+            this.origin = origin;
+        }
+
+        public String requestFile(String path) {
+            System.out.println("Request hitting " + region + " Edge Node for " + path);
+            
+            // Check cache
+            if (cache.containsKey(path)) {
+                System.out.println("  ✓ [CACHE HIT] Serving quickly from edge.");
+                return cache.get(path);
+            }
+            
+            // Cache Miss: Fetch from Origin
+            System.out.println("  ✗ [CACHE MISS] Fetching from Origin...");
+            String fileData = origin.fetchFile(path);
+            
+            // Save to cache for next time
+            cache.put(path, fileData);
+            return fileData;
+        }
+    }
+
+    /**
+     * Simulates DNS routing a user to the nearest Edge Node.
+     */
+    static class DnsRouter {
+        private final Map&lt;String, CdnNode&gt; nodes = new HashMap&lt;&gt;();
+
+        public void addNode(String region, CdnNode node) {
+            nodes.put(region, node);
+        }
+
+        public CdnNode routeToNearestNode(String userRegion) {
+            return nodes.getOrDefault(userRegion, nodes.get("USA")); // Default to USA
+        }
+    }
+
+    // --- Execution ---
+
+    public static void main(String[] args) {
+        OriginServer origin = new OriginServer();
+        
+        // Deploy Edge Nodes
+        CdnNode asiaNode = new CdnNode("Asia", origin);
+        CdnNode europeNode = new CdnNode("Europe", origin);
+        
+        DnsRouter router = new DnsRouter();
+        router.addNode("Asia", asiaNode);
+        router.addNode("Europe", europeNode);
+
+        System.out.println("--- User in Asia requests logo ---");
+        CdnNode nodeForUser1 = router.routeToNearestNode("Asia");
+        nodeForUser1.requestFile("/images/logo.png");
+
+        System.out.println("\n--- ANOTHER User in Asia requests logo ---");
+        nodeForUser1.requestFile("/images/logo.png");
+
+        System.out.println("\n--- User in Europe requests logo ---");
+        CdnNode nodeForUser2 = router.routeToNearestNode("Europe");
+        nodeForUser2.requestFile("/images/logo.png");
+    }
+}
+    </pre>
+
+    <h2>Popular CDN Providers</h2>
+    <p>You rarely build a CDN from scratch. Most companies use third-party providers:</p>
+    <ul>
+      <li><strong>Cloudflare:</strong> Extremely popular, also acts as a security layer.</li>
+      <li><strong>AWS CloudFront:</strong> Amazon's offering, integrates perfectly with S3 buckets.</li>
+      <li><strong>Akamai:</strong> One of the oldest and largest enterprise CDNs.</li>
+    </ul>
+
+    <div class="callout callout-info">
+      <strong>Interview Tip:</strong> If the system design prompt mentions "Global users", "Read-heavy", or involves serving images/videos (like Instagram or Netflix), <strong>always</strong> include a CDN in your architecture diagram immediately. It's an easy win.
+    </div>
+
+    <div class="page-nav">
+      <a href="api-gateway.html" class="prev"><span class="label">← Previous</span><span class="title">API Gateway</span></a>
+      <a href="case-studies/url-shortener.html" class="next"><span class="label">Next →</span><span class="title">URL Shortener Case Study</span></a>
+    </div>
+  </main>
+</div>
+<button class="scroll-top" aria-label="Scroll to top">↑</button>
+<script src="../js/main.js"></script>
+</body>
+</html>

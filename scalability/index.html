@@ -1,0 +1,135 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Scalability — System Design Mastery</title><link rel="stylesheet" href="../css/style.css"><script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script></head><body>
+<button class="menu-toggle">☰</button>
+<div class="page-wrapper"><aside class="sidebar" id="sidebar"></aside>
+<main class="main-content">
+<div class="breadcrumb"><a href="../index.html">Home</a><span class="sep">›</span><strong>Scalability</strong></div>
+
+<h1>Scalability Deep Dive — Handling Growth</h1>
+
+<div class="callout callout-info">
+  <strong>1. What is Scalability?</strong><br>
+  Scalability is a system's ability to handle an increasing amount of work (more users, more data) by adding resources, without degrading performance.
+</div>
+
+<h2>2. Vertical vs 3. Horizontal Scaling</h2>
+<p>There are two main ways to scale a system:</p>
+<table class="comparison">
+  <tr><th>Aspect</th><th>Vertical Scaling (Scale Up)</th><th>Horizontal Scaling (Scale Out)</th></tr>
+  <tr><td>What is it?</td><td>Adding more CPU/RAM to a single machine.</td><td>Adding more machines to the pool.</td></tr>
+  <tr><td>Limits</td><td>Hardware has a hard limit.</td><td>Virtually limitless.</td></tr>
+  <tr><td>Pros</td><td>Simple to implement. No code changes.</td><td>High availability, fault tolerance.</td></tr>
+  <tr><td>Cons</td><td>Single point of failure. Expensive at high end.</td><td>Complex to manage. Requires stateless apps.</td></tr>
+</table>
+
+<h2>5. Auto-Scaling</h2>
+<p>Dynamically adjusting the number of servers based on traffic.</p>
+<span class="code-label">Java 21</span>
+<pre>
+public class AutoScaler {
+    // Java 21 records
+    record SystemMetrics(double cpuUsage, int activeConnections) {}
+    
+    public void evaluateScaling(SystemMetrics metrics) {
+        if (metrics.cpuUsage() > 80.0) {
+            System.out.println("Scale Out: Adding 1 instance");
+        } else if (metrics.cpuUsage() < 20.0) {
+            System.out.println("Scale In: Removing 1 instance");
+        }
+    }
+}
+</pre>
+
+<h2>6. Load Balancing Deep Dive</h2>
+<p>Distributes incoming traffic across multiple backend servers.</p>
+
+<div class="diagram-container">
+<div class="mermaid">
+graph TD
+    A[Clients] --> B[Load Balancer]
+    B -->|Algorithm| C[Server 1]
+    B -->|Algorithm| D[Server 2]
+    B -->|Algorithm| E[Server 3]
+</div>
+<p class="caption">Figure 1: Load Balancer</p>
+</div>
+
+<p><strong>Algorithms:</strong></p>
+<ul>
+    <li><strong>Round Robin:</strong> Sequential distribution.</li>
+    <li><strong>Least Connections:</strong> Sends traffic to the server with fewest active connections.</li>
+    <li><strong>IP Hash:</strong> Uses client IP to consistently route to the same server (good for stateful apps).</li>
+</ul>
+
+<h2>7. Database Scaling</h2>
+<p>Scaling databases is harder than scaling stateless web servers.</p>
+<ul>
+    <li><strong>Read Replicas:</strong> Master DB handles writes, multiple replica DBs handle reads.</li>
+    <li><strong>Sharding:</strong> Splitting data across multiple databases (e.g., Users A-M on DB1, N-Z on DB2).</li>
+    <li><strong>Connection Pooling:</strong> Reusing database connections to save overhead.</li>
+</ul>
+
+<h2>8. CDN & 9. Caching Layers</h2>
+<p>A <span class="jargon">CDN (Content Delivery Network)</span> caches static assets (images, videos) close to the user's location geographically.</p>
+<div class="diagram-container">
+<div class="mermaid">
+graph LR
+    A[Browser] -->|1| B[CDN Cache]
+    B -->|Miss| C[API Gateway]
+    C -->|2| D[Redis Cache]
+    D -->|Miss| E[Application]
+    E -->|3| F[Database]
+</div>
+<p class="caption">Figure 2: Caching Layers</p>
+</div>
+
+<h2>10. Stateless vs Stateful Services</h2>
+<p>To easily scale horizontally, your application must be <span class="jargon">Stateless</span> — meaning it doesn't store session data locally. Store sessions in a shared Redis cache instead.</p>
+
+<span class="code-label">Java 21</span>
+<pre>
+public class StatelessServiceDemo {
+    // BAD: Stateful - cannot be easily scaled horizontally
+    private int userSessionScore = 0;
+    
+    public void incrementScore() { userSessionScore++; }
+    
+    // GOOD: Stateless - delegates state to an external store (e.g., Redis)
+    public void incrementScoreStateless(String userId, RedisClient redis) {
+        redis.increment("score:" + userId);
+    }
+    
+    record RedisClient() {
+        void increment(String key) { /* Call external DB */ }
+    }
+}
+</pre>
+
+<h2>11. Queue-Based Load Leveling</h2>
+<p>If traffic spikes unpredictably, place a Message Queue (like Kafka or RabbitMQ) in front of your workers. The queue buffers requests so workers aren't overwhelmed.</p>
+
+<h2>12. Data Partitioning</h2>
+<p>When sharding, how do you know where data goes? Hash-based partitioning applies a hash function to the ID (e.g., hash(userId) % numberOfServers). Consistent Hashing minimizes reorganization when servers are added/removed.</p>
+
+<h2>13. Capacity Planning & 14. Bottleneck Identification</h2>
+<p>Back-of-the-envelope math (estimating QPS, storage requirements). Remember <strong>Amdahl's Law</strong>: the overall performance improvement is limited by the fraction of the system that cannot be sped up.</p>
+
+<h2>15. Summary Checklist</h2>
+<div class="callout callout-success">
+  <strong>System Design Scaling Checklist:</strong>
+  <ul>
+    <li>Add a Load Balancer</li>
+    <li>Make Web Servers Stateless</li>
+    <li>Add caching (Redis/Memcached)</li>
+    <li>Use a CDN for static assets</li>
+    <li>Scale Database (Replication -> Sharding)</li>
+    <li>Use Queues for asynchronous tasks</li>
+  </ul>
+</div>
+
+<div class="page-nav">
+<a href="../security/index.html" class="prev"><span class="label">← Previous</span><span class="title">Security</span></a>
+<a href="#" class="next"><span class="label">Next →</span><span class="title">Conclusion</span></a>
+</div>
+</main></div>
+<button class="scroll-top">↑</button>
+<script src="../js/main.js"></script></body></html>

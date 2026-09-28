@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Databases & Sharding — System Design Mastery</title>
+  <link rel="stylesheet" href="../css/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+</head>
+<body>
+<button class="menu-toggle" aria-label="Toggle menu">☰</button>
+<div class="page-wrapper">
+  <aside class="sidebar" id="sidebar"></aside>
+  <main class="main-content">
+    <div class="breadcrumb">
+      <a href="../index.html">Home</a>
+      <span class="sep">›</span>
+      High-Level Design
+      <span class="sep">›</span>
+      <strong>Databases & Sharding</strong>
+    </div>
+
+    <h1>Databases & Sharding</h1>
+
+    <section>
+      <h2>SQL vs NoSQL: A Quick Recap</h2>
+      <p>Choosing the right database is one of the most critical decisions in system design.</p>
+      
+      <table class="comparison-table">
+        <thead>
+          <tr>
+            <th>Feature</th>
+            <th>SQL (Relational)</th>
+            <th>NoSQL (Non-Relational)</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Examples</strong></td>
+            <td>PostgreSQL, MySQL, Oracle</td>
+            <td>MongoDB, Cassandra, DynamoDB</td>
+          </tr>
+          <tr>
+            <td><strong>Structure</strong></td>
+            <td>Tables with strict schemas (rows & columns)</td>
+            <td>Flexible (JSON documents, Key-Value, Graphs)</td>
+          </tr>
+          <tr>
+            <td><strong>Relations</strong></td>
+            <td>Excellent. Powerful JOIN operations.</td>
+            <td>Poor. Data is usually denormalized (duplicated).</td>
+          </tr>
+          <tr>
+            <td><strong>Transactions</strong></td>
+            <td>Strong ACID guarantees (very safe)</td>
+            <td>Often eventual consistency (faster, less strict)</td>
+          </tr>
+          <tr>
+            <td><strong>Scaling</strong></td>
+            <td>Mostly Vertically (hard to shard)</td>
+            <td>Easily scales Horizontally out-of-the-box</td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="callout callout-info">
+        <strong>Rule of thumb:</strong> Use SQL for financial data, complex relations, and when data integrity is paramount. Use NoSQL for massive amounts of rapidly changing data, simple lookups, or unstructured data.
+      </div>
+    </section>
+
+    <section>
+      <h2>Database Replication</h2>
+      <p>As traffic grows, a single database becomes a bottleneck. Replication involves keeping copies of your database on multiple machines.</p>
+      
+      <h3>Master-Slave (Primary-Replica)</h3>
+      <p>You have one Master node that handles ALL writes. It then asynchronously copies the data to multiple Slave (Replica) nodes. The Replicas handle read queries.</p>
+      <ul>
+        <li><strong>Why?</strong> It scales read-heavy applications (most web apps have 10x more reads than writes) and provides backups if the Master fails.</li>
+      </ul>
+
+      <h3>Master-Master (Multi-Primary)</h3>
+      <p>Multiple nodes can accept write operations. Great for availability across different geographic regions, but resolving write conflicts (two people updating the same row at the same time on different masters) is incredibly difficult.</p>
+    </section>
+
+    <section>
+      <h2>What is Database Sharding?</h2>
+      <p>Replication helps with reads, but what if you have too much data to fit on one hard drive, or too many WRITE requests for one Master? You need <strong>Sharding (Partitioning)</strong>.</p>
+      
+      <p>Sharding means splitting your massive database into smaller, independent databases (shards) across multiple servers. Each shard contains a distinct subset of the data.</p>
+      
+      <div class="jargon">📖 <strong>Shard Key</strong>: A specific column in your data used to determine which shard a row belongs to. Choosing this is critical!</div>
+    </section>
+
+    <section>
+      <h2>Types of Sharding</h2>
+      
+      <div class="comparison">
+        <div class="side good">
+          <h3>Horizontal Sharding</h3>
+          <p>Splitting tables by rows. E.g., Users with IDs 1-1000 go to DB 1, users 1001-2000 go to DB 2. The schema is identical on both databases.</p>
+        </div>
+        <div class="side good">
+          <h3>Vertical Sharding</h3>
+          <p>Splitting by features/tables. E.g., The User table goes to DB 1, the Orders table goes to DB 2. Usually an early step in moving towards microservices.</p>
+        </div>
+      </div>
+      
+      <h3>The Problems with Sharding</h3>
+      <ul>
+        <li><strong>No more JOINs:</strong> You cannot easily join a User table with an Orders table if they live on completely different servers.</li>
+        <li><strong>Hotspots:</strong> If you shard by alphabet (A-M on DB1, N-Z on DB2), and everyone suddenly creates accounts starting with 'A', DB1 will crash while DB2 is idle. This is called "Celebrity Problem" or uneven load.</li>
+        <li><strong>Rebalancing:</strong> If DB1 gets full, you have to add a new shard and move data around while the system is running.</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>Visualizing Sharding</h2>
+      <div class="diagram-container">
+        <div class="mermaid">
+          flowchart TD
+            App[Application Layer] --> Router{Shard Router\n(Hash on User_ID)}
+            Router --> S1[(Shard 1\nIDs ending in 0,1,2)]
+            Router --> S2[(Shard 2\nIDs ending in 3,4,5)]
+            Router --> S3[(Shard 3\nIDs ending in 6,7,8,9)]
+        </div>
+        <p class="caption">Figure 1: Hash-based sharding distributing data evenly.</p>
+      </div>
+    </section>
+
+    <section>
+      <h2>Java 21 Code: Shard Routing</h2>
+      <p>Here is a basic abstraction of how application code might route a request to a specific database shard using modern Java.</p>
+      
+      <span class="code-label">Java</span>
+      <pre>
+import java.util.List;
+
+// Abstract representation of a database connection
+record DatabaseShard(String dbUrl, String name) {}
+
+// Strategy for picking a shard
+sealed interface ShardingStrategy permits HashSharding, RangeSharding {
+    DatabaseShard getShard(String shardKey);
+}
+
+final class HashSharding implements ShardingStrategy {
+    private final List&lt;DatabaseShard&gt; shards;
+
+    public HashSharding(List&lt;DatabaseShard&gt; shards) {
+        this.shards = shards;
+    }
+
+    @Override
+    public DatabaseShard getShard(String shardKey) {
+        // Simple modulo hash to distribute keys evenly
+        int hash = Math.abs(shardKey.hashCode());
+        int shardIndex = hash % shards.size();
+        return shards.get(shardIndex);
+    }
+}
+
+final class RangeSharding implements ShardingStrategy {
+    private final DatabaseShard shardA;
+    private final DatabaseShard shardB;
+
+    public RangeSharding(DatabaseShard shardA, DatabaseShard shardB) {
+        this.shardA = shardA;
+        this.shardB = shardB;
+    }
+
+    @Override
+    public DatabaseShard getShard(String shardKey) {
+        // e.g., ShardKey is a User ID string
+        char firstChar = shardKey.toUpperCase().charAt(0);
+        // A to M goes to Shard A, N to Z goes to Shard B
+        return switch (firstChar) {
+            case 'A','B','C','D','E','F','G','H','I','J','K','L','M' -> shardA;
+            default -> shardB;
+        };
+    }
+}
+
+public class ShardRouterDemo {
+    public static void main(String[] args) {
+        var shards = List.of(
+            new DatabaseShard("jdbc:mysql://db1", "Shard-0"),
+            new DatabaseShard("jdbc:mysql://db2", "Shard-1"),
+            new DatabaseShard("jdbc:mysql://db3", "Shard-2")
+        );
+        
+        ShardingStrategy router = new HashSharding(shards);
+        
+        System.out.println("User_999 goes to: " + router.getShard("User_999").name());
+        System.out.println("User_42  goes to: " + router.getShard("User_42").name());
+        System.out.println("User_7   goes to: " + router.getShard("User_7").name());
+    }
+}
+      </pre>
+    </section>
+
+    <section>
+      <h2>Indexing and Denormalization</h2>
+      <p><strong>Indexing:</strong> Think of an index like the index at the back of a textbook. Instead of reading every page to find a topic, you look at the index, which tells you exactly which page to go to. Databases use B-Trees for indexes, speeding up searches dramatically (O(log N)) at the cost of slightly slower writes (because the index must be updated).</p>
+      <p><strong>Denormalization:</strong> In highly scaled systems, doing SQL JOINs is slow. To fix this, we intentionally duplicate data. Instead of keeping a separate `User` table and doing a JOIN, we might just copy the `UserName` directly into the `Order` table. It takes up more space, but reads become lightning fast.</p>
+    </section>
+
+    <div class="callout callout-success">
+      <strong>💡 Interview Tip:</strong>
+      Never jump straight to Sharding in an interview! It's incredibly complex. Start with a single Master SQL database. If they ask about scale, propose Master-Slave replication and Caching first. Only propose Sharding when data volume absolutely demands it.
+    </div>
+
+    <div class="page-nav">
+      <a href="caching.html" class="prev"><span class="label">← Previous</span><span class="title">Caching</span></a>
+      <a href="cap-theorem.html" class="next"><span class="label">Next →</span><span class="title">CAP Theorem</span></a>
+    </div>
+  </main>
+</div>
+<button class="scroll-top" aria-label="Scroll to top">↑</button>
+<script src="../js/main.js"></script>
+<script>
+  mermaid.initialize({ startOnLoad: true, theme: 'default' });
+</script>
+</body>
+</html>

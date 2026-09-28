@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>HLD Building Blocks — Your Complete Toolbox — System Design Mastery</title>
+  <link rel="stylesheet" href="../css/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+</head>
+<body>
+<button class="menu-toggle" aria-label="Toggle menu">☰</button>
+<div class="page-wrapper">
+  <aside class="sidebar" id="sidebar"></aside>
+  <main class="main-content">
+    <div class="breadcrumb">
+      <a href="../index.html">Home</a>
+      <span class="sep">›</span>
+      <strong>HLD Building Blocks</strong>
+    </div>
+
+    <h1>HLD Building Blocks — Your Complete Toolbox</h1>
+    <p>Welcome to the ultimate cheat sheet for High-Level Design (HLD). Think of these as the LEGO blocks of system design. Every component you might ever use to build a large-scale system is summarized here.</p>
+
+    <div class="callout callout-info">
+      <strong>💡 How to use this page:</strong> Use this as a quick reference when designing systems. For deep dives, follow the links in each section!
+    </div>
+
+    <div class="card">
+      <h2>Networking & Traffic 🌐</h2>
+      <ul>
+        <li>
+          <strong><a href="#">Client</a></strong>: Any application (mobile app, browser) making requests. <br>
+          <em>Analogy:</em> A customer at a restaurant.
+        </li>
+        <li>
+          <strong><a href="#">API</a></strong>: Application Programming Interface; the contract between systems. <br>
+          <em>Analogy:</em> The menu at a restaurant.
+        </li>
+        <li>
+          <strong><a href="#">HTTP/HTTPS</a></strong>: Protocol for sending data over the web (HTTPS is encrypted). <br>
+          <em>Analogy:</em> The language you speak to the waiter.
+        </li>
+        <li>
+          <strong><a href="#">DNS</a></strong>: Domain Name System; translates domain names to IP addresses. <br>
+          <em>Analogy:</em> The phonebook of the internet.
+        </li>
+        <li>
+          <strong><a href="#">TCP/UDP</a></strong>: Transport protocols. TCP is reliable, UDP is fast but unreliable. <br>
+          <em>Analogy:</em> TCP is a registered letter; UDP is a postcard.
+        </li>
+        <li>
+          <strong><a href="#">Load Balancer</a></strong>: Distributes incoming traffic across multiple servers. <br>
+          <em>Analogy:</em> A traffic cop directing cars to different lanes.
+        </li>
+        <li>
+          <strong><a href="#">Reverse Proxy</a></strong>: Sits in front of servers and forwards client requests to them. <br>
+          <em>Analogy:</em> A receptionist who takes your message and gives it to the right person.
+        </li>
+        <li>
+          <strong><a href="#">CDN</a></strong>: Content Delivery Network; caches static assets near users globally. <br>
+          <em>Analogy:</em> Local vending machines stocked with popular drinks so you don't have to go to the main warehouse.
+        </li>
+        <li>
+          <strong><a href="#">API Gateway</a></strong>: Single entry point for all API calls; handles routing, auth, rate limiting. <br>
+          <em>Analogy:</em> The front desk at a corporate office.
+        </li>
+        <li>
+          <strong><a href="#">Service Discovery</a></strong>: Helps services find each other dynamically. <br>
+          <em>Analogy:</em> A live directory of extensions in an office.
+        </li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <h2>Data Storage 💾</h2>
+      <ul>
+        <li>
+          <strong><a href="#">Database (SQL)</a></strong>: Relational data, structured tables (e.g., PostgreSQL, MySQL). <br>
+          <em>Analogy:</em> A highly organized Excel spreadsheet with strict rules.
+        </li>
+        <li>
+          <strong><a href="#">Database (NoSQL)</a></strong>: Flexible schema, document/key-value storage (e.g., MongoDB, DynamoDB). <br>
+          <em>Analogy:</em> A filing cabinet where you can throw any document into a folder.
+        </li>
+        <li>
+          <strong><a href="#">Read Replica</a></strong>: A copy of the database specifically for read operations. <br>
+          <em>Analogy:</em> A printed copy of a textbook for students to read, keeping the original safe.
+        </li>
+        <li>
+          <strong><a href="#">Replication</a></strong>: Copying data across multiple servers for backup. <br>
+          <em>Analogy:</em> Making photocopies of important documents.
+        </li>
+        <li>
+          <strong><a href="#">Sharding</a></strong>: Splitting database rows across multiple machines. <br>
+          <em>Analogy:</em> Storing books A-M in one room and N-Z in another.
+        </li>
+        <li>
+          <strong><a href="#">Partitioning</a></strong>: Dividing large tables into smaller, manageable chunks. <br>
+          <em>Analogy:</em> Organizing a 10-year file archive by year.
+        </li>
+        <li>
+          <strong><a href="#">Indexing</a></strong>: A data structure that improves data retrieval speed. <br>
+          <em>Analogy:</em> The index at the back of a textbook.
+        </li>
+        <li>
+          <strong><a href="#">Object Storage (S3)</a></strong>: Storing unstructured files (images, videos). <br>
+          <em>Analogy:</em> A massive warehouse for storing physical boxes of any size.
+        </li>
+        <li>
+          <strong><a href="#">Search Engine (Elasticsearch)</a></strong>: Specialized database for complex text search. <br>
+          <em>Analogy:</em> A digital librarian who can find a specific sentence in millions of books instantly.
+        </li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <h2>Caching ⚡</h2>
+      <ul>
+        <li>
+          <strong><a href="#">Cache</a></strong>: Temporary, fast storage for frequently accessed data. <br>
+          <em>Analogy:</em> Keeping your keys in your pocket instead of a safe.
+        </li>
+        <li>
+          <strong><a href="#">Redis/Memcached</a></strong>: Popular in-memory caching systems.
+        </li>
+        <li>
+          <strong><a href="#">Cache-Aside</a></strong>: Application checks cache first, then database if miss.
+        </li>
+        <li>
+          <strong><a href="#">Write-Through</a></strong>: Data is written to cache and database at the same time.
+        </li>
+        <li>
+          <strong><a href="#">TTL (Time To Live)</a></strong>: How long data stays in the cache before expiring.
+        </li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <h2>Messaging 📨</h2>
+      <ul>
+        <li>
+          <strong><a href="#">Message Queue</a></strong>: Asynchronous communication buffer (e.g., RabbitMQ). <br>
+          <em>Analogy:</em> An inbox on a busy person's desk.
+        </li>
+        <li>
+          <strong><a href="#">Kafka</a></strong>: Distributed event streaming platform. <br>
+          <em>Analogy:</em> A chronological journal of everything that happened in a company.
+        </li>
+        <li>
+          <strong><a href="#">Pub-Sub</a></strong>: Publisher-Subscriber pattern; one sender, many listeners. <br>
+          <em>Analogy:</em> A radio station broadcasting to anyone tuned in.
+        </li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <h2>Reliability 🛡️</h2>
+      <ul>
+        <li>
+          <strong><a href="#">Rate Limiter</a></strong>: Restricts number of requests per user/time. <br>
+          <em>Analogy:</em> A bouncer at a club limiting how fast people enter.
+        </li>
+        <li>
+          <strong><a href="#">Circuit Breaker</a></strong>: Stops calls to a failing service to prevent cascading failures. <br>
+          <em>Analogy:</em> An electrical fuse that blows to prevent a house fire.
+        </li>
+        <li>
+          <strong><a href="#">Retry / Timeout</a></strong>: Trying again / stopping after waiting too long.
+        </li>
+        <li>
+          <strong><a href="#">Bulkhead</a></strong>: Isolating components so one failure doesn't crash everything. <br>
+          <em>Analogy:</em> Watertight compartments in a ship.
+        </li>
+        <li>
+          <strong><a href="#">Distributed Lock</a></strong>: Ensuring only one process modifies a resource.
+        </li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <h2>Distributed Patterns 🧩</h2>
+      <ul>
+        <li>
+          <strong><a href="#">CAP Theorem</a></strong>: You can only pick 2: Consistency, Availability, Partition Tolerance.
+        </li>
+        <li>
+          <strong><a href="#">PACELC</a></strong>: Extension of CAP for latency considerations.
+        </li>
+        <li>
+          <strong><a href="#">Idempotency</a></strong>: Performing an action multiple times yields the same result. <br>
+          <em>Analogy:</em> Pressing an elevator button multiple times doesn't call multiple elevators.
+        </li>
+        <li>
+          <strong><a href="#">Saga / Outbox</a></strong>: Patterns for distributed transactions across microservices.
+        </li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <h2>Observability & Security 🔐</h2>
+      <ul>
+        <li>
+          <strong><a href="#">Monitoring / Logging / Tracing</a></strong>: Knowing what's happening, keeping records, following a request's path.
+        </li>
+        <li>
+          <strong><a href="#">SLI/SLO/SLA</a></strong>: Service Level Indicator/Objective/Agreement (Metrics, goals, promises).
+        </li>
+        <li>
+          <strong><a href="#">OAuth / JWT</a></strong>: Delegated access and stateless authentication tokens.
+        </li>
+      </ul>
+    </div>
+
+    <h2>Putting it all together</h2>
+    <p>Here is how these blocks connect in a standard, large-scale modern architecture:</p>
+    
+    <div class="diagram-container">
+      <div class="mermaid">
+        flowchart TD
+            Client[Client App / Browser]
+            DNS[DNS Server]
+            CDN[CDN]
+            LB[Load Balancer]
+            APIG[API Gateway]
+            
+            subgroup
+            S1[User Service]
+            S2[Product Service]
+            S3[Order Service]
+            end
+            
+            Cache[(Redis Cache)]
+            DB[(Primary SQL DB)]
+            DBRep[(Read Replica)]
+            MQ[Kafka Event Bus]
+            ES[(ElasticSearch)]
+
+            Client -->|1. Resolve IP| DNS
+            Client -->|2. Get Static Assets| CDN
+            Client -->|3. API Request| LB
+            LB --> APIG
+            APIG --> S1
+            APIG --> S2
+            APIG --> S3
+            
+            S1 --> Cache
+            S2 --> DB
+            DB -->|Replicate| DBRep
+            S3 --> MQ
+            MQ --> ES
+      </div>
+      <p class="caption">Figure 1: Standard large-scale distributed system.</p>
+    </div>
+
+    <div class="page-nav">
+      <a href="../index.html" class="prev"><span class="label">← Previous</span><span class="title">Home</span></a>
+      <a href="../production-failures/index.html" class="next"><span class="label">Next →</span><span class="title">Production Failures</span></a>
+    </div>
+  </main>
+</div>
+<button class="scroll-top" aria-label="Scroll to top">↑</button>
+<script src="../js/main.js"></script>
+</body>
+</html>

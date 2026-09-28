@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Requirement Gathering — System Design Mastery</title>
+  <link rel="stylesheet" href="../css/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+</head>
+<body>
+<button class="menu-toggle" aria-label="Toggle menu">☰</button>
+<div class="page-wrapper">
+  <aside class="sidebar" id="sidebar"></aside>
+  <main class="main-content">
+    <div class="breadcrumb">
+      <a href="../index.html">Home</a>
+      <span class="sep">›</span>
+      Interview Preparation
+      <span class="sep">›</span>
+      <strong>Requirement Gathering</strong>
+    </div>
+
+    <h1>Requirement Gathering</h1>
+
+    <div class="callout callout-info">
+      <strong>Why this matters:</strong> Requirement gathering is the most critical step in system design. Solving the wrong problem perfectly is still a failure. Many candidates skip this and start drawing boxes—don't be one of them!
+    </div>
+
+    <h2>Categories of Questions to Ask</h2>
+    <p>To systematically gather requirements, break your questions down into these 5 categories:</p>
+    
+    <ol>
+      <li><strong>Users & Scale:</strong> How many users? What is the ratio of daily active users (DAU) to monthly active users (MAU)? Is the system read-heavy or write-heavy?</li>
+      <li><strong>Features:</strong> What are the core features? What is explicitly out of scope (to save time)?</li>
+      <li><strong>Performance:</strong> What is the acceptable latency? What is the availability target (e.g., 99.9% uptime)?</li>
+      <li><strong>Data:</strong> How much data will we store? How long must we retain it? What is the data format?</li>
+      <li><strong>Special Requirements:</strong> Does it need real-time updates? Offline support? Is it a global service requiring multi-region deployment?</li>
+    </ol>
+
+    <h2>Requirement Gathering Decision Tree</h2>
+    <div class="diagram-container">
+      <div class="mermaid">
+        graph TD
+          Start[Interviewer: 'Design X'] --> Clarify[Clarify Scope]
+          Clarify --> F[Functional Features]
+          Clarify --> NF[Non-Functional Metrics]
+          F --> InScope[In Scope]
+          F --> OutScope[Out of Scope]
+          NF --> Scale[Scale & Traffic]
+          NF --> Latency[Latency & Availability]
+          Scale --> Data[Data Volume & Retention]
+      </div>
+      <p class="caption">Figure 1: Navigating requirement gathering</p>
+    </div>
+
+    <h2>Examples of Requirement Gathering</h2>
+
+    <div class="card">
+      <h3>Example 1: "Design Twitter"</h3>
+      <ul>
+        <li><strong>Users:</strong> How many DAU? (e.g., 150M)</li>
+        <li><strong>Features:</strong> Can users post videos or just text? Do we need to design the timeline generation or just the tweeting mechanism?</li>
+        <li><strong>Scale:</strong> Is it read-heavy? (Yes, typically 100:1 read-to-write ratio).</li>
+        <li><strong>Performance:</strong> Does the timeline need to be real-time? (e.g., < 500ms latency).</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <h3>Example 2: "Design a Parking Lot"</h3>
+      <ul>
+        <li><strong>Users:</strong> Is this for a single building or a multi-city enterprise?</li>
+        <li><strong>Features:</strong> Do we need to handle payment processing? Different vehicle sizes (motorcycle, compact, large)?</li>
+        <li><strong>Data:</strong> Do we need to track historical data for analytics?</li>
+      </ul>
+    </div>
+
+    <h2>Java 21 Code: Modeling Requirements</h2>
+    <p>Using Java 21 <div class="jargon">📖 <strong>Record</strong>: A compact syntax for declaring classes that are transparent carriers for immutable data.</div>, you can clearly model system requirements:</p>
+    <span class="code-label">Java</span>
+    <pre>
+/**
+ * A record to succinctly capture the parsed requirements during an interview.
+ */
+public record RequirementSpec(
+    boolean isReadHeavy,
+    long dailyActiveUsers,
+    int readToWriteRatio,
+    double targetLatencyMs,
+    java.util.List<String> coreFeatures
+) {
+    public RequirementSpec {
+        if (targetLatencyMs < 0) {
+            throw new IllegalArgumentException("Latency cannot be negative");
+        }
+    }
+    
+    // Derived metric helper
+    public long estimatedRequestsPerSecond() {
+        long totalDailyRequests = dailyActiveUsers * 10; // Assuming 10 requests/user/day
+        return totalDailyRequests / 86400; // seconds in a day
+    }
+}
+    </pre>
+
+    <h2>How to Write Down Requirements</h2>
+    <p>During the interview, use the whiteboard or shared document to list requirements explicitly:</p>
+    <pre>
+# Functional
+1. Post tweet
+2. View timeline
+(Out of scope: Search, DMs)
+
+# Non-Functional
+- 100M DAU
+- Read:Write = 100:1
+- Low latency (< 200ms)
+- High availability (Eventual consistency is fine)
+    </pre>
+
+    <div class="callout callout-danger">
+      <strong>Red Flags 🚩</strong>
+      <ul>
+        <li>Starting the architecture drawing before agreeing on requirements.</li>
+        <li>Assuming a 1 Billion user scale for a local mom-and-pop shop application.</li>
+        <li>Not asking about read-vs-write ratios, which drastically alters database choices.</li>
+      </ul>
+    </div>
+
+    <div class="page-nav">
+      <a href="methodology.html" class="prev"><span class="label">← Previous</span><span class="title">Methodology</span></a>
+      <a href="oop-for-interviews.html" class="next"><span class="label">Next →</span><span class="title">OOP for Interviews</span></a>
+    </div>
+  </main>
+</div>
+<button class="scroll-top" aria-label="Scroll to top">↑</button>
+<script src="../js/main.js"></script>
+</body>
+</html>

@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Payment System — System Design Mastery</title>
+  <link rel="stylesheet" href="../../css/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+</head>
+<body>
+<button class="menu-toggle" aria-label="Toggle menu">☰</button>
+<div class="page-wrapper">
+  <aside class="sidebar" id="sidebar"></aside>
+  <main class="main-content">
+    <div class="breadcrumb">
+      <a href="../../index.html">Home</a>
+      <span class="sep">›</span>
+      LLD
+      <span class="sep">›</span>
+      Case Studies
+      <span class="sep">›</span>
+      <strong>Payment System</strong>
+    </div>
+
+    <h1>Design a Payment Processing System</h1>
+
+    <section class="card">
+        <h2>What is a Payment Processing System?</h2>
+        <p>A payment system acts as the middleman between a merchant (like Amazon) and the bank. It takes your card details, checks with the bank if you have enough money, and transfers it.</p>
+        <div class="jargon">📖 <strong>Idempotency</strong>: The property of an operation where doing it once has the same effect as doing it multiple times. In payments, if a user clicks "Pay" twice by accident, they should only be charged once!</div>
+    </section>
+
+    <section class="card">
+        <h2>What Problem Does It Solve?</h2>
+        <p>Handling payments involves interacting with slow, flaky banking APIs. A good payment system must handle network failures, retry failed requests safely, prevent double charging, and provide a unified interface for multiple payment methods (Credit Card, UPI, Wallets).</p>
+    </section>
+
+    <section class="card">
+        <h2>How Does It Work?</h2>
+        <p>The system uses an Idempotency Key (a unique request ID) to ensure duplicate requests are ignored. It uses a Factory to select the right Payment Gateway based on the method, and the Observer pattern to trigger asynchronous tasks like fraud detection or sending emails after a payment completes.</p>
+        
+        <div class="diagram-container">
+            <div class="mermaid">
+                graph TD
+                    A[Client] -->|Request + UUID| B[Payment Service]
+                    B --> C{Idempotency Check}
+                    C -->|Seen Before| D[Return Cached Result]
+                    C -->|New Request| E[Payment Gateway Factory]
+                    E --> F[Credit Card Gateway]
+                    E --> G[UPI Gateway]
+                    F --> H[Bank API]
+                    H --> I[Result]
+                    I --> J[Save to DB & Cache]
+            </div>
+            <p class="caption">Figure 1: Payment Request Flow with Idempotency</p>
+        </div>
+    </section>
+
+    <section class="card">
+        <h2>Low-Level Design (Java 21)</h2>
+        
+        <span class="code-label">Java</span>
+<pre><code>import java.time.LocalDateTime;
+import java.util.Map;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+
+enum PaymentMethod { CREDIT_CARD, DEBIT_CARD, UPI, WALLET, NET_BANKING }
+enum PaymentStatus { INITIATED, PROCESSING, SUCCESS, FAILED, REFUNDED }
+
+// requestId is used for idempotency!
+record PaymentRequest(String requestId, String userId, double amount, PaymentMethod method, String paymentDetails, LocalDateTime timestamp) {}
+
+// Sealed interface = known outcomes. No other class can implement PaymentResult.
+sealed interface PaymentResult permits PaymentSuccess, PaymentFailure {}
+record PaymentSuccess(String transactionId, double amount, LocalDateTime processedAt) implements PaymentResult {}
+record PaymentFailure(String errorCode, String message, boolean isRetryable) implements PaymentResult {}
+
+// Design Pattern: Strategy — different gateways for different payment methods
+interface PaymentGateway {
+    PaymentResult process(PaymentRequest request);
+    boolean refund(String transactionId);
+}
+
+class CreditCardGateway implements PaymentGateway {
+    @Override
+    public PaymentResult process(PaymentRequest request) {
+        // Mock external API call
+        return new PaymentSuccess(UUID.randomUUID().toString(), request.amount(), LocalDateTime.now());
+    }
+    
+    @Override
+    public boolean refund(String transactionId) { return true; }
+}
+
+class UpiGateway implements PaymentGateway {
+    @Override
+    public PaymentResult process(PaymentRequest request) {
+        return new PaymentSuccess(UUID.randomUUID().toString(), request.amount(), LocalDateTime.now());
+    }
+    
+    @Override
+    public boolean refund(String transactionId) { return true; }
+}
+
+// Design Pattern: Factory — abstracts away the creation of gateways
+class PaymentGatewayFactory {
+    public static PaymentGateway getGateway(PaymentMethod method) {
+        return switch (method) {
+            case CREDIT_CARD, DEBIT_CARD -&gt; new CreditCardGateway();
+            case UPI -&gt; new UpiGateway();
+            case WALLET, NET_BANKING -&gt; throw new UnsupportedOperationException("Not implemented yet");
+        };
+    }
+}
+
+// Critical for payments! Prevents double charging.
+class IdempotencyHandler {
+    // In production, this would be Redis
+    private final Map&lt;String, PaymentResult&gt; cache = new ConcurrentHashMap&lt;&gt;();
+    
+    public boolean hasProcessed(String requestId) {
+        return cache.containsKey(requestId);
+    }
+    
+    public PaymentResult getCachedResult(String requestId) {
+        return cache.get(requestId);
+    }
+    
+    public void cacheResult(String requestId, PaymentResult result) {
+        cache.put(requestId, result);
+    }
+}
+
+class RetryHandler {
+    public PaymentResult executeWithRetry(PaymentGateway gateway, PaymentRequest request, int maxRetries) {
+        int attempts = 0;
+        while (attempts &lt; maxRetries) {
+            PaymentResult result = gateway.process(request);
+            if (result instanceof PaymentSuccess) {
+                return result;
+            } else if (result instanceof PaymentFailure failure && !failure.isRetryable()) {
+                return result; // Don't retry non-retryable errors (e.g. Insufficient Funds)
+            }
+            attempts++;
+            try {
+                Thread.sleep(1000L * attempts); // Exponential backoff
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        }
+        return new PaymentFailure("TIMEOUT", "Max retries exceeded", false);
+    }
+}
+
+record Transaction(String transactionId, PaymentRequest request, PaymentResult result, LocalDateTime createdAt) {}
+
+// SOLID: Single Responsibility — this class only handles history storage
+class TransactionStore {
+    private final Map&lt;String, Transaction&gt; db = new ConcurrentHashMap&lt;&gt;();
+    
+    public void save(Transaction t) {
+        db.put(t.transactionId(), t);
+    }
+    
+    public Transaction get(String txnId) {
+        return db.get(txnId);
+    }
+}
+
+// Design Pattern: Observer
+interface PaymentObserver {
+    void onPaymentComplete(Transaction transaction);
+}
+
+class AuditLogger implements PaymentObserver {
+    public void onPaymentComplete(Transaction t) {
+        System.out.println("Audit: Transaction " + t.transactionId() + " logged.");
+    }
+}
+
+class NotificationService implements PaymentObserver {
+    public void onPaymentComplete(Transaction t) {
+        if (t.result() instanceof PaymentSuccess) {
+            System.out.println("Email: Payment successful!");
+        }
+    }
+}
+
+// Design Pattern: Facade
+class PaymentService {
+    private final IdempotencyHandler idempotencyHandler = new IdempotencyHandler();
+    private final RetryHandler retryHandler = new RetryHandler();
+    private final TransactionStore store = new TransactionStore();
+    private final java.util.List&lt;PaymentObserver&gt; observers = new java.util.ArrayList&lt;&gt;();
+    
+    public void addObserver(PaymentObserver obs) { observers.add(obs); }
+    
+    public PaymentResult processPayment(PaymentRequest request) {
+        System.out.println("Processing request: " + request.requestId());
+        
+        // 1. Idempotency Check
+        if (idempotencyHandler.hasProcessed(request.requestId())) {
+            System.out.println("Duplicate request detected. Returning cached result.");
+            return idempotencyHandler.getCachedResult(request.requestId());
+        }
+        
+        // 2. Route to Gateway
+        PaymentGateway gateway = PaymentGatewayFactory.getGateway(request.method());
+        
+        // 3. Process (with retry)
+        PaymentResult result = retryHandler.executeWithRetry(gateway, request, 3);
+        
+        // 4. Cache Result
+        idempotencyHandler.cacheResult(request.requestId(), result);
+        
+        // 5. Store & Notify
+        if (result instanceof PaymentSuccess success) {
+            Transaction txn = new Transaction(success.transactionId(), request, result, LocalDateTime.now());
+            store.save(txn);
+            observers.forEach(o -&gt; o.onPaymentComplete(txn));
+        }
+        
+        return result;
+    }
+}
+
+public class Main {
+    public static void main(String[] args) {
+        PaymentService service = new PaymentService();
+        service.addObserver(new AuditLogger());
+        service.addObserver(new NotificationService());
+        
+        String reqId = UUID.randomUUID().toString();
+        PaymentRequest req = new PaymentRequest(reqId, "user123", 100.0, PaymentMethod.CREDIT_CARD, "card_tok", LocalDateTime.now());
+        
+        // First attempt
+        PaymentResult res1 = service.processPayment(req);
+        
+        // Duplicate request (e.g. user clicked twice)
+        PaymentResult res2 = service.processPayment(req); 
+        
+        // res1 and res2 will be the same outcome without hitting the bank twice!
+    }
+}
+</code></pre>
+    </section>
+    
+    <div class="callout callout-info">
+        <h3>Interview Tip</h3>
+        <p>Never design a payment system without mentioning <strong>Idempotency</strong>. Using a cache (like Redis) to store the <code>requestId</code> and its result is the standard way to ensure a user isn't charged twice due to network timeouts or double-clicks.</p>
+    </div>
+
+    <div class="page-nav">
+      <a href="food-ordering.html" class="prev"><span class="label">← Previous</span><span class="title">Food Ordering System</span></a>
+      <a href="inventory.html" class="next"><span class="label">Next →</span><span class="title">Inventory System</span></a>
+    </div>
+  </main>
+</div>
+<button class="scroll-top" aria-label="Scroll to top">↑</button>
+<script src="../../js/main.js"></script>
+</body>
+</html>

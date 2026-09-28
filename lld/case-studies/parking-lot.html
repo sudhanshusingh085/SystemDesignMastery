@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Design a Parking Lot System — System Design Mastery</title>
+  <link rel="stylesheet" href="../../css/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+</head>
+<body>
+<button class="menu-toggle" aria-label="Toggle menu">☰</button>
+<div class="page-wrapper">
+  <aside class="sidebar" id="sidebar"></aside>
+  <main class="main-content">
+    <div class="breadcrumb">
+      <a href="../../index.html">Home</a>
+      <span class="sep">›</span>
+      LLD Case Studies
+      <span class="sep">›</span>
+      <strong>Parking Lot System</strong>
+    </div>
+
+    <h1>Design a Parking Lot System</h1>
+    
+    <h2>What is a Parking Lot System?</h2>
+    <p>A parking lot system manages the vehicles entering, parking, and exiting a given space. Think of it like a <strong>hotel for cars</strong>. A hotel has different types of rooms (suites, standard) for different types of guests, check-in and check-out processes, and billing based on the stay duration.</p>
+    <div class="jargon">📖 <strong>Low-Level Design (LLD)</strong>: The process of designing the actual classes, interfaces, and relationships that will implement a system.</div>
+
+    <h2>Requirements (Clarifying Questions)</h2>
+    <div class="callout callout-info">
+      <p><strong>Interview Tip:</strong> Always ask clarifying questions before jumping into the design.</p>
+      <ul>
+        <li>Does the parking lot have multiple floors? (Yes)</li>
+        <li>Are there different spot sizes for different vehicles? (Yes: compact, regular, large)</li>
+        <li>What vehicle types are supported? (Bike, Car, Truck)</li>
+        <li>How does the billing work? (Hourly rates based on vehicle type)</li>
+        <li>How are spots assigned? (Nearest available spot to the entrance)</li>
+      </ul>
+    </div>
+
+    <h2>How does it work?</h2>
+    <div class="diagram-container">
+      <div class="mermaid">
+        classDiagram
+          class ParkingLot {
+             -List~ParkingFloor~ floors
+             +parkVehicle(Vehicle) Ticket
+             +unparkVehicle(Ticket)
+          }
+          class ParkingFloor {
+             -List~ParkingSpot~ spots
+             +findAvailableSpot(VehicleType) ParkingSpot
+          }
+          class ParkingSpot {
+             -SpotSize size
+             -boolean available
+             +park()
+             +unpark()
+          }
+          class Vehicle {
+             <<abstract>>
+          }
+          ParkingLot *-- ParkingFloor
+          ParkingFloor *-- ParkingSpot
+          ParkingSpot -- Vehicle
+      </div>
+      <p class="caption">Figure 1: Parking Lot Class Diagram</p>
+    </div>
+
+    <h2>Java 21 Implementation</h2>
+    <span class="code-label">Java</span>
+    <pre>
+import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.UUID;
+
+// Enum for fixed set of types
+enum VehicleType { BIKE, CAR, TRUCK }
+
+// Enum mapping to vehicle types
+enum SpotSize { COMPACT, REGULAR, LARGE }
+
+// SOLID: Record for immutable data carrier
+record Ticket(String id, String vehicleNumber, SpotSize spotSize, int floor, int spotNumber, LocalDateTime entryTime) {}
+
+// SOLID: Liskov Substitution Principle — any Vehicle subclass works in parking logic
+abstract sealed class Vehicle permits Bike, Car, Truck {
+    private final String licensePlate;
+    private final VehicleType type;
+
+    protected Vehicle(String licensePlate, VehicleType type) {
+        this.licensePlate = licensePlate;
+        this.type = type;
+    }
+    public String getLicensePlate() { return licensePlate; }
+    public VehicleType getType() { return type; }
+}
+
+// final = not further extendable
+final class Bike extends Vehicle {
+    public Bike(String licensePlate) { super(licensePlate, VehicleType.BIKE); }
+}
+final class Car extends Vehicle {
+    public Car(String licensePlate) { super(licensePlate, VehicleType.CAR); }
+}
+final class Truck extends Vehicle {
+    public Truck(String licensePlate) { super(licensePlate, VehicleType.TRUCK); }
+}
+
+// Design Pattern: Strategy — different parking fee strategies
+interface ParkingFeeStrategy {
+    double calculateFee(Ticket ticket, LocalDateTime exitTime);
+}
+
+class HourlyFeeStrategy implements ParkingFeeStrategy {
+    public double calculateFee(Ticket ticket, LocalDateTime exitTime) {
+        long hours = java.time.Duration.between(ticket.entryTime(), exitTime).toHours();
+        hours = Math.max(hours, 1); // Minimum 1 hour
+        return hours * getRate(ticket.spotSize());
+    }
+    private double getRate(SpotSize size) {
+        return switch (size) {
+            case COMPACT -> 10.0;
+            case REGULAR -> 20.0;
+            case LARGE -> 30.0;
+        };
+    }
+}
+
+class FlatFeeStrategy implements ParkingFeeStrategy {
+    public double calculateFee(Ticket ticket, LocalDateTime exitTime) {
+        return 50.0; // Flat fee
+    }
+}
+
+// SOLID: SRP — ParkingSpot only manages spot state
+class ParkingSpot {
+    private final int number;
+    private final SpotSize size;
+    private boolean available;
+    private Vehicle currentVehicle;
+
+    public ParkingSpot(int number, SpotSize size) {
+        this.number = number;
+        this.size = size;
+        this.available = true;
+    }
+
+    public boolean isAvailable() { return available; }
+    public SpotSize getSize() { return size; }
+    public int getNumber() { return number; }
+
+    public void park(Vehicle vehicle) {
+        this.currentVehicle = vehicle;
+        this.available = false;
+    }
+
+    public void unpark() {
+        this.currentVehicle = null;
+        this.available = true;
+    }
+}
+
+class ParkingFloor {
+    private final int floorNumber;
+    private final List&lt;ParkingSpot&gt; spots;
+
+    public ParkingFloor(int floorNumber, int numSpots) {
+        this.floorNumber = floorNumber;
+        this.spots = new ArrayList&lt;&gt;();
+        for (int i = 0; i &lt; numSpots; i++) {
+            SpotSize size = (i &lt; numSpots / 3) ? SpotSize.COMPACT : 
+                            (i &lt; 2 * numSpots / 3) ? SpotSize.REGULAR : SpotSize.LARGE;
+            spots.add(new ParkingSpot(i, size));
+        }
+    }
+
+    public ParkingSpot findAvailableSpot(SpotSize requiredSize) {
+        for (ParkingSpot spot : spots) {
+            if (spot.isAvailable() && spot.getSize() == requiredSize) {
+                return spot;
+            }
+        }
+        return null;
+    }
+    
+    public int getAvailableSpotsCount() {
+        return (int) spots.stream().filter(ParkingSpot::isAvailable).count();
+    }
+}
+
+// Design Pattern: Singleton
+class ParkingLot {
+    private static ParkingLot instance;
+    private final List&lt;ParkingFloor&gt; floors;
+
+    private ParkingLot(int numFloors, int spotsPerFloor) {
+        floors = new ArrayList&lt;&gt;();
+        for (int i = 0; i &lt; numFloors; i++) {
+            floors.add(new ParkingFloor(i, spotsPerFloor));
+        }
+    }
+
+    public static synchronized ParkingLot getInstance(int numFloors, int spotsPerFloor) {
+        if (instance == null) {
+            instance = new ParkingLot(numFloors, spotsPerFloor);
+        }
+        return instance;
+    }
+
+    private SpotSize mapVehicleToSpotSize(VehicleType type) {
+        return switch (type) {
+            case BIKE -> SpotSize.COMPACT;
+            case CAR -> SpotSize.REGULAR;
+            case TRUCK -> SpotSize.LARGE;
+        };
+    }
+
+    public Ticket entry(Vehicle vehicle) {
+        SpotSize requiredSize = mapVehicleToSpotSize(vehicle.getType());
+        for (int i = 0; i &lt; floors.size(); i++) {
+            ParkingSpot spot = floors.get(i).findAvailableSpot(requiredSize);
+            if (spot != null) {
+                spot.park(vehicle);
+                return new Ticket(UUID.randomUUID().toString(), vehicle.getLicensePlate(), requiredSize, i, spot.getNumber(), LocalDateTime.now());
+            }
+        }
+        throw new RuntimeException("Parking Lot Full!");
+    }
+
+    public void exit(Ticket ticket, ParkingFeeStrategy feeStrategy, PaymentProcessor paymentProcessor) {
+        double amount = feeStrategy.calculateFee(ticket, LocalDateTime.now().plusHours(2)); // Simulated 2 hours later
+        paymentProcessor.process(amount);
+        floors.get(ticket.floor()).spots.get(ticket.spotNumber()).unpark();
+    }
+    
+    public void displayBoard() {
+        DisplayBoard.show(floors);
+    }
+}
+
+// SOLID: DIP — High-level module (ParkingLot) depends on abstraction (PaymentProcessor)
+interface PaymentProcessor {
+    void process(double amount);
+}
+
+class CashPayment implements PaymentProcessor {
+    public void process(double amount) { System.out.println("Processing cash payment: $" + amount); }
+}
+
+class CardPayment implements PaymentProcessor {
+    public void process(double amount) { System.out.println("Processing card payment: $" + amount); }
+}
+
+// SOLID: SRP — Only responsible for displaying
+class DisplayBoard {
+    public static void show(List&lt;ParkingFloor&gt; floors) {
+        for (int i = 0; i &lt; floors.size(); i++) {
+            System.out.println("Floor " + i + " available spots: " + floors.get(i).getAvailableSpotsCount());
+        }
+    }
+}
+
+public class Main {
+    public static void main(String[] args) {
+        ParkingLot lot = ParkingLot.getInstance(2, 6);
+        lot.displayBoard();
+        
+        Vehicle myCar = new Car("XYZ-1234");
+        Ticket ticket = lot.entry(myCar);
+        System.out.println("Parked vehicle: " + ticket.vehicleNumber());
+        
+        lot.displayBoard();
+        
+        lot.exit(ticket, new HourlyFeeStrategy(), new CardPayment());
+        
+        lot.displayBoard();
+    }
+}
+    </pre>
+
+    <div class="page-nav">
+      <a href="../../lld/design-patterns/behavioral.html" class="prev"><span class="label">← Previous</span><span class="title">Behavioral Patterns</span></a>
+      <a href="elevator.html" class="next"><span class="label">Next →</span><span class="title">Elevator System</span></a>
+    </div>
+  </main>
+</div>
+<button class="scroll-top" aria-label="Scroll to top">↑</button>
+<script src="../../js/main.js"></script>
+</body>
+</html>

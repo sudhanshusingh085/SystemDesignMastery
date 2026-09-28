@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Consistent Hashing — System Design Mastery</title>
+  <link rel="stylesheet" href="../css/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+</head>
+<body>
+<button class="menu-toggle" aria-label="Toggle menu">☰</button>
+<div class="page-wrapper">
+  <aside class="sidebar" id="sidebar"></aside>
+  <main class="main-content">
+    <div class="breadcrumb">
+      <a href="../index.html">Home</a>
+      <span class="sep">›</span>
+      High Level Design
+      <span class="sep">›</span>
+      <strong>Consistent Hashing</strong>
+    </div>
+
+    <h1>Consistent Hashing</h1>
+    
+    <div class="callout callout-info">
+      <strong>Interview Tip:</strong> Consistent Hashing is the go-to answer whenever you are asked about partitioning or distributing data evenly across a dynamic pool of servers (like scaling a database or distributed cache).
+    </div>
+
+    <h2>The Problem: Traditional Hashing</h2>
+    <p>Before understanding consistent hashing, we must ask: <strong>What is hashing?</strong></p>
+    <div class="jargon">📖 <strong>Hashing</strong>: Converting data (like a name or ID) into a fixed-size number. Think of it like a librarian assigning a unique shelf number to every book based on its title.</div>
+    <p>Imagine we have <code>N</code> <span class="jargon">📖 <strong>Servers</strong>: Computers that process requests or store data.</span> and we want to store user data across them. The simplest approach is to use a modulo operation:</p>
+    <p><code>serverIndex = hash(key) % N</code></p>
+    <p>This works fine until the number of servers changes. If a server crashes or we add a new one, <code>N</code> changes. Suddenly, almost every key hashes to a completely different server index. This means a massive data redistribution, which can overwhelm the network and take down the entire system in a <em>cache miss storm</em>.</p>
+
+    <h2>What is Consistent Hashing?</h2>
+    <p>Consistent hashing solves this problem by arranging the servers on a virtual circle, often called a <strong>hash ring</strong>. Both the servers and the data keys are hashed to points on this same circle.</p>
+    <p>To find which server should store a specific piece of data, we map the data's key to the ring, and then move <strong>clockwise</strong> until we find the first server. That server is responsible for the data.</p>
+    
+    <h3>How it minimizes redistribution</h3>
+    <p>If a server is added, only the data between the new server and the previous server on the ring needs to be redistributed. If a server is removed, its data is simply taken over by the next server clockwise. The vast majority of keys stay exactly where they were.</p>
+
+    <div class="diagram-container">
+      <div class="mermaid">
+        graph TD
+          subgraph Hash Ring
+            S1((Server 1)) --- K1(Key A)
+            K1 --- S2((Server 2))
+            S2 --- K2(Key B)
+            K2 --- S3((Server 3))
+            S3 --- K3(Key C)
+            K3 --- S1
+          end
+      </div>
+      <p class="caption">Figure 1: Servers and keys placed on a hash ring.</p>
+    </div>
+
+    <h2>Virtual Nodes</h2>
+    <p>A problem with basic consistent hashing is that servers might not be evenly spaced on the ring, leading to unbalanced load (one server gets too much data). To fix this, we use <strong>Virtual Nodes</strong>.</p>
+    <div class="jargon">📖 <strong>Virtual Nodes</strong>: Instead of placing a physical server on the ring once, we place it multiple times using different hash functions (e.g., Server1_A, Server1_B, Server1_C).</div>
+    <p>This creates a more uniform distribution. If a server is powerful, we can give it more virtual nodes. If it's weak, we give it fewer.</p>
+
+    <h2>Step-by-step Walkthrough</h2>
+    <div class="step">
+      <div class="step-number">1</div>
+      <div class="step-content">
+        <strong>Hash the Servers:</strong> We hash the IP or ID of each server (and its virtual node variants) to place them on the ring (0 to 2^32 - 1).
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-number">2</div>
+      <div class="step-content">
+        <strong>Hash the Data:</strong> When a request for a key comes in, we hash the key to find its position on the ring.
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-number">3</div>
+      <div class="step-content">
+        <strong>Route the Data:</strong> We scan clockwise from the data's position to find the first virtual node. We then route the request to the physical server that virtual node represents.
+      </div>
+    </div>
+
+    <h2>Java 21 Code Example</h2>
+    <p>Here is a complete, beginner-friendly implementation of a Consistent Hash Ring using Java 21's features, specifically utilizing a <code>TreeMap</code> which is perfect for searching "the next element clockwise".</p>
+    
+    <span class="code-label">Java</span>
+    <pre>
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.SortedMap;
+import java.util.TreeMap;
+
+/**
+ * A Consistent Hash Ring implementation.
+ */
+public class ConsistentHashRing {
+
+    // Number of virtual nodes per physical server to ensure even distribution
+    private final int virtualNodesPerServer;
+    
+    // TreeMap keeps the hashes sorted. It represents our hash ring.
+    // Key: Hash value, Value: Physical Server Name
+    private final SortedMap&lt;Integer, String&gt; ring = new TreeMap&lt;&gt;();
+
+    public ConsistentHashRing(int virtualNodesPerServer) {
+        this.virtualNodesPerServer = virtualNodesPerServer;
+    }
+
+    /**
+     * Adds a new server to the ring.
+     */
+    public void addNode(String serverName) {
+        for (int i = 0; i &lt; virtualNodesPerServer; i++) {
+            // Create a unique name for the virtual node
+            String virtualNodeName = serverName + "-VN" + i;
+            int hash = getHash(virtualNodeName);
+            ring.put(hash, serverName);
+        }
+        System.out.println("Added server: " + serverName);
+    }
+
+    /**
+     * Removes a server from the ring.
+     */
+    public void removeNode(String serverName) {
+        for (int i = 0; i &lt; virtualNodesPerServer; i++) {
+            String virtualNodeName = serverName + "-VN" + i;
+            int hash = getHash(virtualNodeName);
+            ring.remove(hash);
+        }
+        System.out.println("Removed server: " + serverName);
+    }
+
+    /**
+     * Finds the appropriate server for a given key.
+     */
+    public String getNode(String key) {
+        if (ring.isEmpty()) {
+            return null;
+        }
+
+        int hash = getHash(key);
+        
+        // Find all nodes whose hash is greater than or equal to the key's hash
+        // This is like looking "clockwise" on the ring.
+        SortedMap&lt;Integer, String&gt; tailMap = ring.tailMap(hash);
+        
+        // If tailMap is empty, it means we wrapped around the circle.
+        // We take the first node in the ring.
+        int targetHash = tailMap.isEmpty() ? ring.firstKey() : tailMap.firstKey();
+        
+        return ring.get(targetHash);
+    }
+
+    /**
+     * Helper method to generate a hash. 
+     * In a real system, use MD5 or MurmurHash. We use a simplified String hashCode here 
+     * combined with MD5 for better distribution than standard Java hashCode.
+     */
+    private int getHash(String key) {
+        try {
+            MessageDigest md = MessageDigest.getInstance("MD5");
+            md.update(key.getBytes());
+            byte[] digest = md.digest();
+            // Convert first 4 bytes to an integer
+            return ((digest[3] &amp; 0xFF) &lt;&lt; 24) |
+                   ((digest[2] &amp; 0xFF) &lt;&lt; 16) |
+                   ((digest[1] &amp; 0xFF) &lt;&lt; 8) |
+                   (digest[0] &amp; 0xFF);
+        } catch (NoSuchAlgorithmException e) {
+            throw new RuntimeException("MD5 not supported", e);
+        }
+    }
+
+    public static void main(String[] args) {
+        ConsistentHashRing hashRing = new ConsistentHashRing(3); // 3 virtual nodes per server
+        
+        hashRing.addNode("Server-A");
+        hashRing.addNode("Server-B");
+        hashRing.addNode("Server-C");
+        
+        System.out.println("User 'Alice' goes to: " + hashRing.getNode("Alice"));
+        System.out.println("User 'Bob' goes to: " + hashRing.getNode("Bob"));
+        System.out.println("User 'Charlie' goes to: " + hashRing.getNode("Charlie"));
+        
+        // If Server-B crashes
+        hashRing.removeNode("Server-B");
+        
+        System.out.println("After Server-B removed:");
+        System.out.println("User 'Alice' goes to: " + hashRing.getNode("Alice"));
+        System.out.println("User 'Bob' goes to: " + hashRing.getNode("Bob"));
+    }
+}
+    </pre>
+
+    <h2>Where is Consistent Hashing Used?</h2>
+    <p>Consistent hashing is a foundational concept used in many massively distributed systems:</p>
+    <ul>
+      <li><strong>NoSQL Databases:</strong> Amazon DynamoDB and Apache Cassandra use it to partition data across clusters of nodes.</li>
+      <li><strong>Content Delivery Networks (CDNs):</strong> To distribute web traffic evenly across edge servers.</li>
+      <li><strong>Distributed Caching:</strong> Systems like Memcached and Redis cluster use it to know which cache server holds a specific key.</li>
+      <li><strong>Load Balancers:</strong> To ensure requests from a specific user always hit the same backend server (sticky sessions).</li>
+    </ul>
+
+    <div class="page-nav">
+      <a href="cap-theorem.html" class="prev"><span class="label">← Previous</span><span class="title">CAP Theorem</span></a>
+      <a href="message-queues.html" class="next"><span class="label">Next →</span><span class="title">Message Queues</span></a>
+    </div>
+  </main>
+</div>
+<button class="scroll-top" aria-label="Scroll to top">↑</button>
+<script src="../js/main.js"></script>
+</body>
+</html>

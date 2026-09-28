@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Design an Elevator System — System Design Mastery</title>
+  <link rel="stylesheet" href="../../css/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+</head>
+<body>
+<button class="menu-toggle" aria-label="Toggle menu">☰</button>
+<div class="page-wrapper">
+  <aside class="sidebar" id="sidebar"></aside>
+  <main class="main-content">
+    <div class="breadcrumb">
+      <a href="../../index.html">Home</a>
+      <span class="sep">›</span>
+      LLD Case Studies
+      <span class="sep">›</span>
+      <strong>Elevator System</strong>
+    </div>
+
+    <h1>Design an Elevator System</h1>
+    
+    <h2>What is an Elevator System?</h2>
+    <p>An elevator system manages the transportation of people between floors in a building. Think of it like a <strong>bus network</strong>. Buses run on routes, pick up passengers at stops, and drop them off. The system needs to decide which bus (elevator) to send to which stop (floor) to minimize waiting time.</p>
+
+    <h2>Requirements</h2>
+    <div class="callout callout-info">
+      <ul>
+        <li>Building with N floors, M elevators</li>
+        <li>Users press Up/Down button on a floor</li>
+        <li>Inside elevator: press destination floor</li>
+        <li>Elevator scheduling algorithm</li>
+        <li>Display current floor and direction</li>
+        <li>Handle multiple requests efficiently</li>
+      </ul>
+    </div>
+
+    <h2>How does it work?</h2>
+    <div class="diagram-container">
+      <div class="mermaid">
+        classDiagram
+          class Building {
+             -List~Elevator~ elevators
+             -ElevatorController controller
+          }
+          class ElevatorController {
+             -ElevatorSchedulingStrategy strategy
+             +requestElevator(ElevatorRequest)
+          }
+          class Elevator {
+             -int currentFloor
+             -Direction direction
+             +move()
+             +addRequest(InternalRequest)
+          }
+          Building *-- ElevatorController
+          Building *-- Elevator
+      </div>
+      <p class="caption">Figure 1: Elevator Class Diagram</p>
+    </div>
+
+    <h2>Java 21 Implementation</h2>
+    <span class="code-label">Java</span>
+    <pre>
+import java.util.ArrayList;
+import java.util.List;
+import java.util.PriorityQueue;
+
+enum Direction { UP, DOWN, IDLE }
+
+record ElevatorRequest(int fromFloor, Direction direction) {}
+record InternalRequest(int toFloor) {}
+
+// Design Pattern: Strategy
+interface ElevatorSchedulingStrategy {
+    Elevator selectElevator(List&lt;Elevator&gt; elevators, ElevatorRequest request);
+}
+
+class NearestElevatorStrategy implements ElevatorSchedulingStrategy {
+    public Elevator selectElevator(List&lt;Elevator&gt; elevators, ElevatorRequest request) {
+        Elevator best = elevators.get(0);
+        int minDistance = Integer.MAX_VALUE;
+        for (Elevator e : elevators) {
+            int dist = Math.abs(e.getCurrentFloor() - request.fromFloor());
+            if (dist &lt; minDistance) {
+                minDistance = dist;
+                best = e;
+            }
+        }
+        return best;
+    }
+}
+
+class ZonedStrategy implements ElevatorSchedulingStrategy {
+    public Elevator selectElevator(List&lt;Elevator&gt; elevators, ElevatorRequest request) {
+        // Implementation for zoned strategy
+        return elevators.get(0);
+    }
+}
+
+class Elevator {
+    private final int id;
+    private int currentFloor;
+    private Direction direction;
+    private PriorityQueue&lt;Integer&gt; upQueue;
+    private PriorityQueue&lt;Integer&gt; downQueue;
+
+    public Elevator(int id) {
+        this.id = id;
+        this.currentFloor = 0;
+        this.direction = Direction.IDLE;
+        this.upQueue = new PriorityQueue&lt;&gt;();
+        this.downQueue = new PriorityQueue&lt;&gt;((a, b) -> b.compareTo(a));
+    }
+
+    public int getCurrentFloor() { return currentFloor; }
+    public Direction getDirection() { return direction; }
+
+    public void addRequest(InternalRequest req) {
+        if (req.toFloor() > currentFloor) {
+            upQueue.offer(req.toFloor());
+        } else {
+            downQueue.offer(req.toFloor());
+        }
+    }
+
+    public void addExternalRequest(ElevatorRequest req) {
+        if (req.fromFloor() > currentFloor) {
+            upQueue.offer(req.fromFloor());
+        } else {
+            downQueue.offer(req.fromFloor());
+        }
+    }
+
+    public void move() {
+        if (!upQueue.isEmpty()) {
+            direction = Direction.UP;
+            currentFloor = upQueue.poll();
+            System.out.println("Elevator " + id + " moved UP to floor " + currentFloor);
+        } else if (!downQueue.isEmpty()) {
+            direction = Direction.DOWN;
+            currentFloor = downQueue.poll();
+            System.out.println("Elevator " + id + " moved DOWN to floor " + currentFloor);
+        } else {
+            direction = Direction.IDLE;
+            System.out.println("Elevator " + id + " is IDLE at floor " + currentFloor);
+        }
+    }
+}
+
+// SOLID: DIP
+class ElevatorController {
+    private final List&lt;Elevator&gt; elevators;
+    private final ElevatorSchedulingStrategy strategy;
+
+    public ElevatorController(List&lt;Elevator&gt; elevators, ElevatorSchedulingStrategy strategy) {
+        this.elevators = elevators;
+        this.strategy = strategy;
+    }
+
+    public void requestElevator(ElevatorRequest request) {
+        Elevator selected = strategy.selectElevator(elevators, request);
+        selected.addExternalRequest(request);
+        System.out.println("Assigned Elevator to request at floor " + request.fromFloor());
+    }
+}
+
+// Design Pattern: Facade
+class Building {
+    private final List&lt;Elevator&gt; elevators;
+    private final ElevatorController controller;
+
+    public Building(int numElevators) {
+        elevators = new ArrayList&lt;&gt;();
+        for (int i = 0; i &lt; numElevators; i++) {
+            elevators.add(new Elevator(i));
+        }
+        controller = new ElevatorController(elevators, new NearestElevatorStrategy());
+    }
+
+    public void callElevator(int floor, Direction direction) {
+        controller.requestElevator(new ElevatorRequest(floor, direction));
+    }
+
+    public void step() {
+        for (Elevator e : elevators) {
+            e.move();
+        }
+    }
+}
+
+// SOLID: ISP — different interfaces for different panels
+interface Panel { }
+class FloorPanel implements Panel { }
+class ElevatorPanel implements Panel { }
+interface Display { void show(); }
+
+public class Main {
+    public static void main(String[] args) {
+        Building building = new Building(2);
+        building.callElevator(5, Direction.UP);
+        building.step();
+        building.step();
+    }
+}
+    </pre>
+
+    <div class="page-nav">
+      <a href="parking-lot.html" class="prev"><span class="label">← Previous</span><span class="title">Parking Lot</span></a>
+      <a href="library.html" class="next"><span class="label">Next →</span><span class="title">Library System</span></a>
+    </div>
+  </main>
+</div>
+<button class="scroll-top" aria-label="Scroll to top">↑</button>
+<script src="../../js/main.js"></script>
+</body>
+</html>

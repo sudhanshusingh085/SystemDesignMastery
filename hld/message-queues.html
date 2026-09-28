@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Message Queues — System Design Mastery</title>
+  <link rel="stylesheet" href="../css/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+</head>
+<body>
+<button class="menu-toggle" aria-label="Toggle menu">☰</button>
+<div class="page-wrapper">
+  <aside class="sidebar" id="sidebar"></aside>
+  <main class="main-content">
+    <div class="breadcrumb">
+      <a href="../index.html">Home</a>
+      <span class="sep">›</span>
+      High Level Design
+      <span class="sep">›</span>
+      <strong>Message Queues</strong>
+    </div>
+
+    <h1>Message Queues</h1>
+
+    <h2>What is a Message Queue?</h2>
+    <p>A <strong>Message Queue</strong> is essentially a communication mechanism or a temporary to-do list that sits between different parts of a software system. One part of the system adds messages (tasks or data) to the queue, and another part of the system reads those messages and processes them.</p>
+    
+    <div class="callout callout-purple">
+      <strong>Real-World Analogy: A Restaurant Kitchen</strong><br>
+      Imagine a busy restaurant. The waiter (Producer) takes an order from a customer, writes it on a slip of paper, and pins it to a ticket rail (the Queue). The waiter immediately goes back to serving other tables. In the kitchen, the chefs (Consumers) look at the ticket rail. When a chef is free, they take the next ticket in line and start cooking. The waiter doesn't have to stand in the kitchen shouting the order and waiting for the food to be cooked before helping the next customer.
+    </div>
+
+    <h2>Why do we need them?</h2>
+    <p>Message queues provide several critical benefits in distributed systems:</p>
+    <ul>
+      <li><strong>Decoupling:</strong> The producer and consumer don't need to know about each other. They just need to agree on the message format.</li>
+      <li><strong>Asynchronous Processing:</strong> The producer doesn't have to wait for the consumer to finish processing. It drops the message and moves on.</li>
+      <li><strong>Load Leveling (Buffering):</strong> If the producer generates a massive spike of requests, the queue stores them safely until consumers can catch up, preventing the consumers from being overwhelmed.</li>
+      <li><strong>Reliability:</strong> If a consumer crashes while processing a message, the message can be returned to the queue to be processed by someone else. Data isn't lost.</li>
+    </ul>
+
+    <h2>Core Concepts</h2>
+    <div class="jargon">📖 <strong>Producer</strong>: The application that creates and sends the message.</div>
+    <div class="jargon">📖 <strong>Consumer</strong>: The application that receives and processes the message.</div>
+    <div class="jargon">📖 <strong>Queue</strong>: The buffer that holds the messages.</div>
+    <div class="jargon">📖 <strong>Topic</strong>: A category or channel to which messages are published (used in pub-sub).</div>
+    <div class="jargon">📖 <strong>Broker</strong>: The software system that manages the queues and topics (e.g., RabbitMQ, Kafka).</div>
+
+    <h2>Messaging Patterns</h2>
+    
+    <h3>1. Point-to-Point (Queue)</h3>
+    <p>In this pattern, a message is consumed by exactly <strong>one</strong> consumer. Even if there are multiple consumers listening to the queue for load balancing, a single message will only be delivered to one of them.</p>
+    <div class="diagram-container">
+      <div class="mermaid">
+        graph LR
+          P1(Producer) --> Q[(Queue)]
+          Q --> C1(Consumer 1)
+          Q -.-> C2(Consumer 2)
+      </div>
+      <p class="caption">Figure 1: Point-to-Point. One message goes to only one consumer.</p>
+    </div>
+
+    <h3>2. Publish-Subscribe (Pub/Sub)</h3>
+    <p>Here, a producer publishes a message to a <strong>Topic</strong>. Any number of consumers (Subscribers) who have subscribed to that topic will receive a copy of the message.</p>
+    <div class="diagram-container">
+      <div class="mermaid">
+        graph LR
+          P1(Publisher) --> T((Topic))
+          T --> S1(Subscriber 1)
+          T --> S2(Subscriber 2)
+          T --> S3(Subscriber 3)
+      </div>
+      <p class="caption">Figure 2: Pub/Sub. One message goes to all subscribers.</p>
+    </div>
+
+    <h2>Message Delivery Guarantees</h2>
+    <ul>
+      <li><strong>At-most-once:</strong> The message is delivered 0 or 1 times. It might be lost, but never duplicated. (Fastest, least reliable)</li>
+      <li><strong>At-least-once:</strong> The message is guaranteed to be delivered, but might be delivered multiple times. Consumers must be <em>idempotent</em> (processing the same message twice doesn't break things).</li>
+      <li><strong>Exactly-once:</strong> The holy grail. The message is delivered exactly one time. (Slowest, hardest to implement).</li>
+    </ul>
+
+    <h2>Dead Letter Queue (DLQ)</h2>
+    <div class="jargon">📖 <strong>Dead Letter Queue</strong>: A special secondary queue where messages that fail to process multiple times are sent. Engineers can inspect the DLQ to debug why the messages are failing without blocking the main queue.</div>
+
+    <h2>Java 21 Code Example</h2>
+    <p>Let's build a simple in-memory representation of these concepts using Java 21's concurrency utilities and modern features.</p>
+    
+    <span class="code-label">Java</span>
+    <pre>
+import java.util.List;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.LinkedBlockingQueue;
+
+public class MessagingExamples {
+
+    // --- 1. Point-to-Point (Queue) Example ---
+    
+    // A modern record to represent our Message
+    public record TaskMessage(String id, String payload) {}
+
+    public static class SimpleQueueDemo {
+        public static void run() throws InterruptedException {
+            // A thread-safe queue holding up to 10 items
+            BlockingQueue&lt;TaskMessage&gt; queue = new LinkedBlockingQueue&lt;&gt;(10);
+
+            // Producer Thread
+            Thread producer = new Thread(() -&gt; {
+                try {
+                    for (int i = 1; i &lt;= 3; i++) {
+                        TaskMessage msg = new TaskMessage("ID-" + i, "Process image " + i);
+                        System.out.println("Producing: " + msg.payload());
+                        queue.put(msg); // Blocks if queue is full
+                        Thread.sleep(500);
+                    }
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+            });
+
+            // Consumer Thread
+            Thread consumer = new Thread(() -&gt; {
+                try {
+                    for (int i = 1; i &lt;= 3; i++) {
+                        // Blocks if queue is empty
+                        TaskMessage msg = queue.take();
+                        System.out.println("Consuming: " + msg.payload());
+                        Thread.sleep(1000);
+                    }
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+            });
+
+            producer.start();
+            consumer.start();
+            producer.join();
+            consumer.join();
+        }
+    }
+
+    // --- 2. Publish-Subscribe Example ---
+
+    public record EventMessage(String eventType, String data) {}
+
+    public interface Subscriber {
+        void onMessage(EventMessage message);
+    }
+
+    public static class Topic {
+        private final String name;
+        // Thread-safe list of subscribers
+        private final List&lt;Subscriber&gt; subscribers = new CopyOnWriteArrayList&lt;&gt;();
+
+        public Topic(String name) {
+            this.name = name;
+        }
+
+        public void subscribe(Subscriber sub) {
+            subscribers.add(sub);
+        }
+
+        public void publish(EventMessage message) {
+            System.out.println("\nPublishing to topic '" + name + "': " + message.data());
+            // Every subscriber gets the message
+            for (Subscriber sub : subscribers) {
+                sub.onMessage(message);
+            }
+        }
+    }
+
+    public static class EmailService implements Subscriber {
+        @Override
+        public void onMessage(EventMessage message) {
+            System.out.println("EmailService sending email for: " + message.data());
+        }
+    }
+
+    public static class AnalyticsService implements Subscriber {
+        @Override
+        public void onMessage(EventMessage message) {
+            System.out.println("AnalyticsService logging event: " + message.data());
+        }
+    }
+
+    public static void main(String[] args) throws InterruptedException {
+        System.out.println("--- Point to Point ---");
+        SimpleQueueDemo.run();
+
+        Thread.sleep(1000);
+
+        System.out.println("\n--- Publish/Subscribe ---");
+        Topic userSignupTopic = new Topic("UserSignups");
+        
+        userSignupTopic.subscribe(new EmailService());
+        userSignupTopic.subscribe(new AnalyticsService());
+
+        userSignupTopic.publish(new EventMessage("SIGNUP", "User Alice created an account"));
+    }
+}
+    </pre>
+
+    <h2>Popular Tools</h2>
+    <ul>
+      <li><strong>Apache Kafka:</strong> Excellent for massive throughput, streaming data, and pub/sub. Stores data persistently.</li>
+      <li><strong>RabbitMQ:</strong> Great for complex routing logic and point-to-point queues.</li>
+      <li><strong>AWS SQS (Simple Queue Service):</strong> Managed queue service by Amazon, highly scalable, zero maintenance.</li>
+    </ul>
+    
+    <h2>Event-Driven Architecture</h2>
+    <p>Message queues form the backbone of <strong>Event-Driven Architecture (EDA)</strong>. In EDA, microservices don't call each other directly via HTTP. Instead, they emit "events" (messages) to a broker when something happens, and other services react to those events asynchronously.</p>
+
+    <div class="callout callout-info">
+      <strong>Interview Tip:</strong> When designing a system, if a process takes a long time (like generating a PDF, sending an email, or resizing an image), always introduce a Message Queue to handle it asynchronously so the user doesn't have to wait.
+    </div>
+
+    <div class="page-nav">
+      <a href="consistent-hashing.html" class="prev"><span class="label">← Previous</span><span class="title">Consistent Hashing</span></a>
+      <a href="microservices.html" class="next"><span class="label">Next →</span><span class="title">Microservices</span></a>
+    </div>
+  </main>
+</div>
+<button class="scroll-top" aria-label="Scroll to top">↑</button>
+<script src="../js/main.js"></script>
+</body>
+</html>

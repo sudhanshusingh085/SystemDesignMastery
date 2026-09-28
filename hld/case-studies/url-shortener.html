@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Design TinyURL / URL Shortener — System Design Mastery</title>
+  <link rel="stylesheet" href="../../css/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+</head>
+<body>
+<button class="menu-toggle" aria-label="Toggle menu">☰</button>
+<div class="page-wrapper">
+  <aside class="sidebar" id="sidebar"></aside>
+  <main class="main-content">
+    <div class="breadcrumb">
+      <a href="../../index.html">Home</a>
+      <span class="sep">›</span>
+      HLD
+      <span class="sep">›</span>
+      Case Studies
+      <span class="sep">›</span>
+      <strong>URL Shortener</strong>
+    </div>
+
+    <h1>Design a URL Shortener (TinyURL / bit.ly)</h1>
+    <p>A URL shortener is a service that creates shorter aliases for long URLs. Users are redirected to the original URL when they hit these aliases.</p>
+
+    <div class="jargon">📖 <strong>URL (Uniform Resource Locator)</strong>: The address of a given unique resource on the Web.</div>
+
+    <h2>Step 1 — Requirements</h2>
+    <div class="card">
+      <h3>Functional Requirements</h3>
+      <ul>
+        <li>Given a long URL, our service should generate a shorter and unique alias of it.</li>
+        <li>When users access a short link, our service should redirect them to the original link.</li>
+        <li>Users should optionally be able to pick a custom short link for their URL.</li>
+        <li>Links can have an expiration time.</li>
+      </ul>
+      
+      <h3>Non-functional Requirements</h3>
+      <ul>
+        <li>The system should be highly available.</li>
+        <li>URL redirection should happen in real-time with minimal latency.</li>
+        <li>Shortened links should not be predictable.</li>
+        <li>Scale: 100M new URLs generated per day.</li>
+      </ul>
+
+      <h3>Capacity Estimation</h3>
+      <p>Assuming 100M URLs per day, and a 10:1 read/write ratio, we have 1B redirections per day.</p>
+      <ul>
+        <li><strong>Write QPS:</strong> 100M / (24 * 3600) ~ 1160 URLs/s</li>
+        <li><strong>Read QPS:</strong> 1B / (24 * 3600) ~ 11,600 URLs/s</li>
+        <li><strong>Storage:</strong> 100M * 365 * 10 = 365B records in 10 years. If each record is 500 bytes, total storage = 365B * 500B = 182.5 TB.</li>
+      </ul>
+    </div>
+
+    <h2>Step 2 — Architecture</h2>
+    <p>Below is the high-level design of our URL shortener system.</p>
+
+    <div class="diagram-container">
+      <div class="mermaid">
+        graph TD
+          Client[Client] --> API[API Gateway]
+          API --> URL[URL Service]
+          URL --> DB[(Database)]
+          URL --> Cache[(Redis Cache)]
+          CDN[CDN] --> Client
+      </div>
+      <p class="caption">Figure 1: High Level Architecture of URL Shortener</p>
+    </div>
+
+    <h2>Step 3 — Deep Dive</h2>
+    
+    <h3>URL Encoding (Base62)</h3>
+    <p>To generate short URLs, we can use Base62 encoding (a-z, A-Z, 0-9). With 7 characters, we can generate 62^7 = ~3.5 trillion unique URLs.</p>
+    
+    <div class="comparison">
+      <div class="side good">
+        <h4>Base62 Encoding</h4>
+        <p>Generates short, alphanumeric strings that are URL-safe.</p>
+      </div>
+      <div class="side bad">
+        <h4>MD5 Hashing</h4>
+        <p>Can cause hash collisions and results in longer hashes (need truncation).</p>
+      </div>
+    </div>
+
+    <h3>Database Schema Design</h3>
+    <p>We need a simple schema mapping the short URL (or its ID) to the long URL.</p>
+
+    <h3>Cache Strategy</h3>
+    <p>Since reads (redirections) are 10x more than writes, we need a cache. A <span class="jargon">📖 <strong>Cache</strong>: A temporary storage area that stores copies of frequently accessed data for faster retrieval.</span> like Redis is perfect here.</p>
+
+    <h2>Step 4 — Implementation (Java 21)</h2>
+    <span class="code-label">Java</span>
+    <pre>
+import java.util.Optional;
+import java.time.Instant;
+import java.util.concurrent.ConcurrentHashMap;
+
+// Java 21 Record for immutable data
+public record UrlMapping(String shortUrl, String longUrl, Instant expiresAt) {}
+
+// Sealed interface for result handling
+public sealed interface UrlResult permits UrlResult.Success, UrlResult.NotFound, UrlResult.Expired {
+    record Success(String longUrl) implements UrlResult {}
+    record NotFound() implements UrlResult {}
+    record Expired() implements UrlResult {}
+}
+
+interface UrlRepository {
+    void save(UrlMapping mapping);
+    Optional&lt;UrlMapping&gt; findByShortUrl(String shortUrl);
+}
+
+class InMemoryUrlRepository implements UrlRepository {
+    private final ConcurrentHashMap&lt;String, UrlMapping&gt; db = new ConcurrentHashMap&lt;&gt;();
+    
+    @Override
+    public void save(UrlMapping mapping) {
+        db.put(mapping.shortUrl(), mapping);
+    }
+    
+    @Override
+    public Optional&lt;UrlMapping&gt; findByShortUrl(String shortUrl) {
+        return Optional.ofNullable(db.get(shortUrl));
+    }
+}
+
+class Base62Encoder {
+    private static final String ALPHABET = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+    private static final int BASE = ALPHABET.length();
+    
+    public String encode(long id) {
+        StringBuilder sb = new StringBuilder();
+        while (id &gt; 0) {
+            sb.append(ALPHABET.charAt((int)(id % BASE)));
+            id /= BASE;
+        }
+        return sb.reverse().toString();
+    }
+}
+
+public class UrlShortenerService {
+    private final UrlRepository repository;
+    private final Base62Encoder encoder;
+    private long currentId = 1000000; // Mock ID generator
+
+    public UrlShortenerService(UrlRepository repository, Base62Encoder encoder) {
+        this.repository = repository;
+        this.encoder = encoder;
+    }
+
+    public String shortenUrl(String longUrl) {
+        String shortUrl = encoder.encode(currentId++);
+        repository.save(new UrlMapping(shortUrl, longUrl, Instant.now().plusSeconds(3600 * 24 * 365))); // 1 year validity
+        return shortUrl;
+    }
+
+    public UrlResult redirect(String shortUrl) {
+        return repository.findByShortUrl(shortUrl)
+            .map(mapping -&gt; {
+                if (Instant.now().isAfter(mapping.expiresAt())) {
+                    return new UrlResult.Expired();
+                }
+                return (UrlResult) new UrlResult.Success(mapping.longUrl());
+            })
+            .orElse(new UrlResult.NotFound());
+    }
+}
+    </pre>
+
+    <h2>Step 5 — Optimization</h2>
+    <ul>
+        <li><strong>Rate Limiting:</strong> Implement rate limiting to prevent abuse.</li>
+        <li><strong>Analytics:</strong> Add asynchronous tracking using Kafka or another message queue to track click counts, locations, etc.</li>
+        <li><strong>Geographic Distribution:</strong> Deploy in multiple regions to reduce latency globally.</li>
+    </ul>
+
+    <div class="callout callout-info">
+      <strong>💡 Interview Tip:</strong> Always clarify if the system needs to support custom aliases early on, as it changes the DB schema and collision handling logic.
+    </div>
+
+    <div class="page-nav">
+      <a href="../cdn.html" class="prev"><span class="label">← Previous</span><span class="title">CDN</span></a>
+      <a href="chat-system.html" class="next"><span class="label">Next →</span><span class="title">Chat System</span></a>
+    </div>
+  </main>
+</div>
+<button class="scroll-top" aria-label="Scroll to top">↑</button>
+<script src="../../js/main.js"></script>
+</body>
+</html>

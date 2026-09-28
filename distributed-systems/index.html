@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Distributed Systems — When One Computer Isn't Enough — System Design Mastery</title>
+  <link rel="stylesheet" href="../css/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+</head>
+<body>
+<button class="menu-toggle">☰</button>
+<div class="page-wrapper">
+  <aside class="sidebar" id="sidebar"></aside>
+  <main class="main-content">
+    <div class="breadcrumb">
+      <a href="../index.html">Home</a>
+      <span class="sep">›</span>
+      <strong>Distributed Systems</strong>
+    </div>
+
+    <h1>Distributed Systems — When One Computer Isn't Enough</h1>
+
+    <section>
+      <h2>1. What is a Distributed System?</h2>
+      <p>A <div class="jargon">📖 <strong>Distributed System</strong>: A collection of independent computers that appear to its users as a single coherent system.</div></p>
+      <p>Analogy: A single restaurant vs a chain of restaurants. If a single restaurant kitchen catches fire, operations stop. In a chain, if one location closes, others can still serve customers, but coordinating the menu and prices across all locations becomes a challenge.</p>
+    </section>
+
+    <section>
+      <h2>2. CAP Theorem</h2>
+      <p>The CAP Theorem states that in a distributed data store, you can only guarantee two out of three properties:</p>
+      <ul>
+        <li><strong>Consistency (C):</strong> Every read receives the most recent write.</li>
+        <li><strong>Availability (A):</strong> Every request receives a (non-error) response, without guarantee that it contains the most recent write.</li>
+        <li><strong>Partition Tolerance (P):</strong> The system continues to operate despite an arbitrary number of messages being dropped or delayed by the network between nodes.</li>
+      </ul>
+      <p>Because network partitions (P) are unavoidable, you must choose between Consistency (CP) and Availability (AP).</p>
+      
+      <div class="diagram-container">
+        <div class="mermaid">
+          graph TD
+            CAP((CAP Theorem))
+            CAP --- C(Consistency)
+            CAP --- A(Availability)
+            CAP --- P(Partition Tolerance)
+            
+            C --- CP[CP: HBase, MongoDB]
+            P --- CP
+            
+            A --- AP[AP: Cassandra, DynamoDB]
+            P --- AP
+            
+            C --- CA[CA: RDBMS - Single Node]
+            A --- CA
+        </div>
+        <p class="caption">Figure 1: The CAP Theorem Triangle</p>
+      </div>
+
+      <span class="code-label">Java 21</span>
+      <pre>
+public class CAPSimulation {
+    // Simulates a network partition between two nodes
+    static boolean networkPartition = true;
+    static String node1Data = "V1";
+    static String node2Data = "V1";
+
+    public static void writeData(String newData) {
+        node1Data = newData;
+        if (!networkPartition) {
+            node2Data = newData; // Replicate if no partition
+        }
+    }
+
+    public static void main(String[] args) {
+        writeData("V2"); // Write goes to Node 1
+        
+        // AP System Behavior (Available, but Inconsistent)
+        System.out.println("AP Read Node 2: " + node2Data); // Returns stale "V1"
+        
+        // CP System Behavior (Consistent, but Unavailable)
+        if (networkPartition) {
+            System.err.println("CP Read Node 2: ERROR - Node isolated, rejecting read to maintain consistency");
+        }
+    }
+}
+      </pre>
+    </section>
+
+    <section>
+      <h2>3. PACELC Theorem</h2>
+      <p>An extension to CAP: If there is a Partition (P), how does the system trade off Availability and Consistency (A and C); Else (E), when the system is running normally, how does it trade off Latency and Consistency (L and C).</p>
+    </section>
+
+    <section>
+      <h2>4. Consistency Models</h2>
+      <ul>
+        <li><strong>Strong Consistency:</strong> After a write, any subsequent read will see the updated value.</li>
+        <li><strong>Eventual Consistency:</strong> If no new updates are made, eventually all accesses will return the last updated value.</li>
+        <li><strong>Causal Consistency:</strong> Operations that are causally related are seen by every node in the same order.</li>
+        <li><strong>Read-Your-Writes:</strong> A client will always see its own updates.</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>5. Consistent Hashing</h2>
+      <p>Traditional hashing (hash(key) % N) breaks down when a server is added or removed (N changes), causing almost all keys to be remapped. <div class="jargon">📖 <strong>Consistent Hashing</strong>: Distributes data across a ring such that adding or removing a node only affects a minimal number of keys.</div></p>
+      
+      <span class="code-label">Java 21</span>
+      <pre>
+import java.util.SortedMap;
+import java.util.TreeMap;
+
+public class ConsistentHashRing {
+    private final SortedMap&lt;Integer, String&gt; ring = new TreeMap&lt;&gt;();
+    private final int numberOfVirtualNodes = 3;
+
+    public void addNode(String nodeName) {
+        for (int i = 0; i < numberOfVirtualNodes; i++) {
+            int hash = (nodeName + i).hashCode();
+            ring.put(hash, nodeName);
+        }
+    }
+
+    public String getNode(String key) {
+        if (ring.isEmpty()) return null;
+        int hash = key.hashCode();
+        SortedMap&lt;Integer, String&gt; tailMap = ring.tailMap(hash);
+        int nodeHash = tailMap.isEmpty() ? ring.firstKey() : tailMap.firstKey();
+        return ring.get(nodeHash);
+    }
+}
+      </pre>
+    </section>
+
+    <section>
+      <h2>6. Replication Strategies</h2>
+      <ul>
+        <li><strong>Leader-Follower:</strong> Writes go to the leader, reads can go to followers.</li>
+        <li><strong>Multi-Leader:</strong> Multiple nodes accept writes. Complex conflict resolution.</li>
+        <li><strong>Leaderless:</strong> Any node accepts writes (e.g., Cassandra). Uses quorums for reads/writes.</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>7. Distributed Locks</h2>
+      <p>In a single machine, you use `synchronized` or `ReentrantLock`. In a distributed system, you need an external store like Redis or ZooKeeper.</p>
+      
+      <span class="code-label">Java 21</span>
+      <pre>
+public interface DistributedLock {
+    boolean acquire(String key, long timeoutMs);
+    void release(String key);
+}
+
+// Pseudo-implementation using Redis semantics
+public class RedisLock implements DistributedLock {
+    public boolean acquire(String key, long timeoutMs) {
+        // Implementation typically uses SETNX (Set if Not Exists) with expiration
+        System.out.println("Acquiring lock for " + key);
+        return true;
+    }
+    public void release(String key) {
+        System.out.println("Releasing lock for " + key);
+    }
+}
+      </pre>
+    </section>
+
+    <section>
+      <h2>8. Leader Election & 9. Consensus</h2>
+      <p>Consensus algorithms (like Raft or Paxos) allow a cluster of machines to agree on values, even if some nodes fail. They often start with <strong>Leader Election</strong> to pick a single coordinator to handle writes.</p>
+    </section>
+
+    <section>
+      <h2>10. CQRS</h2>
+      <p><div class="jargon">📖 <strong>CQRS (Command Query Responsibility Segregation)</strong>: Separates the models and databases used for reading data (Queries) from those used for updating data (Commands).</div></p>
+      
+      <div class="diagram-container">
+        <div class="mermaid">
+          graph LR
+            Client -->|Command| WriteDB[(Write DB)]
+            WriteDB -.->|Events| ReadDB[(Read DB)]
+            Client -->|Query| ReadDB
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>11. Event Sourcing</h2>
+      <p>Instead of storing the current state, store the sequence of events that led to it. Analogy: Your bank balance (current state) is just the sum of all your deposits and withdrawals (events).</p>
+      
+      <span class="code-label">Java 21</span>
+      <pre>
+public sealed interface Event permits AccountCreated, MoneyDeposited {}
+record AccountCreated(String id, double initialBalance) implements Event {}
+record MoneyDeposited(String id, double amount) implements Event {}
+
+public class BankAccount {
+    private double balance = 0;
+    
+    // Rebuild state by replaying events
+    public void apply(List&lt;Event&gt; events) {
+        for (Event e : events) {
+            switch (e) {
+                case AccountCreated ac -> this.balance = ac.initialBalance();
+                case MoneyDeposited md -> this.balance += md.amount();
+            }
+        }
+    }
+}
+      </pre>
+    </section>
+
+    <section>
+      <h2>12. Saga Pattern</h2>
+      <p>Used for distributed transactions. Instead of locking multiple databases, a Saga executes a sequence of local transactions. If one fails, it executes compensating transactions to undo the previous steps.</p>
+    </section>
+
+    <section>
+      <h2>13. Outbox Pattern</h2>
+      <p>Ensures a message is reliably sent to a queue when a database transaction commits. You save the business entity AND an `OutboxMessage` in the same database transaction. A background worker then publishes the outbox messages to Kafka/RabbitMQ.</p>
+      
+      <span class="code-label">Java 21</span>
+      <pre>
+public record OutboxMessage(UUID id, String topic, String payload, boolean processed) {}
+      </pre>
+    </section>
+
+    <section>
+      <h2>14. Distributed Transactions (2PC)</h2>
+      <p>Two-Phase Commit (2PC) coordinates commits across multiple databases. It is slow and blocking, hence why modern systems prefer Sagas.</p>
+    </section>
+
+    <section>
+      <h2>15. Idempotency</h2>
+      <p>Making operations safe to retry is critical because in distributed systems, network packets fail. If a client doesn't get an ACK, they will retry. Idempotency ensures the operation isn't duplicated.</p>
+    </section>
+
+    <div class="page-nav">
+      <a href="../database-design/index.html" class="prev"><span class="label">← Previous</span><span class="title">Database Design</span></a>
+      <a href="../index.html" class="next"><span class="label">Next →</span><span class="title">Home</span></a>
+    </div>
+  </main>
+</div>
+<button class="scroll-top">↑</button>
+<script src="../js/main.js"></script>
+</body>
+</html>

@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Networking Basics — System Design Mastery</title>
+  <link rel="stylesheet" href="../css/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+</head>
+<body>
+<button class="menu-toggle" aria-label="Toggle menu">☰</button>
+<div class="page-wrapper">
+  <aside class="sidebar" id="sidebar"></aside>
+  <main class="main-content">
+    <div class="breadcrumb">
+      <a href="../index.html">Home</a>
+      <span class="sep">›</span>
+      Fundamentals
+      <span class="sep">›</span>
+      <strong>Networking Basics</strong>
+    </div>
+
+    <h1>Networking Basics</h1>
+    
+    <p>To design scalable software systems, you must understand how computers talk to each other. You don't need to be a network engineer, but grasping the fundamentals of networking is essential for any software developer.</p>
+
+    <h2>What is a Network? What is the Internet?</h2>
+    <div class="jargon">📖 <strong>Network</strong>: Two or more computers connected together to share data.</div>
+    <div class="jargon">📖 <strong>The Internet</strong>: The global system of interconnected computer networks. It is the "network of networks."</div>
+    <p>If you connect two laptops with a cable, you have a network. If you connect millions of routers, servers, and devices globally, you have the Internet.</p>
+
+    <h2>Addresses and Doors: IP and Ports</h2>
+    <p>If you want to mail a letter, you need a street address. Computers need addresses too.</p>
+
+    <ul>
+      <li><strong>IP Address:</strong> (Internet Protocol Address) This is the unique "street address" for a device on the internet. Example: <code>192.168.1.5</code> or <code>142.250.190.46</code>.</li>
+      <li><strong>Port:</strong> If the IP address is the apartment building, the Port is the specific apartment number. A single server might run a web server on Port 80, and an email server on Port 25.</li>
+    </ul>
+
+    <h2>DNS: The Phone Book of the Internet</h2>
+    <p>Humans are bad at remembering numbers like <code>142.250.190.46</code>, but good at remembering names like <code>google.com</code>.</p>
+    <div class="jargon">📖 <strong>DNS (Domain Name System)</strong>: A service that translates human-readable domain names into machine-readable IP addresses.</div>
+    <p>When you type a URL, your computer first asks a DNS server, "Hey, what is the IP address for google.com?" Once it gets the IP, it connects.</p>
+
+    <h2>HTTP Methods (The Verbs)</h2>
+    <p>When making an HTTP request, you must specify an action using an HTTP Method.</p>
+    <table class="table">
+      <tr>
+        <th>Method</th>
+        <th>What it does</th>
+        <th>Real-World Analogy</th>
+      </tr>
+      <tr>
+        <td><strong>GET</strong></td>
+        <td>Retrieve data</td>
+        <td>Reading a book from a library.</td>
+      </tr>
+      <tr>
+        <td><strong>POST</strong></td>
+        <td>Create new data</td>
+        <td>Filing a new document in a cabinet.</td>
+      </tr>
+      <tr>
+        <td><strong>PUT</strong></td>
+        <td>Update existing data completely</td>
+        <td>Erasing a whiteboard and drawing a new diagram.</td>
+      </tr>
+      <tr>
+        <td><strong>DELETE</strong></td>
+        <td>Remove data</td>
+        <td>Shredding a document.</td>
+      </tr>
+    </table>
+
+    <h2>HTTP Status Codes</h2>
+    <p>When the server responds, it includes a status code to quickly summarize what happened.</p>
+    <ul>
+      <li><span class="badge badge-green">200 OK</span> - Everything went perfectly.</li>
+      <li><span class="badge badge-blue">301 Moved Permanently</span> - The thing you want has moved somewhere else.</li>
+      <li><span class="badge badge-yellow">400 Bad Request</span> - You formatted your request wrong.</li>
+      <li><span class="badge badge-yellow">404 Not Found</span> - The thing you asked for doesn't exist.</li>
+      <li><span class="badge badge-red">500 Internal Server Error</span> - The server crashed or had a bug.</li>
+    </ul>
+
+    <h2>REST APIs and JSON</h2>
+    <p>When modern web applications talk to servers, they usually use a <strong>REST API</strong>.</p>
+    <div class="jargon">📖 <strong>REST (Representational State Transfer)</strong>: A set of architectural rules for designing web APIs using standard HTTP methods.</div>
+    
+    <p>When data is sent back and forth, it needs to be formatted in a way both sides understand. <strong>JSON (JavaScript Object Notation)</strong> is the standard format used today.</p>
+    <pre>
+{
+  "userId": 101,
+  "name": "Alice",
+  "role": "Admin"
+}
+    </pre>
+
+    <h2>The Full Request Lifecycle Diagram</h2>
+    <div class="diagram-container">
+      <div class="mermaid">
+        sequenceDiagram
+            participant Client
+            participant DNS
+            participant Server
+            
+            Client->>DNS: What is api.example.com?
+            DNS-->>Client: It's 198.51.100.1
+            Client->>Server: HTTP POST (JSON Data)
+            Server-->>Client: 201 Created (Success)
+      </div>
+      <p class="caption">Figure 1: DNS Resolution and API Request</p>
+    </div>
+
+    <h2>Performance Metrics</h2>
+    <p>In system design, you must understand three critical network metrics:</p>
+    <ul>
+      <li><strong>Latency:</strong> How long it takes for a message to travel from sender to receiver. (Analogy: How fast a car drives).</li>
+      <li><strong>Bandwidth:</strong> The maximum capacity of a network link. (Analogy: How wide the highway is).</li>
+      <li><strong>Throughput:</strong> The actual amount of data successfully transmitted per second. (Analogy: How many cars actually arrive at the destination per minute).</li>
+    </ul>
+
+    <h2>Java 21 Code: Handling JSON in a REST-like way</h2>
+    <p>Let's look at how we might parse a request and return a JSON response using Java 21 features.</p>
+
+    <span class="code-label">Java</span>
+    <pre>
+/**
+ * Demonstrating how a server might handle different HTTP Methods
+ * and return JSON data using Java 21 features like Enhanced Switch.
+ */
+public class RestApiConcept {
+
+    // Record representing our User resource
+    public record User(int id, String name, String email) {
+        // Simple helper to convert to JSON string (In reality, use Jackson or Gson)
+        public String toJson() {
+            return """
+                {
+                  "id": %d,
+                  "name": "%s",
+                  "email": "%s"
+                }
+                """.formatted(id, name, email);
+        }
+    }
+
+    public static class UserController {
+        
+        public String handleRequest(String httpMethod, String path) {
+            // Pattern matching / Enhanced switch in Java 21
+            return switch (httpMethod) {
+                case "GET" -> {
+                    if (path.equals("/users/1")) {
+                        User u = new User(1, "Bob", "bob@example.com");
+                        yield "HTTP 200 OK\n" + u.toJson();
+                    }
+                    yield "HTTP 404 Not Found\n{ \"error\": \"User not found\" }";
+                }
+                case "POST" -> "HTTP 201 Created\n{ \"status\": \"User saved\" }";
+                case "DELETE" -> "HTTP 204 No Content";
+                default -> "HTTP 405 Method Not Allowed";
+            };
+        }
+    }
+
+    public static void main(String[] args) {
+        UserController controller = new UserController();
+        
+        // Simulating a GET request
+        System.out.println("Client sends: GET /users/1");
+        System.out.println("Server responds:");
+        System.out.println(controller.handleRequest("GET", "/users/1"));
+        
+        System.out.println("\n------------------\n");
+        
+        // Simulating a POST request
+        System.out.println("Client sends: POST /users");
+        System.out.println("Server responds:");
+        System.out.println(controller.handleRequest("POST", "/users"));
+    }
+}
+    </pre>
+
+    <div class="page-nav">
+      <a href="client-server.html" class="prev"><span class="label">← Previous</span><span class="title">Client & Server</span></a>
+      <a href="databases-101.html" class="next"><span class="label">Next →</span><span class="title">Databases 101</span></a>
+    </div>
+  </main>
+</div>
+<button class="scroll-top" aria-label="Scroll to top">↑</button>
+<script src="../js/main.js"></script>
+</body>
+</html>

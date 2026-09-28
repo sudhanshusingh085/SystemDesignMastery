@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Design a Chat System — System Design Mastery</title>
+  <link rel="stylesheet" href="../../css/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+</head>
+<body>
+<button class="menu-toggle" aria-label="Toggle menu">☰</button>
+<div class="page-wrapper">
+  <aside class="sidebar" id="sidebar"></aside>
+  <main class="main-content">
+    <div class="breadcrumb">
+      <a href="../../index.html">Home</a>
+      <span class="sep">›</span>
+      HLD
+      <span class="sep">›</span>
+      Case Studies
+      <span class="sep">›</span>
+      <strong>Chat System</strong>
+    </div>
+
+    <h1>Design a Chat System (WhatsApp / Messenger)</h1>
+    <p>A chat system enables real-time text-based communication between users.</p>
+
+    <div class="jargon">📖 <strong>Real-time</strong>: Data processing that appears to take place instantaneously upon data entry or receipt.</div>
+
+    <h2>Step 1 — Requirements</h2>
+    <div class="card">
+      <h3>Functional Requirements</h3>
+      <ul>
+        <li>1-on-1 messaging</li>
+        <li>Group chat</li>
+        <li>Online/offline status indicator</li>
+        <li>Read receipts</li>
+        <li>Media sharing (images, videos)</li>
+      </ul>
+      
+      <h3>Non-functional Requirements</h3>
+      <ul>
+        <li>Low latency delivery (&lt;200ms)</li>
+        <li>High availability and persistence of chat history</li>
+        <li>Scale: 50M Daily Active Users (DAU)</li>
+      </ul>
+    </div>
+
+    <h2>Step 2 — Architecture</h2>
+    <p>Below is the high-level design of our chat system.</p>
+
+    <div class="diagram-container">
+      <div class="mermaid">
+        graph TD
+          UserA[User A] -- WebSocket --> ChatServer[Chat Server]
+          ChatServer -- MQ --> MessageQueue[Message Queue]
+          MessageQueue --> ChatServerB[Chat Server]
+          ChatServerB -- WebSocket --> UserB[User B]
+          ChatServer --> DB[(Message Storage)]
+          ChatServer --> Media[(Media Storage)]
+      </div>
+      <p class="caption">Figure 1: High Level Architecture of Chat System</p>
+    </div>
+
+    <h2>Step 3 — Deep Dive</h2>
+    
+    <h3>Connection Protocols</h3>
+    <div class="comparison">
+      <div class="side good">
+        <h4>WebSocket</h4>
+        <p>Bidirectional, persistent connection. Best for real-time chat.</p>
+      </div>
+      <div class="side bad">
+        <h4>HTTP Polling</h4>
+        <p>Client repeatedly asks server for updates. Wastes bandwidth.</p>
+      </div>
+    </div>
+
+    <h3>Message Storage</h3>
+    <p>Chat applications generate a massive amount of data. We should use a NoSQL database like Cassandra or HBase for storing chat history because they are optimized for fast writes and time-series data.</p>
+    
+    <h3>Online Status</h3>
+    <p>User status is tracked using a heartbeat mechanism. If the server stops receiving heartbeats for a certain period, the user is marked offline.</p>
+
+    <h2>Step 4 — Implementation (Java 21)</h2>
+    <span class="code-label">Java</span>
+    <pre>
+import java.util.concurrent.ConcurrentHashMap;
+import java.time.Instant;
+import java.util.List;
+
+// Java 21 Record for chat message
+public record ChatMessage(String id, String senderId, String receiverId, String content, Instant timestamp) {}
+
+// Sealed interface for delivery status
+public sealed interface DeliveryStatus permits DeliveryStatus.Sent, DeliveryStatus.Delivered, DeliveryStatus.Read {
+    record Sent() implements DeliveryStatus {}
+    record Delivered(Instant time) implements DeliveryStatus {}
+    record Read(Instant time) implements DeliveryStatus {}
+}
+
+interface MessageStore {
+    void saveMessage(ChatMessage msg);
+    List&lt;ChatMessage&gt; getHistory(String userId, int limit);
+}
+
+class OnlineStatusTracker {
+    // Stores userId to last heartbeat timestamp
+    private final ConcurrentHashMap&lt;String, Instant&gt; onlineUsers = new ConcurrentHashMap&lt;&gt;();
+    private static final int OFFLINE_THRESHOLD_SECONDS = 30;
+
+    public void heartbeat(String userId) {
+        onlineUsers.put(userId, Instant.now());
+    }
+
+    public boolean isOnline(String userId) {
+        Instant lastSeen = onlineUsers.get(userId);
+        if (lastSeen == null) return false;
+        return Instant.now().minusSeconds(OFFLINE_THRESHOLD_SECONDS).isBefore(lastSeen);
+    }
+}
+
+class ChatServer {
+    private final MessageStore store;
+    private final OnlineStatusTracker statusTracker;
+
+    public ChatServer(MessageStore store, OnlineStatusTracker statusTracker) {
+        this.store = store;
+        this.statusTracker = statusTracker;
+    }
+
+    public DeliveryStatus sendMessage(ChatMessage msg) {
+        store.saveMessage(msg);
+        
+        if (statusTracker.isOnline(msg.receiverId())) {
+            // Logic to push message to receiver via WebSocket
+            return new DeliveryStatus.Delivered(Instant.now());
+        } else {
+            // Push notification to offline user
+            return new DeliveryStatus.Sent();
+        }
+    }
+}
+    </pre>
+
+    <h2>Step 5 — Optimization</h2>
+    <ul>
+        <li><strong>End-to-End Encryption:</strong> Only the sender and receiver hold the keys to decrypt the messages.</li>
+        <li><strong>Message Pagination:</strong> Load chat history in chunks using cursor-based pagination.</li>
+        <li><strong>Media Compression:</strong> Compress images and videos before sending to reduce bandwidth.</li>
+    </ul>
+
+    <div class="callout callout-info">
+      <strong>💡 Interview Tip:</strong> For group chats, explain "fan-out". When a message is sent to a group of 100 people, the server fans out 100 individual messages to the respective receivers.
+    </div>
+
+    <div class="page-nav">
+      <a href="url-shortener.html" class="prev"><span class="label">← Previous</span><span class="title">URL Shortener</span></a>
+      <a href="news-feed.html" class="next"><span class="label">Next →</span><span class="title">News Feed</span></a>
+    </div>
+  </main>
+</div>
+<button class="scroll-top" aria-label="Scroll to top">↑</button>
+<script src="../../js/main.js"></script>
+</body>
+</html>

@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Car Rental System Design — System Design Mastery</title>
+  <link rel="stylesheet" href="../../css/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+</head>
+<body>
+<button class="menu-toggle" aria-label="Toggle menu">☰</button>
+<div class="page-wrapper">
+  <aside class="sidebar" id="sidebar"></aside>
+  <main class="main-content">
+    <div class="breadcrumb">
+      <a href="../../index.html">Home</a>
+      <span class="sep">›</span>
+      LLD
+      <span class="sep">›</span>
+      Case Studies
+      <span class="sep">›</span>
+      <strong>Car Rental</strong>
+    </div>
+
+    <h1>Design a Car Rental System</h1>
+
+    <div class="callout callout-info">
+      <strong>Scenario:</strong> Design a system like Enterprise or Hertz where users can browse vehicles by location, reserve them for specific dates, and process billing based on different pricing models.
+    </div>
+
+    <h2>1. What is a Car Rental System?</h2>
+    <p>A physical inventory management system dealing with vehicles moving between different locations (pick-up and drop-off), complex pricing variables (insurance, duration, late fees), and reservation states.</p>
+    <div class="jargon">📖 <strong>Inventory Management</strong>: The process of tracking the availability, location, and condition of items (vehicles, in this case) across multiple branches.</div>
+
+    <h2>2. What problem does it solve?</h2>
+    <p>It solves the complexity of tracking thousands of vehicles, calculating dynamic pricing rules, and managing the lifecycle of a reservation from pending to active to completed.</p>
+
+    <h2>3. How does it work?</h2>
+    <div class="diagram-container">
+      <div class="mermaid">
+        classDiagram
+          RentalService --> VehicleInventory
+          RentalService --> BillingService
+          RentalService --> Reservation
+          Vehicle <|-- Sedan
+          Vehicle <|-- SUV
+          VehicleFactory --> Vehicle
+      </div>
+      <p class="caption">Figure 1: Car Rental System Components</p>
+    </div>
+
+    <h2>4. Java 21 Code Implementation</h2>
+    <span class="code-label">Java</span>
+    <pre><code>
+import java.util.*;
+import java.time.LocalDate;
+
+enum VehicleType { SEDAN, SUV, LUXURY, VAN, TRUCK }
+enum ReservationStatus { PENDING, ACTIVE, COMPLETED, CANCELLED }
+
+// OOP: Sealed for fixed hierarchy, pattern matching can be used exhaustively
+sealed interface Vehicle permits Sedan, SUV, LuxuryCar, Van, Truck {
+    String getLicensePlate();
+    double getDailyRate();
+}
+
+record Sedan(String licensePlate, double dailyRate) implements Vehicle {
+    public String getLicensePlate() { return licensePlate; }
+    public double getDailyRate() { return dailyRate; }
+}
+record SUV(String licensePlate, double dailyRate) implements Vehicle {
+    public String getLicensePlate() { return licensePlate; }
+    public double getDailyRate() { return dailyRate; }
+}
+record LuxuryCar(String licensePlate, double dailyRate) implements Vehicle {
+    public String getLicensePlate() { return licensePlate; }
+    public double getDailyRate() { return dailyRate; }
+}
+record Van(String licensePlate, double dailyRate) implements Vehicle {
+    public String getLicensePlate() { return licensePlate; }
+    public double getDailyRate() { return dailyRate; }
+}
+record Truck(String licensePlate, double dailyRate) implements Vehicle {
+    public String getLicensePlate() { return licensePlate; }
+    public double getDailyRate() { return dailyRate; }
+}
+
+record User(String name, String licenseNumber) {}
+record Location(String id, String name, String address) {}
+
+// SOLID: Single Responsibility — this class only handles location-based inventory
+class VehicleInventory {
+    private Map&lt;Location, List&lt;Vehicle&gt;&gt; inventory = new HashMap&lt;&gt;();
+    
+    public void addVehicle(Location loc, Vehicle v) {
+        inventory.computeIfAbsent(loc, k -> new ArrayList&lt;&gt;()).add(v);
+    }
+    public List&lt;Vehicle&gt; getAvailable(Location loc) {
+        return inventory.getOrDefault(loc, List.of());
+    }
+}
+
+class Reservation {
+    String id; User customer; Vehicle vehicle; Location pickup, returnLoc; 
+    LocalDate startDate, endDate; ReservationStatus status;
+    
+    public Reservation(User customer, Vehicle vehicle, Location pickup, Location returnLoc, LocalDate start, LocalDate end) {
+        this.id = UUID.randomUUID().toString(); this.customer = customer; this.vehicle = vehicle;
+        this.pickup = pickup; this.returnLoc = returnLoc; this.startDate = start; this.endDate = end;
+        this.status = ReservationStatus.PENDING;
+    }
+}
+
+// Design Pattern: Strategy — interchangeable algorithms for pricing
+interface PricingStrategy {
+    double calculateTotal(Vehicle vehicle, int days);
+}
+
+class StandardPricing implements PricingStrategy {
+    public double calculateTotal(Vehicle v, int days) { return v.getDailyRate() * days; }
+}
+
+// SOLID: Single Responsibility — calculates bills and late fees
+class BillingService {
+    public double calculateFinalBill(Reservation r, PricingStrategy strategy, boolean insurance, boolean late) {
+        int days = (int) java.time.temporal.ChronoUnit.DAYS.between(r.startDate, r.endDate);
+        double total = strategy.calculateTotal(r.vehicle, days);
+        if (insurance) total += 20 * days;
+        if (late) total += 50; // Late fee flat rate
+        return total;
+    }
+}
+
+// Design Pattern: Observer — notify subscribers on state change
+interface RentalObserver {
+    void onReservationCreated(Reservation r);
+}
+
+class InvoiceGenerator implements RentalObserver {
+    public void onReservationCreated(Reservation r) { System.out.println("Invoice generated for " + r.id); }
+}
+
+// Design Pattern: Factory
+class VehicleFactory {
+    public static Vehicle createVehicle(VehicleType type, String plate, double rate) {
+        return switch(type) {
+            case SEDAN -> new Sedan(plate, rate);
+            case SUV -> new SUV(plate, rate);
+            case LUXURY -> new LuxuryCar(plate, rate);
+            case VAN -> new Van(plate, rate);
+            case TRUCK -> new Truck(plate, rate);
+        };
+    }
+}
+
+// Design Pattern: Facade
+class RentalService {
+    private VehicleInventory inventory = new VehicleInventory();
+    private BillingService billing = new BillingService();
+    private List&lt;RentalObserver&gt; observers = new ArrayList&lt;&gt;();
+    
+    public void addObserver(RentalObserver obs) { observers.add(obs); }
+    
+    public Reservation bookCar(User user, Vehicle v, Location pickup, Location drop, LocalDate start, LocalDate end) {
+        Reservation r = new Reservation(user, v, pickup, drop, start, end);
+        observers.forEach(o -> o.onReservationCreated(r));
+        return r;
+    }
+}
+
+public class Main {
+    public static void main(String[] args) {
+        RentalService service = new RentalService();
+        service.addObserver(new InvoiceGenerator());
+        
+        Vehicle v = VehicleFactory.createVehicle(VehicleType.SUV, "XYZ-1234", 100.0);
+        Location l1 = new Location("L1", "JFK Airport", "NYC");
+        
+        service.bookCar(new User("John Doe", "DL12345"), v, l1, l1, LocalDate.now(), LocalDate.now().plusDays(3));
+    }
+}
+    </code></pre>
+
+    <h2>5. Why is this recommended?</h2>
+    <p>The <strong>Factory Pattern</strong> centralizes object creation, making it easy to add new vehicle types. Using <strong>Sealed Interfaces</strong> ensures that any switch statement checking vehicle types is exhaustive at compile time, preventing runtime bugs.</p>
+    
+    <div class="callout callout-purple">
+      <strong>Interview Tip:</strong> Discuss how you would handle inventory consistency across locations. What happens if a car reserved at Location A is returned late to Location B, but another customer has already booked it from A? Mentioning buffer times and fleet repositioning shows deep domain thinking.
+    </div>
+
+    <div class="page-nav">
+      <a href="movie-booking.html" class="prev"><span class="label">← Previous</span><span class="title">Movie Booking</span></a>
+      <a href="../../index.html" class="next"><span class="label">Next →</span><span class="title">Home</span></a>
+    </div>
+  </main>
+</div>
+<button class="scroll-top" aria-label="Scroll to top">↑</button>
+<script src="../../js/main.js"></script>
+</body>
+</html>

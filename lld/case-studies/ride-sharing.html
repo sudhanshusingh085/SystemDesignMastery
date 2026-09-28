@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Ride Sharing System — System Design Mastery</title>
+  <link rel="stylesheet" href="../../css/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+</head>
+<body>
+<button class="menu-toggle" aria-label="Toggle menu">☰</button>
+<div class="page-wrapper">
+  <aside class="sidebar" id="sidebar"></aside>
+  <main class="main-content">
+    <div class="breadcrumb">
+      <a href="../../index.html">Home</a>
+      <span class="sep">›</span>
+      LLD
+      <span class="sep">›</span>
+      Case Studies
+      <span class="sep">›</span>
+      <strong>Ride Sharing System</strong>
+    </div>
+
+    <h1>Design a Ride Sharing System (Uber/Lyft)</h1>
+
+    <section class="card">
+        <h2>What is a Ride Sharing System?</h2>
+        <p>A ride-sharing system matches a rider needing a lift with a nearby driver willing to drive them. It calculates the price based on distance and demand, tracks the trip in real-time, and handles payments.</p>
+        <div class="jargon">📖 <strong>Surge Pricing</strong>: A dynamic pricing model where prices increase when demand for rides is higher than the supply of available drivers in an area.</div>
+    </section>
+
+    <section class="card">
+        <h2>What Problem Does It Solve?</h2>
+        <p>Matching algorithms must be fast and geographical. Pricing must be flexible and dynamic. Trip states (requested, driver assigned, in progress) must be strictly managed so a trip isn't marked "complete" before the driver arrives.</p>
+    </section>
+
+    <section class="card">
+        <h2>How Does It Work?</h2>
+        <p>The core uses the Strategy pattern heavily: one strategy for matching drivers (nearest vs highest rated), and another strategy (plus Decorator) for pricing to dynamically wrap base fares with surge multipliers. The State pattern manages the trip lifecycle.</p>
+        
+        <div class="diagram-container">
+            <div class="mermaid">
+                classDiagram
+                    Trip *-- TripStatus : Composition
+                    Trip o-- Rider : Aggregation
+                    Trip o-- Driver : Aggregation
+                    PricingStrategy <|.. BasePricing : Implements
+                    PricingStrategy <|.. SurgePricing : Implements
+                    DriverMatchingStrategy <|.. NearestDriverMatcher : Implements
+            </div>
+            <p class="caption">Figure 1: Core Class Relationships</p>
+        </div>
+    </section>
+
+    <section class="card">
+        <h2>Low-Level Design (Java 21)</h2>
+        
+        <span class="code-label">Java</span>
+<pre><code>import java.time.LocalDateTime;
+import java.util.*;
+
+record Location(double latitude, double longitude) {
+    public double distanceTo(Location other) {
+        // Simplified distance calculation
+        return Math.sqrt(Math.pow(latitude - other.latitude, 2) + Math.pow(longitude - other.longitude, 2));
+    }
+}
+
+record RiderId(String id) {}
+record DriverId(String id) {}
+
+class Rider {
+    private RiderId id;
+    private String name;
+    private Location currentLocation;
+    // getters/setters...
+}
+
+enum VehicleType { BIKE, AUTO, MINI, SEDAN, SUV, PREMIUM }
+
+class Driver {
+    private DriverId id;
+    private String name;
+    private Location currentLocation;
+    private VehicleType vehicleType;
+    private double rating;
+    private boolean isAvailable;
+    
+    public Driver(DriverId id, Location loc, double rating) {
+        this.id = id;
+        this.currentLocation = loc;
+        this.rating = rating;
+        this.isAvailable = true;
+    }
+    public Location getCurrentLocation() { return currentLocation; }
+    public double getRating() { return rating; }
+    public void setAvailable(boolean b) { isAvailable = b; }
+}
+
+// Design Pattern: State — Strict trip lifecycle
+sealed interface TripStatus permits Requested, DriverAssigned, InProgress, Completed, Cancelled {}
+record Requested() implements TripStatus {}
+record DriverAssigned() implements TripStatus {}
+record InProgress() implements TripStatus {}
+record Completed() implements TripStatus {}
+record Cancelled() implements TripStatus {}
+
+// OOP: Composition — Trip owns TripStatus lifecycle
+class Trip {
+    private final String tripId;
+    private final Rider rider;
+    private Driver driver;
+    private final Location source;
+    private final Location destination;
+    private TripStatus status;
+    private double fare;
+    
+    public Trip(String tripId, Rider rider, Location source, Location destination) {
+        this.tripId = tripId;
+        this.rider = rider;
+        this.source = source;
+        this.destination = destination;
+        this.status = new Requested();
+    }
+    
+    public void setDriver(Driver driver) { this.driver = driver; }
+    public void setStatus(TripStatus s) { this.status = s; }
+    public void setFare(double fare) { this.fare = fare; }
+    
+    public Location getSource() { return source; }
+    public Location getDestination() { return destination; }
+    public TripStatus getStatus() { return status; }
+}
+
+// Design Pattern: State
+class TripStateMachine {
+    public void transition(Trip trip, TripStatus newStatus) {
+        boolean valid = switch(trip.getStatus()) {
+            case Requested r -&gt; newStatus instanceof DriverAssigned || newStatus instanceof Cancelled;
+            case DriverAssigned d -&gt; newStatus instanceof InProgress || newStatus instanceof Cancelled;
+            case InProgress i -&gt; newStatus instanceof Completed;
+            case Completed c -&gt; false;
+            case Cancelled c -&gt; false;
+        };
+        if(valid) trip.setStatus(newStatus);
+        else throw new IllegalStateException("Invalid state transition");
+    }
+}
+
+// Design Pattern: Strategy
+interface DriverMatchingStrategy {
+    Driver matchDriver(Trip trip, List&lt;Driver&gt; availableDrivers);
+}
+
+class NearestDriverMatcher implements DriverMatchingStrategy {
+    @Override
+    public Driver matchDriver(Trip trip, List&lt;Driver&gt; availableDrivers) {
+        return availableDrivers.stream()
+                .min(Comparator.comparingDouble(d -&gt; d.getCurrentLocation().distanceTo(trip.getSource())))
+                .orElse(null);
+    }
+}
+
+class HighestRatedDriverMatcher implements DriverMatchingStrategy {
+    @Override
+    public Driver matchDriver(Trip trip, List&lt;Driver&gt; availableDrivers) {
+        return availableDrivers.stream()
+                .max(Comparator.comparingDouble(Driver::getRating))
+                .orElse(null);
+    }
+}
+
+// Design Pattern: Strategy
+interface PricingStrategy {
+    double calculateFare(Location source, Location destination);
+}
+
+class BasePricing implements PricingStrategy {
+    @Override
+    public double calculateFare(Location source, Location destination) {
+        double distance = source.distanceTo(destination);
+        return 5.0 + (distance * 2.0); // Base fee + per unit distance
+    }
+}
+
+// Design Pattern: Decorator wrapping BasePricing
+class SurgePricing implements PricingStrategy {
+    private final PricingStrategy baseStrategy;
+    private final double surgeMultiplier;
+    
+    public SurgePricing(PricingStrategy baseStrategy, double surgeMultiplier) {
+        this.baseStrategy = baseStrategy;
+        this.surgeMultiplier = surgeMultiplier;
+    }
+    
+    @Override
+    public double calculateFare(Location source, Location destination) {
+        return baseStrategy.calculateFare(source, destination) * surgeMultiplier;
+    }
+}
+
+// SOLID: SRP — manages only driver availability
+class DriverPool {
+    private final List&lt;Driver&gt; activeDrivers = new ArrayList&lt;&gt;();
+    
+    public void addDriver(Driver d) { activeDrivers.add(d); }
+    public List&lt;Driver&gt; getAvailableDrivers() {
+        return activeDrivers.stream().filter(d -&gt; true).toList(); // Simplified
+    }
+}
+
+// Design Pattern: Observer
+interface TripObserver {
+    void onTripUpdated(Trip trip);
+}
+class RiderNotifier implements TripObserver {
+    public void onTripUpdated(Trip trip) { System.out.println("Rider UI update: " + trip.getStatus()); }
+}
+
+// Design Pattern: Facade
+class RideService {
+    private final TripStateMachine stateMachine = new TripStateMachine();
+    private final DriverMatchingStrategy matchingStrategy;
+    private final PricingStrategy pricingStrategy;
+    private final DriverPool driverPool;
+    private final List&lt;TripObserver&gt; observers = new ArrayList&lt;&gt;();
+    
+    public RideService(DriverMatchingStrategy ms, PricingStrategy ps, DriverPool pool) {
+        this.matchingStrategy = ms;
+        this.pricingStrategy = ps;
+        this.driverPool = pool;
+    }
+    
+    public void addObserver(TripObserver o) { observers.add(o); }
+    
+    public Trip requestRide(Rider rider, Location dest) {
+        Trip trip = new Trip(UUID.randomUUID().toString(), rider, new Location(0,0), dest);
+        trip.setFare(pricingStrategy.calculateFare(new Location(0,0), dest));
+        
+        Driver driver = matchingStrategy.matchDriver(trip, driverPool.getAvailableDrivers());
+        if(driver != null) {
+            trip.setDriver(driver);
+            driver.setAvailable(false);
+            stateMachine.transition(trip, new DriverAssigned());
+        }
+        notify(trip);
+        return trip;
+    }
+    
+    private void notify(Trip t) { observers.forEach(o -&gt; o.onTripUpdated(t)); }
+}
+</code></pre>
+    </section>
+
+    <div class="callout callout-info">
+        <h3>Interview Tip</h3>
+        <p>Using the <strong>Decorator Pattern</strong> for Surge Pricing is a massive flex. It shows you know how to wrap base logic dynamically at runtime without modifying the underlying pricing classes.</p>
+    </div>
+
+    <div class="page-nav">
+      <a href="inventory.html" class="prev"><span class="label">← Previous</span><span class="title">Inventory System</span></a>
+      <a href="../design-patterns/index.html" class="next"><span class="label">Next →</span><span class="title">Design Patterns</span></a>
+    </div>
+  </main>
+</div>
+<button class="scroll-top" aria-label="Scroll to top">↑</button>
+<script src="../../js/main.js"></script>
+</body>
+</html>

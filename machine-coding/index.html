@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Machine Coding — Writing Code Under Pressure — System Design Mastery</title>
+  <link rel="stylesheet" href="../css/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+</head>
+<body>
+<button class="menu-toggle" aria-label="Toggle menu">☰</button>
+<div class="page-wrapper">
+  <aside class="sidebar" id="sidebar"></aside>
+  <main class="main-content">
+    <div class="breadcrumb">
+      <a href="../index.html">Home</a>
+      <span class="sep">›</span>
+      Interview Prep
+      <span class="sep">›</span>
+      <strong>Machine Coding</strong>
+    </div>
+
+    <h1>Machine Coding — Writing Code Under Pressure</h1>
+    
+    <div class="callout callout-info">
+      <strong>💡 What to expect:</strong> The Machine Coding round requires you to produce working, well-designed code in a short time. This guide provides a battle-tested template and approach to conquer it.
+    </div>
+
+    <h2>1. What is Machine Coding?</h2>
+    <p>Machine coding is an interview round (usually 60-90 minutes) where you are given a problem statement and must write <strong>working, executable code</strong> that solves it using Object-Oriented Principles.</p>
+    
+    <div class="jargon">📖 <strong>Machine Coding vs LLD</strong>: While LLD (Low-Level Design) focuses on class diagrams, APIs, and theoretical design, Machine Coding requires actual implementation. The code must compile and run!</div>
+
+    <h2>2. The Approach Template</h2>
+    <p>Time management is the most critical skill. Follow this strict timeline for a 90-minute round:</p>
+
+    <div class="diagram-container">
+      <div class="mermaid">
+        flowchart LR
+          A[0-5m: Understand & Ask] --> B[5-15m: Identify Entities]
+          B --> C[15-25m: Interfaces & Enums]
+          C --> D[25-60m: Core Logic]
+          D --> E[60-70m: Edge Cases]
+          E --> F[70-90m: Demo/Main & Test]
+      </div>
+      <p class="caption">Figure 1: Recommended Machine Coding Timeline</p>
+    </div>
+
+    <ul class="step">
+      <li>
+        <div class="step-number">1</div>
+        <div class="step-content"><strong>0-5 min: Read & Clarify.</strong> Understand the core requirements. Ask about constraints (e.g., "Do we need a real DB or is in-memory fine?").</div>
+      </li>
+      <li>
+        <div class="step-number">2</div>
+        <div class="step-content"><strong>5-15 min: Identify Entities.</strong> Jot down the main nouns. These will be your classes/records.</div>
+      </li>
+      <li>
+        <div class="step-number">3</div>
+        <div class="step-content"><strong>15-25 min: Define Interfaces & Enums.</strong> Establish the contracts. Use enums for statuses, types, etc.</div>
+      </li>
+      <li>
+        <div class="step-content"><strong>25-60 min: Implement Core Logic.</strong> Build the services and repositories. Focus on the happy path first.</div>
+      </li>
+      <li>
+        <div class="step-content"><strong>60-70 min: Error Handling.</strong> Add custom exceptions and handle edge cases (e.g., duplicate entries, not found).</div>
+      </li>
+      <li>
+        <div class="step-content"><strong>70-90 min: Main Method.</strong> Write a compelling <code>Main.java</code> that demonstrates your code working. This is crucial!</div>
+      </li>
+    </ul>
+
+    <h2>3. Code Structure Template</h2>
+    <p>Structure your Java code in logical packages (even if it's all in one file for an online IDE, use static nested classes to simulate structure):</p>
+    
+    <pre>
+com.example.system
+├── model/       # Entities, Records, Enums
+├── repository/  # Data access interfaces and in-memory impls
+├── service/     # Business logic
+├── strategy/    # Interchangeable algorithms (if needed)
+├── exception/   # Custom exceptions
+└── Main.java    # Demo application
+    </pre>
+
+    <h2>4. Time Management Tips</h2>
+    <ul>
+      <li><strong>Don't gold-plate:</strong> Get a working solution first, then refactor.</li>
+      <li><strong>Focus on core:</strong> If it's a parking lot, focus on parking and unparking, not user authentication.</li>
+      <li><strong>Use Enums early:</strong> They make your code robust and prevent invalid states.</li>
+      <li><strong>In-Memory DB:</strong> Always use <code>HashMap</code> or <code>ConcurrentHashMap</code> for storage unless a real DB is explicitly required.</li>
+    </ul>
+
+    <h2>5. Common Mistakes</h2>
+    <div class="comparison">
+      <div class="side bad">
+        <h3>❌ Avoid These</h3>
+        <ul>
+          <li>Starting to code without a plan</li>
+          <li>Over-engineering (YAGNI violation)</li>
+          <li>Putting all logic in one massive class</li>
+          <li>Using hard-coded strings (use constants/enums)</li>
+          <li>Running out of time before writing a Main method to test</li>
+        </ul>
+      </div>
+      <div class="side good">
+        <h3>✅ Do These</h3>
+        <ul>
+          <li>Follow the timeline strict</li>
+          <li>Apply SOLID and DRY principles</li>
+          <li>Use meaningful variable names</li>
+          <li>Separate models, repositories, and services</li>
+          <li>Provide a working Demo</li>
+        </ul>
+      </div>
+    </div>
+
+    <h2>6. Evaluation Criteria</h2>
+    <p>What do interviewers actually look for?</p>
+    <ol>
+      <li><strong>Working Code > Perfect Code:</strong> A complete, working solution with average design beats a perfectly designed, half-finished application.</li>
+      <li><strong>OOP Usage:</strong> Correct use of interfaces, abstract classes, encapsulation.</li>
+      <li><strong>Design Patterns:</strong> Using Strategy, Factory, or Observer where it naturally fits (don't force them).</li>
+      <li><strong>Code Readability:</strong> Clean code, good naming, no magic numbers.</li>
+      <li><strong>Extensibility:</strong> Can a new feature be added easily?</li>
+    </ol>
+
+    <h2>7. Practice Problem Walkthrough: Task Management System</h2>
+    <p>Let's design a simple Task Management System following our template.</p>
+
+    <span class="code-label">Java 21</span>
+    <pre>
+import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.Collectors;
+
+// --- 1. Enums & Models (Using Java 21 Records) ---
+enum Priority { LOW, MEDIUM, HIGH }
+enum Status { TODO, IN_PROGRESS, DONE }
+
+// Record for immutable ID
+record TaskId(String id) {
+    public TaskId() { this(UUID.randomUUID().toString()); }
+}
+
+// Entity Class
+class Task {
+    private final TaskId id;
+    private String title;
+    private Priority priority;
+    private Status status;
+
+    public Task(String title, Priority priority) {
+        this.id = new TaskId();
+        this.title = title;
+        this.priority = priority;
+        this.status = Status.TODO;
+    }
+
+    // Getters and Setters...
+    public TaskId getId() { return id; }
+    public Status getStatus() { return status; }
+    public void setStatus(Status status) { this.status = status; }
+    
+    @Override
+    public String toString() {
+        return "Task[" + id.id().substring(0,5) + "] " + title + " (" + priority + ", " + status + ")";
+    }
+}
+
+// --- 2. Exceptions ---
+class TaskNotFoundException extends RuntimeException {
+    public TaskNotFoundException(String message) { super(message); }
+}
+
+// --- 3. Repository (Data Layer) ---
+interface TaskRepository {
+    void save(Task task);
+    Optional&lt;Task&gt; findById(TaskId id);
+    List&lt;Task&gt; findAll();
+}
+
+class InMemoryTaskRepository implements TaskRepository {
+    // ConcurrentHashMap for thread safety
+    private final Map&lt;TaskId, Task&gt; storage = new ConcurrentHashMap&lt;&gt;();
+
+    @Override
+    public void save(Task task) { storage.put(task.getId(), task); }
+
+    @Override
+    public Optional&lt;Task&gt; findById(TaskId id) { return Optional.ofNullable(storage.get(id)); }
+
+    @Override
+    public List&lt;Task&gt; findAll() { return new ArrayList&lt;&gt;(storage.values()); }
+}
+
+// --- 4. Service (Business Logic) ---
+class TaskService {
+    private final TaskRepository repository;
+
+    // Dependency Injection
+    public TaskService(TaskRepository repository) {
+        this.repository = repository;
+    }
+
+    public TaskId createTask(String title, Priority priority) {
+        Task task = new Task(title, priority);
+        repository.save(task);
+        return task.getId();
+    }
+
+    public void updateStatus(TaskId id, Status newStatus) {
+        Task task = repository.findById(id)
+            .orElseThrow(() -> new TaskNotFoundException("Task " + id + " not found"));
+        task.setStatus(newStatus);
+        repository.save(task);
+    }
+
+    public List&lt;Task&gt; getTasksByStatus(Status status) {
+        return repository.findAll().stream()
+                .filter(t -> t.getStatus() == status)
+                .collect(Collectors.toList());
+    }
+}
+
+// --- 5. Main Demo ---
+public class Main {
+    public static void main(String[] args) {
+        System.out.println("--- Task Management System Demo ---");
+        
+        // Setup
+        TaskRepository repo = new InMemoryTaskRepository();
+        TaskService service = new TaskService(repo);
+
+        // Core flow execution
+        TaskId task1 = service.createTask("Setup Database", Priority.HIGH);
+        TaskId task2 = service.createTask("Write API Docs", Priority.MEDIUM);
+
+        System.out.println("Created Tasks:");
+        service.getTasksByStatus(Status.TODO).forEach(System.out::println);
+
+        System.out.println("\nUpdating Task 1 to IN_PROGRESS...");
+        service.updateStatus(task1, Status.IN_PROGRESS);
+
+        System.out.println("\nTasks In Progress:");
+        service.getTasksByStatus(Status.IN_PROGRESS).forEach(System.out::println);
+
+        // Exception test
+        try {
+            service.updateStatus(new TaskId("invalid-id"), Status.DONE);
+        } catch (TaskNotFoundException e) {
+            System.out.println("\nExpected Error: " + e.getMessage());
+        }
+    }
+}
+    </pre>
+
+    <div class="callout callout-purple">
+      <strong>🚀 Important Note:</strong> All LLD Case Studies in Section 22 of this site follow this exact template approach. Familiarize yourself with this structure!
+    </div>
+
+    <div class="page-nav">
+      <a href="../lld-principles/index.html" class="prev"><span class="label">← Previous</span><span class="title">LLD Principles</span></a>
+      <a href="../hld/index.html" class="next"><span class="label">Next →</span><span class="title">High Level Design</span></a>
+    </div>
+  </main>
+</div>
+<button class="scroll-top" aria-label="Scroll to top">↑</button>
+<script src="../js/main.js"></script>
+</body>
+</html>

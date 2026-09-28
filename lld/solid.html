@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SOLID Principles — System Design Mastery</title>
+  <link rel="stylesheet" href="../css/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+</head>
+<body>
+<button class="menu-toggle" aria-label="Toggle menu">☰</button>
+<div class="page-wrapper">
+  <aside class="sidebar" id="sidebar"></aside>
+  <main class="main-content">
+    <div class="breadcrumb">
+      <a href="../index.html">Home</a>
+      <span class="sep">›</span>
+      <a href="index.html">Low-Level Design</a>
+      <span class="sep">›</span>
+      <strong>SOLID Principles</strong>
+    </div>
+
+    <h1>SOLID Principles</h1>
+    
+    <div class="callout callout-info">
+      <p>SOLID is an acronym for five design principles intended to make software designs more understandable, flexible, and maintainable.</p>
+    </div>
+
+    <!-- S: Single Responsibility -->
+    <section>
+      <h2>1. Single Responsibility Principle (SRP)</h2>
+      <p>A class should have one, and only one, reason to change. In other words, a class should only have one job.</p>
+      <div class="jargon">📖 <strong>Analogy</strong>: A chef should only cook, not also do the restaurant's accounting and clean the floors.</div>
+      
+      <div class="comparison">
+        <div class="side bad">
+          <h3>Bad Approach</h3>
+          <span class="code-label">Java</span>
+          <pre>
+public class UserService {
+    public void registerUser(String username) {
+        // 1. Handle user registration logic
+    }
+    public void sendEmail(String email) {
+        // 2. Handle email sending
+    }
+    public void saveToDatabase(Object data) {
+        // 3. Handle database operations
+    }
+}
+          </pre>
+        </div>
+        <div class="side good">
+          <h3>Good Approach</h3>
+          <span class="code-label">Java</span>
+          <pre>
+public class AuthService {
+    private final UserRepository repository;
+    private final EmailService emailService;
+    // Constructor omitted for brevity
+    
+    public void registerUser(String username, String email) {
+        repository.save(username);
+        emailService.sendWelcomeEmail(email);
+    }
+}
+
+public class EmailService {
+    public void sendWelcomeEmail(String email) { /* ... */ }
+}
+
+public class UserRepository {
+    public void save(String username) { /* ... */ }
+}
+          </pre>
+        </div>
+      </div>
+      
+      <div class="diagram-container">
+        <div class="mermaid">
+          graph LR
+            A[UserService] -->|Refactor| B[AuthService]
+            A -->|Refactor| C[EmailService]
+            A -->|Refactor| D[UserRepository]
+        </div>
+        <p class="caption">Figure 1: Splitting responsibilities</p>
+      </div>
+    </section>
+
+    <!-- O: Open/Closed -->
+    <section>
+      <h2>2. Open/Closed Principle (OCP)</h2>
+      <p>Software entities should be open for extension, but closed for modification.</p>
+      <div class="jargon">📖 <strong>Analogy</strong>: A power strip. You can plug in new devices (extension) without rewiring the house (modification).</div>
+      
+      <div class="comparison">
+        <div class="side bad">
+          <h3>Bad Approach</h3>
+          <span class="code-label">Java</span>
+          <pre>
+public class AreaCalculator {
+    public double calculateArea(Object shape) {
+        if (shape instanceof Circle c) {
+            return Math.PI * c.radius() * c.radius();
+        } else if (shape instanceof Rectangle r) {
+            return r.width() * r.height();
+        }
+        return 0;
+    }
+}
+          </pre>
+        </div>
+        <div class="side good">
+          <h3>Good Approach</h3>
+          <span class="code-label">Java</span>
+          <pre>
+public interface Shape {
+    double calculateArea();
+}
+
+public record Circle(double radius) implements Shape {
+    @Override
+    public double calculateArea() {
+        return Math.PI * radius * radius;
+    }
+}
+
+public record Rectangle(double width, double height) implements Shape {
+    @Override
+    public double calculateArea() {
+        return width * height;
+    }
+}
+          </pre>
+        </div>
+      </div>
+    </section>
+
+    <!-- L: Liskov Substitution -->
+    <section>
+      <h2>3. Liskov Substitution Principle (LSP)</h2>
+      <p>Subtypes must be substitutable for their base types without altering the correctness of the program.</p>
+      <div class="jargon">📖 <strong>Analogy</strong>: If you order a taxi, a luxury taxi should also work — it's still a taxi and behaves like one.</div>
+      
+      <div class="comparison">
+        <div class="side bad">
+          <h3>Bad Approach</h3>
+          <span class="code-label">Java</span>
+          <pre>
+public class Rectangle {
+    protected int width, height;
+    public void setWidth(int width) { this.width = width; }
+    public void setHeight(int height) { this.height = height; }
+}
+
+public class Square extends Rectangle {
+    @Override
+    public void setWidth(int width) {
+        this.width = width;
+        this.height = width; // Breaking expected behavior
+    }
+}
+          </pre>
+        </div>
+        <div class="side good">
+          <h3>Good Approach</h3>
+          <span class="code-label">Java</span>
+          <pre>
+public interface Shape {
+    int getArea();
+}
+
+public record Rectangle(int width, int height) implements Shape {
+    @Override
+    public int getArea() { return width * height; }
+}
+
+public record Square(int side) implements Shape {
+    @Override
+    public int getArea() { return side * side; }
+}
+          </pre>
+        </div>
+      </div>
+    </section>
+
+    <!-- I: Interface Segregation -->
+    <section>
+      <h2>4. Interface Segregation Principle (ISP)</h2>
+      <p>Clients should not be forced to depend on interfaces they do not use.</p>
+      <div class="jargon">📖 <strong>Analogy</strong>: A restaurant menu shouldn't force you to order dessert just to get the main course.</div>
+      
+      <div class="comparison">
+        <div class="side bad">
+          <h3>Bad Approach</h3>
+          <span class="code-label">Java</span>
+          <pre>
+public interface Worker {
+    void work();
+    void eat();
+    void sleep();
+}
+
+public class Robot implements Worker {
+    public void work() { /* Working */ }
+    public void eat() { throw new UnsupportedOperationException(); }
+    public void sleep() { throw new UnsupportedOperationException(); }
+}
+          </pre>
+        </div>
+        <div class="side good">
+          <h3>Good Approach</h3>
+          <span class="code-label">Java</span>
+          <pre>
+public interface Workable {
+    void work();
+}
+
+public interface Eatable {
+    void eat();
+}
+
+public interface Sleepable {
+    void sleep();
+}
+
+public class Robot implements Workable {
+    @Override
+    public void work() { /* Working */ }
+}
+          </pre>
+        </div>
+      </div>
+    </section>
+
+    <!-- D: Dependency Inversion -->
+    <section>
+      <h2>5. Dependency Inversion Principle (DIP)</h2>
+      <p>High-level modules should not depend on low-level modules. Both should depend on abstractions.</p>
+      <div class="jargon">📖 <strong>Analogy</strong>: A lamp shouldn't be hardwired to one specific power plant — it uses a standard plug.</div>
+      
+      <div class="comparison">
+        <div class="side bad">
+          <h3>Bad Approach</h3>
+          <span class="code-label">Java</span>
+          <pre>
+public class OrderService {
+    private MySqlDatabase database;
+
+    public OrderService() {
+        this.database = new MySqlDatabase(); // Tight coupling
+    }
+}
+          </pre>
+        </div>
+        <div class="side good">
+          <h3>Good Approach</h3>
+          <span class="code-label">Java</span>
+          <pre>
+public interface Database {
+    void save(Object data);
+}
+
+public class OrderService {
+    private final Database database;
+
+    // Injected via constructor
+    public OrderService(Database database) {
+        this.database = database;
+    }
+}
+          </pre>
+        </div>
+      </div>
+    </section>
+
+    <div class="callout callout-purple">
+      <strong>Interview Tip:</strong> In the case studies (Parking Lot, Elevator, etc.), we will add comments showing exactly where each SOLID principle is applied. Watch out for these!
+    </div>
+
+    <div class="page-nav">
+      <a href="index.html" class="prev"><span class="label">← Previous</span><span class="title">LLD Overview</span></a>
+      <a href="design-patterns/index.html" class="next"><span class="label">Next →</span><span class="title">Design Patterns</span></a>
+    </div>
+  </main>
+</div>
+<button class="scroll-top" aria-label="Scroll to top">↑</button>
+<script src="../js/main.js"></script>
+</body>
+</html>

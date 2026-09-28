@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>System Design Mastery — From Zero to Interview Ready</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<button class="menu-toggle" aria-label="Toggle menu">☰</button>
+
+<div class="page-wrapper">
+  <aside class="sidebar" id="sidebar"></aside>
+
+  <main class="main-content">
+
+    <h1>🏗️ System Design Mastery</h1>
+    <p style="font-size:1.15rem; color: var(--text-muted); margin-bottom: 2rem;">
+      A complete, <strong>beginner-friendly</strong> guide — <strong>24 sections</strong>, from absolute zero to interview-ready.<br>
+      All code in <strong>Java 21</strong>. Every technical term explained. Visual diagrams everywhere.<br>
+      <em>Designed so even a non-software-engineer can learn.</em>
+    </p>
+
+    <div class="callout callout-info">
+      <div class="callout-title">📌 How this guide is structured</div>
+      <p>Follow sections <strong>00 → 23</strong> in order for the full learning path. Or jump to any section you need.
+      Every concept links to the Glossary. Case studies reference which SOLID principle and Design Pattern is used with inline comments.</p>
+    </div>
+
+    <!-- ===== 00. FOUNDATIONS ===== -->
+    <h2>00 · Absolute Foundations</h2>
+    <p>Start here if you've never written code or don't know what a server is. These explain the very basics — like explaining electricity before teaching you to build a circuit.</p>
+    <div class="card-grid">
+      <a href="fundamentals/what-is-system-design.html" class="topic-card">
+        <span class="card-emoji">🤔</span>
+        <h3>What is System Design?</h3>
+        <p>Why companies ask about it. What it means. The restaurant analogy.</p>
+      </a>
+      <a href="fundamentals/client-server.html" class="topic-card">
+        <span class="card-emoji">🖥️</span>
+        <h3>Client & Server</h3>
+        <p>Your phone asks, a computer answers. Request → Response.</p>
+      </a>
+    </div>
+
+    <!-- ===== 01. REQUIREMENT GATHERING ===== -->
+    <h2>01 · Requirement Gathering</h2>
+    <p>The <strong>#1 reason candidates fail</strong> system design interviews: they start designing without asking questions. This section teaches you the EXACT questions to ask.</p>
+    <div class="card-grid">
+      <a href="interview/methodology.html" class="topic-card">
+        <span class="card-emoji">🗺️</span>
+        <h3>RADIO Framework</h3>
+        <p>Requirements → Architecture → Design → Implementation → Optimization. Step-by-step method.</p>
+      </a>
+      <a href="interview/requirement-gathering.html" class="topic-card">
+        <span class="card-emoji">❓</span>
+        <h3>Questions to Ask</h3>
+        <p>25+ categorized questions. Examples for Twitter, Parking Lot, and more.</p>
+      </a>
+    </div>
+
+    <!-- ===== 02. OOP ===== -->
+    <h2>02 · OOP Fundamentals</h2>
+    <p>Object-Oriented Programming is the <strong>language of system design</strong>. Every interview expects you to think in objects. This covers ALL OOP concepts — not just the basics.</p>
+    <div class="card-grid">
+      <a href="oop/index.html" class="topic-card">
+        <span class="card-emoji">🧬</span>
+        <h3>Complete OOP Deep Dive</h3>
+        <p>Class/Object, Encapsulation, Abstraction, Inheritance, Polymorphism, <strong>Association, Aggregation, Composition, Coupling, Cohesion</strong> — all with Java 21 code.</p>
+      </a>
+    </div>
+
+    <!-- ===== 03. JAVA DESIGN ===== -->
+    <h2>03 · Java Design Fundamentals</h2>
+    <p>Java-specific constructs the interviewer expects you to use correctly. When to pick <code>interface</code> vs <code>abstract class</code> vs <code>sealed class</code> vs <code>record</code>.</p>
+    <div class="card-grid">
+      <a href="java-design/index.html" class="topic-card">
+        <span class="card-emoji">☕</span>
+        <h3>Java 21 Constructs</h3>
+        <p>interface, abstract class, final, sealed classes, enum, record, immutability, generics, exception design.</p>
+      </a>
+    </div>
+
+    <!-- ===== 04. SOLID ===== -->
+    <h2>04 · SOLID Principles</h2>
+    <p>Five rules that separate clean code from spaghetti code. Every case study references these with comments.</p>
+    <div class="card-grid">
+      <a href="lld/solid.html" class="topic-card">
+        <span class="card-emoji">🧱</span>
+        <h3>S.O.L.I.D. with Code</h3>
+        <p>BAD code → GOOD code for each principle. Diagrams showing the refactoring.</p>
+      </a>
+    </div>
+
+    <!-- ===== 05. DESIGN PATTERNS ===== -->
+    <h2>05 · Design Patterns</h2>
+    <p>Proven recipes for common problems. The Gang of Four patterns that interviewers love to see in your code.</p>
+    <div class="card-grid">
+      <a href="lld/design-patterns/index.html" class="topic-card">
+        <span class="card-emoji">📋</span>
+        <h3>Patterns Overview</h3>
+        <p>What patterns are, why they exist, all 3 categories.</p>
+      </a>
+      <a href="lld/design-patterns/creational.html" class="topic-card">
+        <span class="card-emoji">🏭</span>
+        <h3>Creational</h3>
+        <p>Singleton, Factory, Abstract Factory, Builder, Prototype</p>
+      </a>
+      <a href="lld/design-patterns/structural.html" class="topic-card">
+        <span class="card-emoji">🔌</span>
+        <h3>Structural</h3>
+        <p>Adapter, Decorator, Facade, Proxy, <strong>Composite</strong></p>
+      </a>
+      <a href="lld/design-patterns/behavioral.html" class="topic-card">
+        <span class="card-emoji">🔀</span>
+        <h3>Behavioral</h3>
+        <p>Observer, Strategy, Command, State, Template Method, <strong>Chain of Responsibility</strong></p>
+      </a>
+    </div>
+
+    <!-- ===== 06. CONCURRENCY ===== -->
+    <h2>06 · Concurrency</h2>
+    <p>How to make your program do multiple things at the same time. Critical for system design and often asked in interviews.</p>
+    <div class="card-grid">
+      <a href="concurrency/index.html" class="topic-card">
+        <span class="card-emoji">🔄</span>
+        <h3>Concurrency & Threads</h3>
+        <p>Threads, Locks, Semaphores, Thread Pools, CompletableFuture, Virtual Threads (Java 21), race conditions, deadlocks.</p>
+      </a>
+    </div>
+
+    <!-- ===== 07. LLD PRINCIPLES ===== -->
+    <h2>07 · LLD Principles</h2>
+    <p>Beyond SOLID — other principles that make your code professional.</p>
+    <div class="card-grid">
+      <a href="lld-principles/index.html" class="topic-card">
+        <span class="card-emoji">📐</span>
+        <h3>DRY, KISS, YAGNI & More</h3>
+        <p>Don't Repeat Yourself, Keep It Simple, Law of Demeter, Composition over Inheritance, Tell Don't Ask.</p>
+      </a>
+    </div>
+
+    <!-- ===== 08. MACHINE CODING ===== -->
+    <h2>08 · Machine Coding</h2>
+    <p>The interview round where you actually <strong>write working code</strong> in 1-2 hours. How to approach it, manage time, and produce clean code under pressure.</p>
+    <div class="card-grid">
+      <a href="machine-coding/index.html" class="topic-card">
+        <span class="card-emoji">⌨️</span>
+        <h3>Machine Coding Guide</h3>
+        <p>Approach template, time management, code structure, common mistakes, practice problems.</p>
+      </a>
+    </div>
+
+    <!-- ===== 09. API DESIGN ===== -->
+    <h2>09 · API Design</h2>
+    <p>How to design clean, consistent, production-grade APIs. Interviewers often ask "design the API for this system."</p>
+    <div class="card-grid">
+      <a href="api-design/index.html" class="topic-card">
+        <span class="card-emoji">🔌</span>
+        <h3>REST, Pagination, Versioning</h3>
+        <p>RESTful conventions, status codes, pagination (cursor vs offset), error handling, idempotency, rate limiting headers.</p>
+      </a>
+    </div>
+
+    <!-- ===== 10. DATABASE DESIGN ===== -->
+    <h2>10 · Database Design</h2>
+    <p>How to model data properly — tables, relationships, indexes, normalization. The foundation of every system.</p>
+    <div class="card-grid">
+      <a href="database-design/index.html" class="topic-card">
+        <span class="card-emoji">🗄️</span>
+        <h3>Schema, ER, Normalization, Indexing</h3>
+        <p>ER diagrams, 1NF/2NF/3NF, B-Tree indexes, SQL vs NoSQL deep dive, sharding strategies, connection pooling.</p>
+      </a>
+    </div>
+
+    <!-- ===== 11. NETWORKING ===== -->
+    <h2>11 · Networking Fundamentals</h2>
+    <div class="card-grid">
+      <a href="fundamentals/networking-basics.html" class="topic-card">
+        <span class="card-emoji">🌐</span>
+        <h3>HTTP, DNS, TCP, Ports</h3>
+        <p>How computers talk. IP addresses, HTTP methods, status codes, REST, JSON.</p>
+      </a>
+    </div>
+
+    <!-- ===== 12. DISTRIBUTED SYSTEMS ===== -->
+    <h2>12 · Distributed Systems</h2>
+    <p>When one computer isn't enough. The theoretical foundations of systems that span multiple machines.</p>
+    <div class="card-grid">
+      <a href="distributed-systems/index.html" class="topic-card">
+        <span class="card-emoji">🌍</span>
+        <h3>CAP, Consensus, Consistency Models</h3>
+        <p>CAP Theorem, PACELC, Consistency models, Distributed Locks, Leader Election, Consistent Hashing, Replication, CQRS, Event Sourcing, Saga, Outbox Pattern.</p>
+      </a>
+    </div>
+
+    <!-- ===== 13. CACHING ===== -->
+    <h2>13 · Caching</h2>
+    <div class="card-grid">
+      <a href="hld/caching.html" class="topic-card">
+        <span class="card-emoji">⚡</span>
+        <h3>Strategies, Redis, LRU Code</h3>
+        <p>Cache-Aside, Write-Through, Write-Behind, Eviction, TTL, Redis. Full LRU implementation.</p>
+      </a>
+    </div>
+
+    <!-- ===== 14. MESSAGING ===== -->
+    <h2>14 · Messaging / Kafka</h2>
+    <div class="card-grid">
+      <a href="hld/message-queues.html" class="topic-card">
+        <span class="card-emoji">📨</span>
+        <h3>Queues, Pub-Sub, Kafka Deep Dive</h3>
+        <p>Producer/Consumer, Topics, Partitions, Consumer Groups, at-least-once, exactly-once, Dead Letter Queue.</p>
+      </a>
+    </div>
+
+    <!-- ===== 15. MICROSERVICES ===== -->
+    <h2>15 · Microservices</h2>
+    <div class="card-grid">
+      <a href="hld/microservices.html" class="topic-card">
+        <span class="card-emoji">🧩</span>
+        <h3>Monolith → Microservices</h3>
+        <p>Service decomposition, communication, API Gateway, Service Discovery, Saga pattern.</p>
+      </a>
+    </div>
+
+    <!-- ===== 16. RELIABILITY ===== -->
+    <h2>16 · Reliability & Fault Tolerance</h2>
+    <p>How to build systems that don't break. When they do break, how to recover gracefully.</p>
+    <div class="card-grid">
+      <a href="reliability/index.html" class="topic-card">
+        <span class="card-emoji">🛡️</span>
+        <h3>Circuit Breaker, Retry, Bulkhead</h3>
+        <p>Circuit Breaker pattern, Retry with backoff, Timeouts, Bulkhead, Failover, Redundancy, Health Checks, Graceful Degradation.</p>
+      </a>
+    </div>
+
+    <!-- ===== 17. OBSERVABILITY ===== -->
+    <h2>17 · Observability</h2>
+    <div class="card-grid">
+      <a href="observability/index.html" class="topic-card">
+        <span class="card-emoji">📊</span>
+        <h3>Monitoring, Logging, Tracing</h3>
+        <p>The 3 pillars. Metrics, dashboards, alerting, distributed tracing, log aggregation, SLI/SLO/SLA.</p>
+      </a>
+    </div>
+
+    <!-- ===== 18. SECURITY ===== -->
+    <h2>18 · Security</h2>
+    <div class="card-grid">
+      <a href="security/index.html" class="topic-card">
+        <span class="card-emoji">🔒</span>
+        <h3>Auth, OAuth, JWT, Encryption</h3>
+        <p>Authentication vs Authorization, OAuth 2.0, JWT, HTTPS/TLS, SQL Injection, XSS, CORS, API Keys.</p>
+      </a>
+    </div>
+
+    <!-- ===== 19. SCALABILITY ===== -->
+    <h2>19 · Scalability</h2>
+    <div class="card-grid">
+      <a href="scalability/index.html" class="topic-card">
+        <span class="card-emoji">📈</span>
+        <h3>Scaling Deep Dive</h3>
+        <p>Vertical vs Horizontal, Auto-scaling, Load Balancing algorithms, CDN, Database scaling, Read replicas, Connection pooling.</p>
+      </a>
+    </div>
+
+    <!-- ===== 20. HLD BUILDING BLOCKS ===== -->
+    <h2>20 · HLD Building Blocks</h2>
+    <p>The complete reference of every component you might use in a high-level design. Think of this as your <strong>toolbox</strong>.</p>
+    <div class="card-grid">
+      <a href="hld-building-blocks/index.html" class="topic-card">
+        <span class="card-emoji">🏗️</span>
+        <h3>All Components Reference</h3>
+        <p>Load Balancer, Reverse Proxy, CDN, API Gateway, Service Discovery, Database, Replication, Sharding, Cache, Redis, Message Queue, Kafka, Object Storage, Search, Rate Limiter, Circuit Breaker, Distributed Lock, and 20+ more.</p>
+      </a>
+    </div>
+
+    <!-- ===== 21. HLD PROBLEMS ===== -->
+    <h2>21 · Complete HLD Problems</h2>
+    <p>Full system design interview walkthroughs using the RADIO framework. Architecture diagrams + capacity estimates + trade-off discussions.</p>
+    <div class="card-grid">
+      <a href="hld/case-studies/url-shortener.html" class="topic-card">
+        <span class="card-emoji">🔗</span><h3>URL Shortener</h3>
+        <p>TinyURL. Base62, database schema, cache strategy.</p>
+      </a>
+      <a href="hld/case-studies/chat-system.html" class="topic-card">
+        <span class="card-emoji">💬</span><h3>Chat System</h3>
+        <p>WhatsApp. WebSocket, message delivery, online status.</p>
+      </a>
+      <a href="hld/case-studies/news-feed.html" class="topic-card">
+        <span class="card-emoji">📰</span><h3>News Feed</h3>
+        <p>Twitter/Instagram. Fan-out on write vs read.</p>
+      </a>
+      <a href="hld/case-studies/notification.html" class="topic-card">
+        <span class="card-emoji">🔔</span><h3>Notification System</h3>
+        <p>Push, SMS, Email. Priority queue, retry, DLQ.</p>
+      </a>
+    </div>
+
+    <!-- ===== 22. LLD PROBLEMS ===== -->
+    <h2>22 · LLD / Machine Coding Problems</h2>
+    <p>Full low-level designs with <strong>complete Java 21 code</strong>. Every class has comments: <code>// SOLID: ... </code> and <code>// Design Pattern: ...</code></p>
+    <div class="card-grid">
+      <a href="lld/case-studies/parking-lot.html" class="topic-card">
+        <span class="card-emoji">🅿️</span><h3>Parking Lot</h3><p>Multi-floor, ticketing, payment strategies.</p>
+      </a>
+      <a href="lld/case-studies/elevator.html" class="topic-card">
+        <span class="card-emoji">🛗</span><h3>Elevator</h3><p>Multiple elevators, scheduling algorithms.</p>
+      </a>
+      <a href="lld/case-studies/vending-machine.html" class="topic-card">
+        <span class="card-emoji">🥤</span><h3>Vending Machine</h3><p>State Pattern showcase. Insert → Select → Dispense.</p>
+      </a>
+      <a href="lld/case-studies/atm.html" class="topic-card">
+        <span class="card-emoji">🏧</span><h3>ATM</h3><p>State + Chain of Responsibility. Cash dispensing.</p>
+      </a>
+      <a href="lld/case-studies/library.html" class="topic-card">
+        <span class="card-emoji">📚</span><h3>Library</h3><p>Borrow, return, search, fines, Observer.</p>
+      </a>
+      <a href="lld/case-studies/tic-tac-toe.html" class="topic-card">
+        <span class="card-emoji">⭕</span><h3>Tic-Tac-Toe</h3><p>NxN board, sealed game states, undo.</p>
+      </a>
+      <a href="lld/case-studies/chess.html" class="topic-card">
+        <span class="card-emoji">♟️</span><h3>Chess</h3><p>Inheritance + polymorphism for piece movement.</p>
+      </a>
+      <a href="lld/case-studies/splitwise.html" class="topic-card">
+        <span class="card-emoji">💰</span><h3>Splitwise</h3><p>Expense splitting, debt simplification, Observer.</p>
+      </a>
+      <a href="lld/case-studies/movie-booking.html" class="topic-card">
+        <span class="card-emoji">🎬</span><h3>Movie Booking</h3><p>Seat selection, concurrency, payment integration.</p>
+      </a>
+      <a href="lld/case-studies/car-rental.html" class="topic-card">
+        <span class="card-emoji">🚗</span><h3>Car Rental</h3><p>Fleet management, reservations, pricing strategies.</p>
+      </a>
+      <a href="lld/case-studies/food-ordering.html" class="topic-card">
+        <span class="card-emoji">🍔</span><h3>Food Ordering</h3><p>Restaurant → Kitchen → Delivery. Observer + State.</p>
+      </a>
+      <a href="lld/case-studies/payment-system.html" class="topic-card">
+        <span class="card-emoji">💳</span><h3>Payment System</h3><p>Strategy pattern. Retry, idempotency, reconciliation.</p>
+      </a>
+      <a href="lld/case-studies/inventory.html" class="topic-card">
+        <span class="card-emoji">📦</span><h3>Inventory</h3><p>Stock tracking, warehouse management, concurrency.</p>
+      </a>
+      <a href="lld/case-studies/ride-sharing.html" class="topic-card">
+        <span class="card-emoji">🚕</span><h3>Ride Sharing</h3><p>Driver matching, surge pricing, trip state machine.</p>
+      </a>
+    </div>
+
+    <!-- ===== 23. PRODUCTION & INTERVIEW ===== -->
+    <h2>23 · Production Failures & Interview Simulations</h2>
+    <div class="card-grid">
+      <a href="production-failures/index.html" class="topic-card">
+        <span class="card-emoji">🔥</span>
+        <h3>Production Failure Scenarios</h3>
+        <p>Real-world outages: what went wrong, post-mortem analysis, how to prevent them.</p>
+      </a>
+      <a href="interview-simulations/index.html" class="topic-card">
+        <span class="card-emoji">🎤</span>
+        <h3>Full Interview Simulations</h3>
+        <p>Mock HLD and LLD interviews with interviewer-candidate dialogue, scoring rubric, and tips.</p>
+      </a>
+      <a href="glossary.html" class="topic-card">
+        <span class="card-emoji">📖</span>
+        <h3>Glossary (100+ Terms)</h3>
+        <p>Searchable dictionary of every term. Beginner-friendly definitions with analogies.</p>
+      </a>
+    </div>
+
+    <!-- Footer -->
+    <div style="margin-top: 4rem; padding-top: 2rem; border-top: 1px solid var(--border); text-align: center; color: var(--text-muted); font-size: 0.85rem;">
+      <p>🏗️ <strong>System Design Mastery</strong> — 24 Sections · Zero → Interview Ready</p>
+      <p>All code in <strong>Java 21</strong> · Every term explained · Visual diagrams · SOLID & Pattern comments in every case study</p>
+    </div>
+
+  </main>
+</div>
+
+<button class="scroll-top" aria-label="Scroll to top">↑</button>
+<script src="js/main.js"></script>
+</body>
+</html>

@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>OOP for Interviews — System Design Mastery</title>
+  <link rel="stylesheet" href="../css/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+</head>
+<body>
+<button class="menu-toggle" aria-label="Toggle menu">☰</button>
+<div class="page-wrapper">
+  <aside class="sidebar" id="sidebar"></aside>
+  <main class="main-content">
+    <div class="breadcrumb">
+      <a href="../index.html">Home</a>
+      <span class="sep">›</span>
+      Interview Preparation
+      <span class="sep">›</span>
+      <strong>OOP for Interviews</strong>
+    </div>
+
+    <h1>Object-Oriented Programming (OOP) for Interviews</h1>
+
+    <div class="callout callout-info">
+      <strong>What is OOP?</strong> Object-Oriented Programming is a paradigm where code is organized around <strong>"objects"</strong>—entities that bundle data (state) and behavior (methods) together. It models real-world concepts to make code reusable and easier to reason about.
+    </div>
+
+    <h2>The 4 Pillars of OOP</h2>
+    <div class="card">
+      <h3>1. Encapsulation</h3>
+      <p>Hiding internal state and requiring all interaction to be performed through an object's methods. <strong>Analogy:</strong> A capsule pill; you swallow it without needing to know the chemical powder inside.</p>
+      <span class="code-label">Java</span>
+      <pre>
+public class BankAccount {
+    private double balance; // Hidden state
+
+    public void deposit(double amount) {
+        if (amount > 0) balance += amount; // Controlled access
+    }
+}
+      </pre>
+
+      <h3>2. Abstraction</h3>
+      <p>Hiding complex implementation details and showing only the essential features. <strong>Analogy:</strong> Driving a car; you press the accelerator without needing to understand fuel injection.</p>
+
+      <h3>3. Inheritance</h3>
+      <p>A mechanism where a new class derives properties and behaviors from an existing class. <strong>Analogy:</strong> A 'Dog' inherits traits from 'Animal'.</p>
+
+      <h3>4. Polymorphism</h3>
+      <p>The ability of different objects to respond to the same method call in their own way. <strong>Analogy:</strong> Asking a Dog to 'speak' results in a bark, while a Cat results in a meow.</p>
+    </div>
+
+    <h2>Core OOP Constructs in Java 21</h2>
+
+    <h3>class</h3>
+    <p>The basic building block. Use it when you have a complete, concrete implementation of an object.</p>
+
+    <h3>abstract class</h3>
+    <p>A <div class="jargon">📖 <strong>abstract class</strong>: A blueprint that cannot be instantiated on its own. It can contain both complete methods (with bodies) and abstract methods (without bodies).</div></p>
+    <p><strong>When to use:</strong> When you want to share code among several closely related classes.</p>
+    <span class="code-label">Java</span>
+    <pre>
+public abstract class Vehicle {
+    // Shared behavior
+    public void startEngine() { System.out.println("Engine started"); }
+    // Must be implemented by subclasses
+    public abstract void drive();
+}
+    </pre>
+
+    <h3>interface</h3>
+    <p>A contract that defines a set of methods a class must implement. Unlike abstract classes, interfaces are primarily about defining <em>what</em> an object can do, not <em>how</em> it does it.</p>
+    <p><strong>When to use:</strong> To define capabilities for disparate classes (e.g., `Flyable` for a Bird and an Airplane).</p>
+    <span class="code-label">Java</span>
+    <pre>
+public interface PaymentProcessor {
+    boolean processPayment(double amount);
+}
+    </pre>
+
+    <h3>final class</h3>
+    <p>A class that cannot be subclassed. The `String` class in Java is final.</p>
+    <p><strong>When to use:</strong> When you want to guarantee immutability or prevent modification of core behavior for security.</p>
+    <span class="code-label">Java</span>
+    <pre>
+public final class Configuration {
+    private final String url = "https://api.example.com";
+}
+    </pre>
+
+    <h3>sealed class (Java 17+)</h3>
+    <p>Restricts which classes may extend or implement it. It provides a middle ground between completely open (regular class) and completely closed (final class).</p>
+    <p><strong>When to use:</strong> When you have a known, fixed set of subclasses, enabling exhaustive pattern matching in `switch` statements.</p>
+    <span class="code-label">Java</span>
+    <pre>
+public sealed class Shape permits Circle, Square {}
+
+final class Circle extends Shape {}
+final class Square extends Shape {}
+    </pre>
+
+    <h3>record (Java 16+)</h3>
+    <p>A special kind of class designed to be a transparent carrier for immutable data. It automatically generates constructors, getters, `equals()`, `hashCode()`, and `toString()`.</p>
+    <p><strong>When to use:</strong> For Data Transfer Objects (DTOs) or anytime you just need to hold data.</p>
+    <span class="code-label">Java</span>
+    <pre>
+public record User(String id, String email) {}
+    </pre>
+
+    <h3>enum</h3>
+    <p>A special type used to define a collection of constants. In Java, enums can have fields and methods.</p>
+    <span class="code-label">Java</span>
+    <pre>
+public enum OrderStatus {
+    PENDING(1), SHIPPED(2), DELIVERED(3);
+    
+    private final int code;
+    OrderStatus(int code) { this.code = code; }
+    public int getCode() { return code; }
+}
+    </pre>
+
+    <h3>Generics</h3>
+    <p>Allows classes and methods to operate on objects of various types while providing compile-time type safety.</p>
+    <span class="code-label">Java</span>
+    <pre>
+public class Box&lt;T&gt; {
+    private T item;
+    public void set(T item) { this.item = item; }
+    public T get() { return item; }
+}
+    </pre>
+
+    <h2>Comparison Table</h2>
+    <div class="table-responsive">
+      <table>
+        <thead>
+          <tr>
+            <th>Construct</th>
+            <th>Can instantiate?</th>
+            <th>Primary Use Case</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Class</td>
+            <td>Yes</td>
+            <td>General purpose objects with state and behavior.</td>
+          </tr>
+          <tr>
+            <td>Abstract Class</td>
+            <td>No</td>
+            <td>Sharing common base code among related objects.</td>
+          </tr>
+          <tr>
+            <td>Interface</td>
+            <td>No</td>
+            <td>Defining a contract or capability.</td>
+          </tr>
+          <tr>
+            <td>Sealed Class</td>
+            <td>No*</td>
+            <td>Domain modeling with a strictly limited set of subtypes.</td>
+          </tr>
+          <tr>
+            <td>Record</td>
+            <td>Yes</td>
+            <td>Immutable data carriers (DTOs).</td>
+          </tr>
+          <tr>
+            <td>Enum</td>
+            <td>Yes (internal)</td>
+            <td>Fixed set of constants.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h2>Mermaid Class Diagram</h2>
+    <div class="diagram-container">
+      <div class="mermaid">
+        classDiagram
+          class PaymentProcessor {
+              <<interface>>
+              +processPayment(amount)
+          }
+          class StripeProcessor {
+              +processPayment(amount)
+          }
+          class PaypalProcessor {
+              +processPayment(amount)
+          }
+          PaymentProcessor <|.. StripeProcessor
+          PaymentProcessor <|.. PaypalProcessor
+          
+          class Shape {
+              <<sealed>>
+          }
+          class Circle {
+              <<final>>
+          }
+          class Square {
+              <<final>>
+          }
+          Shape <|-- Circle
+          Shape <|-- Square
+      </div>
+      <p class="caption">Figure 1: Interfaces and Sealed Classes</p>
+    </div>
+
+    <h2>Interview Patterns: What to Use When</h2>
+    <div class="callout callout-purple">
+      <ul>
+        <li><strong>"Make it extensible so we can add new payment methods later."</strong> → Use an <strong>Interface</strong>.</li>
+        <li><strong>"These three classes share 80% of the same logic."</strong> → Use an <strong>Abstract Class</strong>.</li>
+        <li><strong>"The status can only be one of these three exact values."</strong> → Use an <strong>Enum</strong> or a <strong>Sealed Class</strong>.</li>
+        <li><strong>"I just need an object to return multiple values from this method."</strong> → Use a <strong>Record</strong>.</li>
+      </ul>
+    </div>
+
+    <div class="page-nav">
+      <a href="requirement-gathering.html" class="prev"><span class="label">← Previous</span><span class="title">Requirement Gathering</span></a>
+      <a href="../hld/index.html" class="next"><span class="label">Next →</span><span class="title">HLD Overview</span></a>
+    </div>
+  </main>
+</div>
+<button class="scroll-top" aria-label="Scroll to top">↑</button>
+<script src="../js/main.js"></script>
+</body>
+</html>

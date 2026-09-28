@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Databases 101 — System Design Mastery</title>
+  <link rel="stylesheet" href="../css/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+</head>
+<body>
+<button class="menu-toggle" aria-label="Toggle menu">☰</button>
+<div class="page-wrapper">
+  <aside class="sidebar" id="sidebar"></aside>
+  <main class="main-content">
+    <div class="breadcrumb">
+      <a href="../index.html">Home</a>
+      <span class="sep">›</span>
+      Fundamentals
+      <span class="sep">›</span>
+      <strong>Databases 101</strong>
+    </div>
+
+    <h1>Databases 101</h1>
+    
+    <p>A server's memory is temporary. If the server reboots, everything stored in its RAM is lost forever. To keep data safe permanently, we need a <strong>Database</strong>.</p>
+
+    <h2>What is a Database?</h2>
+    <div class="jargon">📖 <strong>Database</strong>: An organized collection of structured information, or data, typically stored electronically in a computer system. Think of it as a highly advanced digital filing cabinet.</div>
+
+    <h3>Why not just save to a text file?</h3>
+    <p>You might wonder, "Why can't my server just write data to a file like <code>users.txt</code>?" You can, but databases solve massive problems that simple files cannot:</p>
+    <ul>
+      <li><strong>Searching:</strong> Finding a specific user in a 10GB text file takes forever. Databases use <em>Indexes</em> to find data instantly.</li>
+      <li><strong>Concurrency:</strong> If 1,000 users try to write to a text file at the exact same millisecond, the file gets corrupted. Databases safely manage thousands of simultaneous connections.</li>
+      <li><strong>Integrity:</strong> Databases ensure rules are followed (e.g., "Email addresses must be unique", or "Age cannot be negative").</li>
+    </ul>
+
+    <h2>Relational Databases and SQL</h2>
+    <p>The most common type of database is a Relational Database (RDBMS). It organizes data into <strong>Tables</strong>, which look exactly like Excel spreadsheets.</p>
+    
+    <ul>
+      <li><strong>Tables:</strong> A collection of related data (e.g., a "Users" table).</li>
+      <li><strong>Columns:</strong> The properties of the data (e.g., ID, Name, Email).</li>
+      <li><strong>Rows:</strong> Individual entries (e.g., a single user).</li>
+    </ul>
+
+    <p>To talk to these databases, we use <strong>SQL (Structured Query Language)</strong>.</p>
+    <div class="callout callout-info">
+      <strong>Example SQL Query:</strong><br>
+      <code>SELECT name, email FROM Users WHERE age > 18;</code>
+    </div>
+
+    <h3>Keys and Relationships</h3>
+    <p>Relational databases connect data using keys:</p>
+    <ul>
+      <li><strong>Primary Key:</strong> A unique identifier for a row (like a Social Security Number for a citizen).</li>
+      <li><strong>Foreign Key:</strong> A reference to a Primary Key in another table, creating a link between them.</li>
+    </ul>
+
+    <div class="diagram-container">
+      <div class="mermaid">
+        erDiagram
+            USER {
+                int id PK
+                string name
+            }
+            ORDER {
+                int id PK
+                int user_id FK
+                float total
+            }
+            USER ||--o{ ORDER : "places"
+      </div>
+      <p class="caption">Figure 1: A User can place many Orders (1-to-many relationship)</p>
+    </div>
+
+    <h2>CRUD Operations</h2>
+    <p>Almost all database interactions fall into four basic categories, known by the acronym <strong>CRUD</strong>:</p>
+    <ul>
+      <li><strong>C</strong>reate (Insert new data)</li>
+      <li><strong>R</strong>ead (Select/fetch data)</li>
+      <li><strong>U</strong>pdate (Modify existing data)</li>
+      <li><strong>D</strong>elete (Remove data)</li>
+    </ul>
+
+    <h2>Transactions and ACID Properties</h2>
+    <p>A <strong>Transaction</strong> is a sequence of database operations treated as a single unit of work. It is "all-or-nothing."</p>
+    <div class="callout callout-success">
+      <strong>Analogy: The ATM Transfer</strong><br>
+      If you transfer $100 from Checking to Savings, two things must happen: <br>
+      1. Deduct $100 from Checking.<br>
+      2. Add $100 to Savings.<br>
+      If the system crashes after step 1, you lose $100! A transaction ensures that if step 2 fails, step 1 is automatically reversed (rolled back).
+    </div>
+
+    <p>Relational databases guarantee <strong>ACID</strong> properties:</p>
+    <ul>
+      <li><strong>A</strong>tomicity: All-or-nothing.</li>
+      <li><strong>C</strong>onsistency: Data remains valid according to defined rules.</li>
+      <li><strong>I</strong>solation: Simultaneous transactions don't interfere with each other.</li>
+      <li><strong>D</strong>urability: Once saved, data remains saved even if power is lost.</li>
+    </ul>
+
+    <h2>SQL vs NoSQL</h2>
+    <p>In modern system design, you aren't limited to Relational (SQL) databases. There are also <strong>NoSQL</strong> databases designed for massive scale and flexibility.</p>
+    
+    <table class="table">
+      <tr>
+        <th>Type</th>
+        <th>Best for</th>
+        <th>Examples</th>
+      </tr>
+      <tr>
+        <td><strong>Relational (SQL)</strong></td>
+        <td>Strict schemas, financial systems, complex relationships.</td>
+        <td>PostgreSQL, MySQL, Oracle</td>
+      </tr>
+      <tr>
+        <td><strong>Key-Value (NoSQL)</strong></td>
+        <td>Extreme speed, caching, simple lookups.</td>
+        <td>Redis, DynamoDB</td>
+      </tr>
+      <tr>
+        <td><strong>Document (NoSQL)</strong></td>
+        <td>Flexible schema, JSON data, content management.</td>
+        <td>MongoDB, CouchDB</td>
+      </tr>
+      <tr>
+        <td><strong>Graph (NoSQL)</strong></td>
+        <td>Social networks, recommendation engines.</td>
+        <td>Neo4j</td>
+      </tr>
+    </table>
+
+    <h2>Java 21 Code: Simulating a Simple Database Repository</h2>
+    <p>In Java, we typically wrap database logic in a "Repository" or "Data Access Object (DAO)". Here is a simple in-memory simulation using a HashMap and Java records.</p>
+
+    <span class="code-label">Java</span>
+    <pre>
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Optional;
+
+/**
+ * Simulating a simple Database operations (CRUD) using Java 21 Records
+ * and an in-memory Map structure.
+ */
+public class DatabaseBasics {
+
+    // Record representing a row in our "Users" table
+    public record User(Integer id, String name, String role) {}
+
+    // Our "Repository" handles all the CRUD logic
+    public static class UserRepository {
+        // Simulating a database table with an Index (Primary Key -> Row)
+        private final Map<Integer, User> dataStore = new HashMap<>();
+        private int currentId = 1;
+
+        // CREATE
+        public User create(String name, String role) {
+            User newUser = new User(currentId++, name, role);
+            dataStore.put(newUser.id(), newUser);
+            return newUser;
+        }
+
+        // READ
+        public Optional<User> read(Integer id) {
+            // Optional helps us handle the case where the ID isn't found safely
+            return Optional.ofNullable(dataStore.get(id));
+        }
+
+        // UPDATE
+        public boolean update(Integer id, String newName, String newRole) {
+            if (dataStore.containsKey(id)) {
+                dataStore.put(id, new User(id, newName, newRole));
+                return true; // Success
+            }
+            return false; // Not found
+        }
+
+        // DELETE
+        public boolean delete(Integer id) {
+            return dataStore.remove(id) != null;
+        }
+    }
+
+    public static void main(String[] args) {
+        UserRepository repo = new UserRepository();
+
+        // C: Create
+        User alice = repo.create("Alice", "Admin");
+        User bob = repo.create("Bob", "User");
+        System.out.println("Created: " + alice);
+
+        // R: Read
+        repo.read(1).ifPresent(user -> System.out.println("Found User 1: " + user.name()));
+
+        // U: Update
+        repo.update(2, "Robert", "User");
+        System.out.println("Updated Bob to: " + repo.read(2).get().name());
+
+        // D: Delete
+        repo.delete(1);
+        System.out.println("Does Alice exist? " + repo.read(1).isPresent()); // false
+    }
+}
+    </pre>
+
+    <div class="callout callout-purple">
+      <strong>Interview Tip:</strong> In an interview, don't just say "I will use MongoDB." You must explain <em>why</em>. If the system needs strict ACID transactions (like a banking app), choose SQL. If it needs to store massive amounts of unstructured data quickly, choose NoSQL.
+    </div>
+
+    <div class="page-nav">
+      <a href="networking-basics.html" class="prev"><span class="label">← Previous</span><span class="title">Networking Basics</span></a>
+      <a href="../interview/methodology.html" class="next"><span class="label">Next →</span><span class="title">Interview Methodology</span></a>
+    </div>
+  </main>
+</div>
+<button class="scroll-top" aria-label="Scroll to top">↑</button>
+<script src="../js/main.js"></script>
+</body>
+</html>

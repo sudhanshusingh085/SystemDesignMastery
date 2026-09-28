@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Design a Library System — System Design Mastery</title>
+  <link rel="stylesheet" href="../../css/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+</head>
+<body>
+<button class="menu-toggle" aria-label="Toggle menu">☰</button>
+<div class="page-wrapper">
+  <aside class="sidebar" id="sidebar"></aside>
+  <main class="main-content">
+    <div class="breadcrumb">
+      <a href="../../index.html">Home</a>
+      <span class="sep">›</span>
+      LLD Case Studies
+      <span class="sep">›</span>
+      <strong>Library System</strong>
+    </div>
+
+    <h1>Design a Library System</h1>
+    
+    <h2>What is a Library System?</h2>
+    <p>A library system manages books, members, and the borrowing/returning process. Think of it like a <strong>rental service</strong>. People can browse inventory, take items for a limited time, and return them, paying a fine if they are late.</p>
+
+    <h2>Requirements</h2>
+    <div class="callout callout-info">
+      <ul>
+        <li>Add/remove books</li>
+        <li>Search books by title, author, ISBN</li>
+        <li>Member registration</li>
+        <li>Borrow/return books</li>
+        <li>Fine calculation for late returns</li>
+        <li>Maximum 5 books per member</li>
+      </ul>
+    </div>
+
+    <h2>How does it work?</h2>
+    <div class="diagram-container">
+      <div class="mermaid">
+        classDiagram
+          class Library {
+             +addBook(Book)
+             +registerMember(Member)
+             +borrowBook(String, String)
+          }
+          class Book {
+             -BookInfo info
+             -boolean available
+          }
+          class Member {
+             -List~Book~ borrowedBooks
+             -MemberType type
+          }
+          Library *-- Book
+          Library *-- Member
+      </div>
+      <p class="caption">Figure 1: Library Class Diagram</p>
+    </div>
+
+    <h2>Java 21 Implementation</h2>
+    <span class="code-label">Java</span>
+    <pre>
+import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.stream.Collectors;
+
+// Immutable data
+record BookInfo(String isbn, String title, String author, int year) {}
+
+class Book {
+    private final BookInfo info;
+    private boolean available;
+
+    public Book(BookInfo info) {
+        this.info = info;
+        this.available = true;
+    }
+
+    public BookInfo getInfo() { return info; }
+    public boolean isAvailable() { return available; }
+    public void setAvailable(boolean available) { this.available = available; }
+}
+
+sealed interface MemberType permits RegularMember, PremiumMember {}
+record RegularMember() implements MemberType {}
+record PremiumMember() implements MemberType {}
+
+class Member {
+    private final String name;
+    private final String memberId;
+    private final List&lt;Book&gt; borrowedBooks;
+    private final MemberType memberType;
+    private static final int MAX_BOOKS = 5;
+
+    public Member(String name, String memberId, MemberType type) {
+        this.name = name;
+        this.memberId = memberId;
+        this.memberType = type;
+        this.borrowedBooks = new ArrayList&lt;&gt;();
+    }
+
+    public boolean canBorrow() { return borrowedBooks.size() &lt; MAX_BOOKS; }
+    public void borrowBook(Book book) { borrowedBooks.add(book); }
+    public void returnBook(Book book) { borrowedBooks.remove(book); }
+    public String getMemberId() { return memberId; }
+}
+
+// Design Pattern: Strategy
+interface SearchStrategy {
+    List&lt;Book&gt; search(List&lt;Book&gt; books, String query);
+}
+
+class TitleSearch implements SearchStrategy {
+    public List&lt;Book&gt; search(List&lt;Book&gt; books, String query) {
+        return books.stream().filter(b -> b.getInfo().title().contains(query)).collect(Collectors.toList());
+    }
+}
+
+class AuthorSearch implements SearchStrategy {
+    public List&lt;Book&gt; search(List&lt;Book&gt; books, String query) {
+        return books.stream().filter(b -> b.getInfo().author().contains(query)).collect(Collectors.toList());
+    }
+}
+
+class IsbnSearch implements SearchStrategy {
+    public List&lt;Book&gt; search(List&lt;Book&gt; books, String query) {
+        return books.stream().filter(b -> b.getInfo().isbn().equals(query)).collect(Collectors.toList());
+    }
+}
+
+// SOLID: DIP
+interface FineCalculator {
+    double calculateFine(long overdueDays);
+}
+
+class DailyFineCalculator implements FineCalculator {
+    public double calculateFine(long overdueDays) {
+        return overdueDays > 0 ? overdueDays * 1.5 : 0;
+    }
+}
+
+record BorrowRecord(String memberId, String isbn, LocalDate borrowDate, LocalDate dueDate, LocalDate returnDate) {}
+
+// Design Pattern: Observer
+interface LibraryObserver {
+    void onBookBorrowed(String memberId, String isbn);
+    void onBookReturned(String memberId, String isbn);
+}
+
+class NotificationService implements LibraryObserver {
+    public void onBookBorrowed(String memberId, String isbn) {
+        System.out.println("Notification: Member " + memberId + " borrowed book " + isbn);
+    }
+    public void onBookReturned(String memberId, String isbn) {
+        System.out.println("Notification: Member " + memberId + " returned book " + isbn);
+    }
+}
+
+// Design Pattern: Facade
+class Library {
+    private final List&lt;Book&gt; catalog = new ArrayList&lt;&gt;();
+    private final List&lt;Member&gt; members = new ArrayList&lt;&gt;();
+    private final List&lt;LibraryObserver&gt; observers = new ArrayList&lt;&gt;();
+
+    public void addBook(Book book) { catalog.add(book); }
+    public void registerMember(Member member) { members.add(member); }
+    
+    public void addObserver(LibraryObserver observer) { observers.add(observer); }
+
+    public void borrowBook(String memberId, String isbn) {
+        Member member = members.stream().filter(m -> m.getMemberId().equals(memberId)).findFirst().orElse(null);
+        Book book = catalog.stream().filter(b -> b.getInfo().isbn().equals(isbn) && b.isAvailable()).findFirst().orElse(null);
+
+        if (member != null && book != null && member.canBorrow()) {
+            book.setAvailable(false);
+            member.borrowBook(book);
+            for (LibraryObserver obs : observers) {
+                obs.onBookBorrowed(memberId, isbn);
+            }
+        } else {
+            System.out.println("Cannot borrow book.");
+        }
+    }
+}
+
+public class Main {
+    public static void main(String[] args) {
+        Library lib = new Library();
+        lib.addObserver(new NotificationService());
+
+        Book book = new Book(new BookInfo("123", "Design Patterns", "GoF", 1994));
+        lib.addBook(book);
+
+        Member member = new Member("Alice", "M01", new RegularMember());
+        lib.registerMember(member);
+
+        lib.borrowBook("M01", "123");
+    }
+}
+    </pre>
+
+    <div class="page-nav">
+      <a href="elevator.html" class="prev"><span class="label">← Previous</span><span class="title">Elevator System</span></a>
+      <a href="chess.html" class="next"><span class="label">Next →</span><span class="title">Chess Game</span></a>
+    </div>
+  </main>
+</div>
+<button class="scroll-top" aria-label="Scroll to top">↑</button>
+<script src="../../js/main.js"></script>
+</body>
+</html>

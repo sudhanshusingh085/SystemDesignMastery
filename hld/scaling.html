@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Scaling — System Design Mastery</title>
+  <link rel="stylesheet" href="../css/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+</head>
+<body>
+<button class="menu-toggle" aria-label="Toggle menu">☰</button>
+<div class="page-wrapper">
+  <aside class="sidebar" id="sidebar"></aside>
+  <main class="main-content">
+    <div class="breadcrumb">
+      <a href="../index.html">Home</a>
+      <span class="sep">›</span>
+      High-Level Design
+      <span class="sep">›</span>
+      <strong>Scaling</strong>
+    </div>
+
+    <h1>Scaling</h1>
+
+    <section>
+      <h2>What is Scaling?</h2>
+      <p>Scaling is the process of adjusting the capacity of your system to handle varying amounts of load. Imagine you run a simple lemonade stand. Initially, you have 10 customers a day, and you can easily serve them. But what if you get 1,000 customers a day? Your single jug of lemonade and your two hands won't be enough. You need to <strong>scale</strong>.</p>
+      
+      <div class="jargon">📖 <strong>Load</strong>: The amount of work or traffic a system is handling at any given time. This could mean HTTP requests, database queries, or data processing tasks.</div>
+    </section>
+
+    <section>
+      <h2>Vertical Scaling (Scale Up)</h2>
+      <p>Vertical scaling means making a single resource bigger, faster, or stronger. To handle more customers, you buy a massive, industrial-sized lemonade dispenser and learn to pour faster.</p>
+      <p>In computing, this means adding more RAM, a faster CPU, or a larger hard drive to your existing server.</p>
+      
+      <div class="callout callout-info">
+        <strong>Pros:</strong> Extremely simple. No changes to your code or architecture are needed.<br>
+        <strong>Cons:</strong> There's a hard hardware limit. You can only buy a machine so big. Also, it involves downtime to upgrade, and it remains a single point of failure (if that one machine breaks, everything stops).
+      </div>
+    </section>
+
+    <section>
+      <h2>Horizontal Scaling (Scale Out)</h2>
+      <p>Horizontal scaling means adding <em>more</em> resources of the same type. Instead of one giant lemonade stand, you open 10 smaller stands across the neighborhood.</p>
+      <p>In computing, this means adding more servers to your pool and distributing the traffic among them.</p>
+
+      <div class="callout callout-info">
+        <strong>Pros:</strong> Practically infinite scalability. Better resilience (if one server dies, others can take over).<br>
+        <strong>Cons:</strong> High complexity. You need a way to distribute traffic (Load Balancer), and you need to ensure all servers have access to the same shared data (which leads to complex database and caching architectures).
+      </div>
+    </section>
+
+    <section>
+      <h2>Vertical vs Horizontal: A Comparison</h2>
+      <table class="comparison-table">
+        <thead>
+          <tr>
+            <th>Feature</th>
+            <th>Vertical Scaling (Scale Up)</th>
+            <th>Horizontal Scaling (Scale Out)</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Limit</strong></td>
+            <td>Hardware limitations (finite)</td>
+            <td>Practically infinite</td>
+          </tr>
+          <tr>
+            <td><strong>Downtime</strong></td>
+            <td>Usually required for upgrades</td>
+            <td>Zero downtime (add machines on the fly)</td>
+          </tr>
+          <tr>
+            <td><strong>Complexity</strong></td>
+            <td>Low (no code changes)</td>
+            <td>High (requires load balancers, distributed state)</td>
+          </tr>
+          <tr>
+            <td><strong>Cost</strong></td>
+            <td>Exponential (supercomputers are expensive)</td>
+            <td>Linear (commodity hardware is cheap)</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>How it looks</h2>
+      <div class="diagram-container">
+        <div class="mermaid">
+          graph TD
+            subgraph Vertical Scaling
+              V1[Server with 8GB RAM] --> V2[Server with 64GB RAM]
+            end
+            
+            subgraph Horizontal Scaling
+              H1[Server] --> LB[Load Balancer]
+              LB --> S1[Server 1]
+              LB --> S2[Server 2]
+              LB --> S3[Server 3]
+            end
+        </div>
+        <p class="caption">Figure 1: Making one machine bigger vs adding more machines.</p>
+      </div>
+    </section>
+
+    <section>
+      <h2>Java 21 Code Example: Simulating Scaling</h2>
+      <p>Let's use Java 21 to simulate how vertical and horizontal scaling might look conceptually when handling requests.</p>
+      
+      <span class="code-label">Java</span>
+      <pre>
+import java.util.List;
+import java.util.ArrayList;
+import java.util.concurrent.atomic.AtomicInteger;
+
+// Represent a request in the system
+record Request(String id, String payload) {}
+
+// A server that can process requests
+sealed interface Server permits WebServer {
+    boolean process(Request request);
+    int capacity();
+}
+
+// Our concrete WebServer implementation
+final class WebServer implements Server {
+    private final String name;
+    private final int maxCapacityPerSecond;
+    private final AtomicInteger currentLoad = new AtomicInteger(0);
+
+    public WebServer(String name, int maxCapacityPerSecond) {
+        this.name = name;
+        this.maxCapacityPerSecond = maxCapacityPerSecond;
+    }
+
+    @Override
+    public boolean process(Request request) {
+        if (currentLoad.get() < maxCapacityPerSecond) {
+            currentLoad.incrementAndGet();
+            System.out.println(name + " processed request: " + request.id());
+            // Simulate processing time...
+            currentLoad.decrementAndGet();
+            return true;
+        }
+        System.out.println(name + " is OVERLOADED! Dropped request: " + request.id());
+        return false;
+    }
+
+    @Override
+    public int capacity() {
+        return maxCapacityPerSecond;
+    }
+}
+
+public class ScalingDemo {
+    public static void main(String[] args) {
+        System.out.println("--- Vertical Scaling ---");
+        // Start with a small server
+        Server smallServer = new WebServer("Small-Server", 10);
+        
+        // Upgrade it! (Vertical Scaling)
+        Server bigServer = new WebServer("Big-Server-Upgraded", 100);
+        
+        System.out.println("--- Horizontal Scaling ---");
+        // Add multiple small servers behind a load balancer abstraction
+        List&lt;Server&gt; serverPool = new ArrayList&lt;&gt;();
+        serverPool.add(new WebServer("Node-1", 10));
+        serverPool.add(new WebServer("Node-2", 10));
+        serverPool.add(new WebServer("Node-3", 10));
+        
+        // Simple round-robin load distribution
+        int requestCount = 25;
+        for (int i = 0; i < requestCount; i++) {
+            Request req = new Request("REQ-" + i, "data");
+            Server nodeToUse = serverPool.get(i % serverPool.size());
+            nodeToUse.process(req);
+        }
+    }
+}
+      </pre>
+    </section>
+
+    <section>
+      <h2>Elasticity and Auto-Scaling</h2>
+      <p>Real-world traffic isn't constant. You might have 1,000 users at noon and 10 users at midnight. It's expensive to run 100 servers all night just in case.</p>
+      <div class="jargon">📖 <strong>Elasticity</strong>: The ability of a system to automatically scale out (add servers) when load is high, and scale in (remove servers) when load drops, ensuring you only pay for what you use.</div>
+      <p>Cloud providers like AWS, GCP, and Azure provide <strong>Auto-Scaling Groups (ASGs)</strong> that monitor metrics like CPU utilization and automatically launch or terminate instances.</p>
+    </section>
+    
+    <section>
+      <h2>Real-World Examples</h2>
+      <ul>
+        <li><strong>Netflix:</strong> Uses massive horizontal scaling. They have thousands of microservices running across tens of thousands of AWS EC2 instances, scaling dynamically based on viewing hours (evenings have vastly more traffic).</li>
+        <li><strong>Uber:</strong> Relies heavily on horizontal scaling to handle real-time ride tracking, dispatching, and pricing calculation across regions.</li>
+      </ul>
+    </section>
+
+    <div class="callout callout-success">
+      <strong>💡 Interview Tip:</strong>
+      When asked to design a system (like Twitter or URL shortener), ALWAYS start by assuming horizontal scaling. Say "We will put our web servers behind a load balancer so we can scale horizontally as traffic grows." It's an easy point to score early on!
+    </div>
+
+    <div class="page-nav">
+      <a href="index.html" class="prev"><span class="label">← Previous</span><span class="title">HLD Overview</span></a>
+      <a href="load-balancing.html" class="next"><span class="label">Next →</span><span class="title">Load Balancing</span></a>
+    </div>
+  </main>
+</div>
+<button class="scroll-top" aria-label="Scroll to top">↑</button>
+<script src="../js/main.js"></script>
+<script>
+  mermaid.initialize({ startOnLoad: true, theme: 'default' });
+</script>
+</body>
+</html>

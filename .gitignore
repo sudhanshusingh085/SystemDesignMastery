@@ -1,0 +1,19 @@
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Zip files
+*.zip
+
+# Old/unrelated folders
+system-design-mastery-java21/
+cursor-based_pagination/
+
+# Git
+.git/

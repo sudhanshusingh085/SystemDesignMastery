@@ -1,0 +1,182 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Observability — System Design Mastery</title><link rel="stylesheet" href="../css/style.css"><script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script></head><body>
+<button class="menu-toggle">☰</button>
+<div class="page-wrapper"><aside class="sidebar" id="sidebar"></aside>
+<main class="main-content">
+<div class="breadcrumb"><a href="../index.html">Home</a><span class="sep">›</span><strong>Observability</strong></div>
+
+<h1>Observability — Monitoring, Logging, Tracing</h1>
+
+<div class="callout callout-info">
+  <strong>1. What is Observability?</strong><br>
+  Observability is the ability to understand the internal state of your system just by looking at its external outputs (data).
+  <p><strong>Real-World Analogy:</strong> Your car's dashboard. You don't need to open the hood to know you are running out of fuel, the engine is overheating, or how fast you're going. The dashboard gives you all that data.</p>
+</div>
+
+<h2>2. The 3 Pillars of Observability</h2>
+<p>A truly observable system requires three main components:</p>
+<ul>
+    <li><strong>Metrics:</strong> Numerical data measured over time (e.g., CPU usage %, memory used, requests per second).</li>
+    <li><strong>Logs:</strong> Immutable, timestamped records of discrete events (e.g., "User logged in", "Database connection failed").</li>
+    <li><strong>Traces:</strong> The journey of a single request across multiple microservices.</li>
+</ul>
+
+<h2>3. Metrics Deep Dive</h2>
+<p>What should you measure? Two common frameworks:</p>
+<ul>
+    <li><strong>RED Method (for services):</strong> <b>R</b>ate (requests/sec), <b>E</b>rrors (failures/sec), <b>D</b>uration (latency).</li>
+    <li><strong>USE Method (for resources):</strong> <b>U</b>tilization (% busy), <b>S</b>aturation (queue length), <b>E</b>rrors.</li>
+</ul>
+
+<span class="code-label">Java 21</span>
+<pre>
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.DoubleAdder;
+
+public class MetricsDemo {
+    // Java 21 approach to metrics using basic primitives
+    record MetricsCollector(
+        AtomicLong requestCounter, // Counter: Only goes up
+        AtomicLong activeConnections, // Gauge: Goes up and down
+        DoubleAdder totalResponseTime // Used to calculate summary/histogram
+    ) {
+        public MetricsCollector() {
+            this(new AtomicLong(0), new AtomicLong(0), new DoubleAdder());
+        }
+
+        public void recordRequest(long durationMs) {
+            requestCounter.incrementAndGet();
+            totalResponseTime.add(durationMs);
+        }
+        
+        public void openConnection() { activeConnections.incrementAndGet(); }
+        public void closeConnection() { activeConnections.decrementAndGet(); }
+    }
+}
+</pre>
+
+<h2>4. Logging Best Practices</h2>
+<p>Logs should be structured (usually JSON) so they can be easily queried and filtered by tools like Elasticsearch or Splunk.</p>
+
+<div class="comparison">
+    <div class="side bad">
+        <strong>BAD LOGGING</strong>
+        <code>log.error("Error occurred");</code>
+        <p>No context! Which user? What time? What error?</p>
+    </div>
+    <div class="side good">
+        <strong>GOOD LOGGING (Structured)</strong>
+        <code>{"level": "ERROR", "timestamp": "2026-10-01T12:00:00Z", "correlationId": "abc-123", "service": "payment-api", "message": "Failed to charge card", "userId": "881"}</code>
+    </div>
+</div>
+
+<span class="code-label">Java 21</span>
+<pre>
+import java.time.Instant;
+
+public class LoggingDemo {
+    // Structured log record using Java 21
+    record LogMessage(
+        String level, 
+        Instant timestamp, 
+        String correlationId, 
+        String service, 
+        String message
+    ) {
+        public String toJson() {
+            // Simplified JSON creation for demonstration
+            return """
+                {
+                    "level": "%s",
+                    "timestamp": "%s",
+                    "correlationId": "%s",
+                    "service": "%s",
+                    "message": "%s"
+                }
+                """.formatted(level, timestamp, correlationId, service, message);
+        }
+    }
+}
+</pre>
+
+<h2>5. Distributed Tracing</h2>
+<p>When a single request hits 5 different microservices, how do you debug a failure? Distributed tracing assigns a unique <span class="jargon">Trace ID</span> to the request at the gateway. This ID is passed to every downstream service.</p>
+
+<div class="diagram-container">
+<div class="mermaid">
+sequenceDiagram
+    participant User
+    participant Gateway
+    participant Auth
+    participant Order
+    participant Payment
+    
+    User->>Gateway: POST /order
+    Gateway->>Gateway: Generate TraceID: 123
+    Gateway->>Auth: Verify Token (TraceID: 123)
+    Auth-->>Gateway: OK
+    Gateway->>Order: Create Order (TraceID: 123)
+    Order->>Payment: Charge Card (TraceID: 123)
+    Payment-->>Order: Success
+    Order-->>Gateway: Order Created
+    Gateway-->>User: 200 OK
+</div>
+<p class="caption">Figure 1: Trace ID propagation across services</p>
+</div>
+
+<span class="code-label">Java 21</span>
+<pre>
+public class TracingDemo {
+    // Span represents a single operation within a trace
+    record Span(String traceId, String spanId, String parentSpanId, String name, long startTime, long endTime) {}
+    
+    public class Tracer {
+        private static final ThreadLocal&lt;String&gt; currentTraceId = new ThreadLocal&lt;&gt;();
+        
+        public static void setTraceId(String traceId) { currentTraceId.set(traceId); }
+        public static String getTraceId() { return currentTraceId.get(); }
+        public static void clear() { currentTraceId.remove(); }
+    }
+}
+</pre>
+
+<h2>6. Alerting</h2>
+<p>Don't alert on everything. <span class="jargon">Alert Fatigue</span> happens when engineers ignore alerts because there are too many false positives. Alert on symptoms (high latency, high error rate) rather than causes (high CPU).</p>
+
+<h2>7. SLI, SLO, SLA</h2>
+<ul>
+    <li><strong>SLI (Service Level Indicator):</strong> The actual metric (e.g., 99.5% of requests completed in &lt; 200ms).</li>
+    <li><strong>SLO (Service Level Objective):</strong> Your internal target (e.g., We aim for 99.9% of requests to complete in &lt; 200ms).</li>
+    <li><strong>SLA (Service Level Agreement):</strong> The legal contract with clients (e.g., We guarantee 99.5% uptime, or we refund you money).</li>
+</ul>
+
+<h2>8. Dashboards & 9. Tools</h2>
+<p>A good dashboard shows the Golden Signals (Latency, Traffic, Errors, Saturation). Popular tools:</p>
+<ul>
+    <li><strong>Metrics:</strong> Prometheus, Datadog</li>
+    <li><strong>Dashboards:</strong> Grafana</li>
+    <li><strong>Logs:</strong> ELK Stack (Elasticsearch, Logstash, Kibana)</li>
+    <li><strong>Tracing:</strong> Jaeger, Zipkin</li>
+</ul>
+
+<h2>10. Observability Architecture</h2>
+<div class="diagram-container">
+<div class="mermaid">
+graph TD
+    A[App Service] -->|Push Metrics| B[Prometheus]
+    A -->|Write Logs| C[Logstash]
+    A -->|Send Traces| D[Jaeger]
+    B --> E[Grafana Dashboard]
+    C --> F[Elasticsearch]
+    F --> E
+    D --> E
+</div>
+<p class="caption">Figure 2: Comprehensive Observability Stack</p>
+</div>
+
+<div class="page-nav">
+<a href="../reliability/index.html" class="prev"><span class="label">← Previous</span><span class="title">Reliability</span></a>
+<a href="../security/index.html" class="next"><span class="label">Next →</span><span class="title">Security</span></a>
+</div>
+</main></div>
+<button class="scroll-top">↑</button>
+<script src="../js/main.js"></script></body></html>

@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Java 21 Design Fundamentals — System Design Mastery</title>
+  <link rel="stylesheet" href="../css/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+</head>
+<body>
+<button class="menu-toggle" aria-label="Toggle menu">☰</button>
+<div class="page-wrapper">
+  <aside class="sidebar" id="sidebar"></aside>
+  <main class="main-content">
+    <div class="breadcrumb">
+      <a href="../index.html">Home</a>
+      <span class="sep">›</span>
+      Fundamentals
+      <span class="sep">›</span>
+      <strong>Java 21 Design Fundamentals</strong>
+    </div>
+
+    <h1>Java 21 Design Fundamentals</h1>
+    <p>Modern Java has evolved significantly. Let's look at the foundational constructs you'll use daily to architect clean, safe, and maintainable systems.</p>
+
+    <div class="card">
+      <h2>1. Interfaces</h2>
+      <p><strong>What is it?</strong> An interface is a contract. It declares a set of methods that a class must implement.</p>
+      <p><strong>When to use it?</strong> When you want to define "what" something can do, without worrying about "how" it does it. Perfect for loose coupling and mocking in tests.</p>
+      
+      <h3>Real-World Analogy</h3>
+      <p>A <strong>power outlet standard</strong>. The wall provides an interface (two prongs, 120V). Any appliance that implements this interface (has a matching plug) can draw power, regardless of whether it's a toaster or a TV.</p>
+
+      <div class="diagram-container">
+        <div class="mermaid">
+          classDiagram
+            class Flyable {
+              <<interface>>
+              +fly()
+            }
+            Flyable <|.. Bird
+            Flyable <|.. Airplane
+        </div>
+        <p class="caption">Figure 1: Interface Implementation</p>
+      </div>
+
+      <span class="code-label">Java</span>
+      <pre>
+public interface Flyable {
+    // Abstract method (implicitly public and abstract)
+    void fly();
+    
+    // Default method (since Java 8)
+    default void land() {
+        System.out.println("Landing smoothly...");
+    }
+}
+
+public class Bird implements Flyable {
+    @Override
+    public void fly() {
+        System.out.println("Flapping wings.");
+    }
+}
+
+public class Airplane implements Flyable {
+    @Override
+    public void fly() {
+        System.out.println("Starting jet engines.");
+    }
+}
+      </pre>
+      <div class="callout callout-info">
+        <strong>Interview Tip:</strong> Mention <em>Functional Interfaces</em> (interfaces with exactly one abstract method) which allow the use of lambda expressions.
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>2. Abstract Classes</h2>
+      <p><strong>What is it?</strong> A class that cannot be instantiated on its own. It acts as a partial blueprint, allowing you to define some concrete methods and some abstract ones.</p>
+      <p><strong>When to use it?</strong> When you have closely related classes that share code and a common core identity.</p>
+
+      <span class="code-label">Java</span>
+      <pre>
+public abstract class Vehicle {
+    protected String id;
+    
+    public Vehicle(String id) {
+        this.id = id;
+    }
+    
+    // Concrete method shared by all children
+    public void startEngine() {
+        System.out.println("Engine started for " + id);
+    }
+    
+    // Abstract method that children MUST implement
+    public abstract String fuelType();
+}
+      </pre>
+      
+      <table>
+        <thead>
+          <tr>
+            <th>Feature</th>
+            <th>Interface</th>
+            <th>Abstract Class</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>State (Fields)</td>
+            <td>Only <code>public static final</code> constants</td>
+            <td>Can have mutable instance fields</td>
+          </tr>
+          <tr>
+            <td>Constructors</td>
+            <td>No</td>
+            <td>Yes</td>
+          </tr>
+          <tr>
+            <td>Multiple Inheritance</td>
+            <td>Yes (A class can implement many)</td>
+            <td>No (A class can extend only one)</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="card">
+      <h2>3. Final</h2>
+      <p><strong>What is it?</strong> A keyword that restricts modification. A <code>final</code> class cannot be extended. A <code>final</code> method cannot be overridden. A <code>final</code> variable cannot be reassigned.</p>
+      <p><strong>When to use it?</strong> To enforce immutability, prevent inheritance for security reasons (like <code>String</code>), or ensure a method's logic isn't tampered with by subclasses.</p>
+      
+      <h3>Real-World Analogy</h3>
+      <p>A <strong>sealed envelope</strong>. Once it's sealed (finalized), you cannot change what's inside without breaking it.</p>
+
+      <span class="code-label">Java</span>
+      <pre>
+// Cannot be subclassed
+public final class Configuration {
+    // Cannot be reassigned
+    private final String url;
+    
+    public Configuration(String url) {
+        this.url = url;
+    }
+    
+    // Subclasses couldn't override this even if the class wasn't final
+    public final String getUrl() {
+        return url;
+    }
+}
+      </pre>
+    </div>
+
+    <div class="card">
+      <h2>4. Sealed Classes (Java 17+)</h2>
+      <p><strong>What is it?</strong> A feature that restricts which classes can extend a superclass. It gives you control over inheritance hierarchies.</p>
+      <p><strong>When to use it?</strong> Domain modeling where you know all possible variants of a type (e.g., AST nodes, specific business events).</p>
+      
+      <h3>Real-World Analogy</h3>
+      <p>An <strong>exclusive club with a guest list</strong>. Only the names on the permit list are allowed in.</p>
+
+      <span class="code-label">Java</span>
+      <pre>
+// The guest list: only Circle, Rectangle, and Triangle can extend Shape
+public sealed class Shape permits Circle, Rectangle, Triangle {
+    // Common fields
+}
+
+// Subclasses must be declared final, sealed, or non-sealed
+public final class Circle extends Shape {
+    double radius;
+}
+
+public final class Rectangle extends Shape {
+    double w, h;
+}
+
+public non-sealed class Triangle extends Shape {
+    // Anyone can extend Triangle now
+}
+
+// Java 21 Pattern Matching with Sealed Classes
+public void printShapeInfo(Shape shape) {
+    // Exhaustive switch: no default case needed because Java knows all permutations!
+    switch(shape) {
+        case Circle c -> System.out.println("Circle radius: " + c.radius);
+        case Rectangle r -> System.out.println("Rectangle w: " + r.w);
+        case Triangle t -> System.out.println("Triangle");
+    }
+}
+      </pre>
+    </div>
+
+    <div class="card">
+      <h2>5. Enums</h2>
+      <p><strong>What is it?</strong> A special data type that enables for a variable to be a set of predefined constants.</p>
+      <p><strong>When to use it?</strong> For things that have a fixed set of states: Days, Seasons, Order Statuses, Directions.</p>
+      
+      <h3>Real-World Analogy</h3>
+      <p>The <strong>days of the week</strong>. There are exactly 7. You can't invent an 8th day.</p>
+
+      <span class="code-label">Java</span>
+      <pre>
+public enum OrderStatus {
+    CREATED("Order created, unpaid"),
+    PAID("Payment received"),
+    SHIPPED("On the way"),
+    DELIVERED("Delivered successfully");
+    
+    private final String description;
+    
+    // Enum constructors are implicitly private
+    OrderStatus(String description) {
+        this.description = description;
+    }
+    
+    public String getDescription() {
+        return description;
+    }
+}
+      </pre>
+    </div>
+
+    <div class="card">
+      <h2>6. Records (Java 16+)</h2>
+      <p><strong>What is it?</strong> A concise syntax for creating immutable data carriers. It automatically generates a constructor, getters, <code>equals()</code>, <code>hashCode()</code>, and <code>toString()</code>.</p>
+      <p><strong>When to use it?</strong> For DTOs, configurations, tuples, or any class whose sole purpose is to hold data.</p>
+
+      <h3>Real-World Analogy</h3>
+      <p>A <strong>shipping label</strong>. It just carries information (address, name). It doesn't perform actions, and once printed, it shouldn't be altered.</p>
+
+      <span class="code-label">Java</span>
+      <pre>
+// That's it! 1 line replaces ~40 lines of boilerplate code.
+public record Point(int x, int y) {
+    
+    // Compact constructor for validation
+    public Point {
+        if (x < 0 || y < 0) {
+            throw new IllegalArgumentException("Coordinates must be positive");
+        }
+    }
+    
+    // Can define custom methods too
+    public double distanceFromOrigin() {
+        return Math.sqrt(x * x + y * y);
+    }
+}
+      </pre>
+    </div>
+
+    <div class="card">
+      <h2>7. Immutability</h2>
+      <p><strong>What is it?</strong> Designing an object so its state cannot change after construction.</p>
+      <p><strong>Why does it matter?</strong> Thread safety without locking, great for caching, reduces side effects, and makes reasoning about code easier.</p>
+      <div class="jargon">📖 <strong>Defensive Copy</strong>: Copying mutable objects when passing them in or out of an immutable class to prevent external modification.</div>
+
+      <span class="code-label">Java</span>
+      <pre>
+public final class ImmutableUser {
+    private final String name;
+    private final List<String> roles;
+    
+    public ImmutableUser(String name, List<String> roles) {
+        this.name = name;
+        // Defensive copy on the way in
+        this.roles = List.copyOf(roles); 
+    }
+    
+    public List<String> getRoles() {
+        // Safe to return because List.copyOf creates an unmodifiable list
+        return roles;
+    }
+}
+      </pre>
+    </div>
+
+    <div class="card">
+      <h2>8. Generics</h2>
+      <p><strong>What is it?</strong> Parameterized types. Writing code that works with any object type while providing compile-time type safety.</p>
+      
+      <h3>Real-World Analogy</h3>
+      <p>A <strong>shipping container</strong>. The container can hold electronics, clothes, or food. It's a generic box, but when you label it "Box of Electronics", you know you shouldn't put food in it.</p>
+
+      <span class="code-label">Java</span>
+      <pre>
+// Generic class
+public class Box<T> {
+    private T item;
+    
+    public void put(T item) { this.item = item; }
+    public T get() { return item; }
+}
+
+// Bounded generic: Type must implement Comparable
+public <T extends Comparable<T>> T findMax(List<T> list) {
+    return Collections.max(list);
+}
+      </pre>
+    </div>
+
+    <div class="card">
+      <h2>9. Exception Design</h2>
+      <p><strong>What is it?</strong> Properly classifying and handling errors in an application.</p>
+      <ul>
+        <li><strong>Checked Exceptions:</strong> Extend <code>Exception</code>. Must be handled (try-catch) or declared (throws). Use for recoverable errors (e.g., FileNotFound).</li>
+        <li><strong>Unchecked Exceptions:</strong> Extend <code>RuntimeException</code>. Don't need to be declared. Use for programming errors (e.g., NullPointer) or fatal issues.</li>
+      </ul>
+
+      <span class="code-label">Java</span>
+      <pre>
+// Using sealed classes for structured exception hierarchies (Modern Java approach)
+public sealed abstract class AppException extends RuntimeException 
+    permits BusinessException, TechnicalException {
+    
+    public AppException(String message) {
+        super(message);
+    }
+}
+
+public final class BusinessException extends AppException {
+    public BusinessException(String msg) { super(msg); }
+}
+
+public final class TechnicalException extends AppException {
+    public TechnicalException(String msg) { super(msg); }
+}
+      </pre>
+    </div>
+
+    <div class="card">
+      <h2>10. Summary Table</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Construct</th>
+            <th>Primary Use Case</th>
+            <th>State / Data</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>interface</code></td>
+            <td>Defining capabilities/contracts (loose coupling)</td>
+            <td>Stateless</td>
+          </tr>
+          <tr>
+            <td><code>abstract class</code></td>
+            <td>Partial implementation for related concepts</td>
+            <td>Mutable/Immutable state</td>
+          </tr>
+          <tr>
+            <td><code>class</code></td>
+            <td>Standard behavioral entity</td>
+            <td>Mutable state</td>
+          </tr>
+          <tr>
+            <td><code>record</code></td>
+            <td>Pure data carrier (DTO)</td>
+            <td>Immutable state</td>
+          </tr>
+          <tr>
+            <td><code>enum</code></td>
+            <td>Fixed set of predefined constants</td>
+            <td>Fixed constants</td>
+          </tr>
+          <tr>
+            <td><code>sealed class</code></td>
+            <td>Domain modeling with closed hierarchies</td>
+            <td>Flexible</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="card">
+      <h2>11. Interview Decision Tree</h2>
+      <div class="diagram-container">
+        <div class="mermaid">
+          flowchart TD
+            A[Need a new type?] --> B{Does it only hold data?}
+            B -->|Yes| C[Use RECORD]
+            B -->|No| D{Are instances fixed/predefined?}
+            D -->|Yes| E[Use ENUM]
+            D -->|No| F{Need to enforce a contract?}
+            F -->|Yes| G[Use INTERFACE]
+            F -->|No| H{Is inheritance closed/known?}
+            H -->|Yes| I[Use SEALED CLASS]
+            H -->|No| J{Does it share state with children?}
+            J -->|Yes| K[Use ABSTRACT CLASS]
+            J -->|No| L[Use standard CLASS]
+        </div>
+        <p class="caption">Figure 2: Type Selection Decision Tree</p>
+      </div>
+    </div>
+
+    <div class="page-nav">
+      <a href="../oop/index.html" class="prev"><span class="label">← Previous</span><span class="title">OOP Fundamentals</span></a>
+      <a href="../index.html" class="next"><span class="label">Next →</span><span class="title">Home</span></a>
+    </div>
+  </main>
+</div>
+<button class="scroll-top" aria-label="Scroll to top">↑</button>
+<script src="../js/main.js"></script>
+</body>
+</html>

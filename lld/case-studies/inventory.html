@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Inventory Management System — System Design Mastery</title>
+  <link rel="stylesheet" href="../../css/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+</head>
+<body>
+<button class="menu-toggle" aria-label="Toggle menu">☰</button>
+<div class="page-wrapper">
+  <aside class="sidebar" id="sidebar"></aside>
+  <main class="main-content">
+    <div class="breadcrumb">
+      <a href="../../index.html">Home</a>
+      <span class="sep">›</span>
+      LLD
+      <span class="sep">›</span>
+      Case Studies
+      <span class="sep">›</span>
+      <strong>Inventory System</strong>
+    </div>
+
+    <h1>Design an Inventory Management System</h1>
+
+    <section class="card">
+        <h2>What is an Inventory Management System?</h2>
+        <p>An inventory system tracks physical goods in warehouses. Imagine a giant Amazon warehouse: you need to know exactly how many iPhones are on shelf A12, when you need to order more, and you need to move stock from one warehouse to another without losing track.</p>
+        <div class="jargon">📖 <strong>Concurrency Control</strong>: Making sure that if two customers buy the last iPhone at the exact same millisecond, the system doesn't sell it to both of them (overselling).</div>
+    </section>
+
+    <section class="card">
+        <h2>What Problem Does It Solve?</h2>
+        <p>The biggest challenge in inventory is concurrency. Stock updates happen constantly. A robust system uses thread-safe operations (like synchronized blocks or locks) to handle concurrent reads/writes and maintains an immutable audit trail of all movements.</p>
+    </section>
+
+    <section class="card">
+        <h2>How Does It Work?</h2>
+        <p>The system uses Locks to prevent race conditions during stock removal. A Transfer Service coordinates moving stock between warehouses atomically (either both succeed or neither do). The Observer pattern alerts warehouse managers when stock dips below reorder thresholds.</p>
+        
+        <div class="diagram-container">
+            <div class="mermaid">
+                sequenceDiagram
+                    participant Client
+                    participant StockManager
+                    participant Warehouse
+                    participant AuditTrail
+                    Client->>StockManager: removeStock(product, 5)
+                    StockManager->>Warehouse: lock(product)
+                    Warehouse-->>StockManager: Lock acquired
+                    StockManager->>Warehouse: updateQuantity(-5)
+                    Warehouse-->>StockManager: Updated
+                    StockManager->>Warehouse: unlock(product)
+                    StockManager->>AuditTrail: logTransaction()
+            </div>
+            <p class="caption">Figure 1: Safe Concurrent Stock Update</p>
+        </div>
+    </section>
+
+    <section class="card">
+        <h2>Low-Level Design (Java 21)</h2>
+        
+        <span class="code-label">Java</span>
+<pre><code>import java.time.LocalDateTime;
+import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.locks.ReentrantLock;
+
+record ProductId(String id) {}
+record Product(ProductId id, String name, String category, double price, String sku) {}
+record WarehouseId(String id) {}
+
+// Mutable state representing stock for a specific product
+class StockEntry {
+    private final Product product;
+    private int quantity;
+    private final int reorderThreshold;
+    private LocalDateTime lastUpdated;
+    
+    // Concurrency! Lock per product to allow concurrent updates on different products
+    private final ReentrantLock lock = new ReentrantLock();
+
+    public StockEntry(Product product, int quantity, int reorderThreshold) {
+        this.product = product;
+        this.quantity = quantity;
+        this.reorderThreshold = reorderThreshold;
+        this.lastUpdated = LocalDateTime.now();
+    }
+    
+    public void addStock(int amount) {
+        lock.lock();
+        try {
+            this.quantity += amount;
+            this.lastUpdated = LocalDateTime.now();
+        } finally {
+            lock.unlock();
+        }
+    }
+    
+    public void removeStock(int amount) {
+        lock.lock();
+        try {
+            if (this.quantity &lt; amount) {
+                throw new RuntimeException("InsufficientStockException");
+            }
+            this.quantity -= amount;
+            this.lastUpdated = LocalDateTime.now();
+        } finally {
+            lock.unlock();
+        }
+    }
+    
+    public int getQuantity() { return quantity; }
+    public boolean needsReorder() { return quantity &lt;= reorderThreshold; }
+    public Product getProduct() { return product; }
+}
+
+class Warehouse {
+    private final WarehouseId id;
+    private final String name;
+    private final String location;
+    private final Map&lt;ProductId, StockEntry&gt; stock = new ConcurrentHashMap&lt;&gt;();
+    
+    public Warehouse(WarehouseId id, String name, String location) {
+        this.id = id;
+        this.name = name;
+        this.location = location;
+    }
+    
+    public StockEntry getStockEntry(ProductId pid) {
+        return stock.get(pid);
+    }
+    
+    public void initializeStock(Product p, int initial, int threshold) {
+        stock.put(p.id(), new StockEntry(p, initial, threshold));
+    }
+    
+    public WarehouseId getId() { return id; }
+    public Collection&lt;StockEntry&gt; getAllStock() { return stock.values(); }
+}
+
+enum StockOperation { ADD, REMOVE, TRANSFER, ADJUSTMENT }
+
+record StockTransaction(String txnId, ProductId product, WarehouseId warehouse, StockOperation operation, int quantity, LocalDateTime timestamp, String reason) {}
+
+// Design Pattern: Observer
+interface StockObserver {
+    void onStockUpdated(StockEntry entry, WarehouseId wId);
+}
+
+class LowStockAlertService implements StockObserver {
+    @Override
+    public void onStockUpdated(StockEntry entry, WarehouseId wId) {
+        if (entry.needsReorder()) {
+            System.out.println("ALERT! Low stock for " + entry.getProduct().name() + " in warehouse " + wId.id());
+        }
+    }
+}
+
+class AuditTrailService implements StockObserver {
+    private final List&lt;StockTransaction&gt; ledger = new ArrayList&lt;&gt;();
+    
+    @Override
+    public void onStockUpdated(StockEntry entry, WarehouseId wId) {
+        // Log to DB in reality
+        System.out.println("Audit: Stock updated for " + entry.getProduct().id());
+    }
+}
+
+// SOLID: Single Responsibility — StockManager only handles single warehouse operations
+class StockManager {
+    private final List&lt;StockObserver&gt; observers = new ArrayList&lt;&gt;();
+    
+    public void addObserver(StockObserver obs) { observers.add(obs); }
+    
+    public void addStock(Warehouse w, ProductId pid, int amount) {
+        StockEntry entry = w.getStockEntry(pid);
+        if (entry != null) {
+            entry.addStock(amount);
+            notifyObservers(entry, w.getId());
+        }
+    }
+    
+    public void removeStock(Warehouse w, ProductId pid, int amount) {
+        StockEntry entry = w.getStockEntry(pid);
+        if (entry != null) {
+            entry.removeStock(amount); // Throws if insufficient
+            notifyObservers(entry, w.getId());
+        }
+    }
+    
+    private void notifyObservers(StockEntry entry, WarehouseId wId) {
+        observers.forEach(o -&gt; o.onStockUpdated(entry, wId));
+    }
+}
+
+// Transfer stock atomically
+class TransferService {
+    private final StockManager stockManager;
+    
+    public TransferService(StockManager stockManager) {
+        this.stockManager = stockManager;
+    }
+    
+    public void transfer(Warehouse from, Warehouse to, ProductId pid, int amount) {
+        StockEntry source = from.getStockEntry(pid);
+        StockEntry dest = to.getStockEntry(pid);
+        
+        // Prevent deadlocks by enforcing lock ordering based on Warehouse ID
+        Warehouse first = from.getId().id().compareTo(to.getId().id()) &lt; 0 ? from : to;
+        Warehouse second = first == from ? to : from;
+        
+        // In a real system you'd lock both entries to ensure atomicity.
+        // For simplicity, we just rely on remove and add. 
+        // If remove succeeds, we add. If add fails, we rollback (add back to source).
+        try {
+            stockManager.removeStock(from, pid, amount);
+            try {
+                stockManager.addStock(to, pid, amount);
+            } catch (Exception e) {
+                // Rollback
+                stockManager.addStock(from, pid, amount);
+                throw new RuntimeException("Transfer failed during destination addition, rolled back.");
+            }
+        } catch (Exception e) {
+            System.out.println("Transfer failed: " + e.getMessage());
+        }
+    }
+}
+
+// SOLID: SRP — only handles reporting
+class InventoryReport {
+    public void generateReport(Warehouse w) {
+        System.out.println("--- Report for Warehouse: " + w.getId().id() + " ---");
+        for (StockEntry e : w.getAllStock()) {
+            System.out.println(e.getProduct().name() + ": " + e.getQuantity());
+        }
+    }
+}
+
+// Design Pattern: Factory
+class WarehouseFactory {
+    public static Warehouse createWarehouse(String id, String name) {
+        return new Warehouse(new WarehouseId(id), name, "Unknown");
+    }
+}
+
+// Design Pattern: Facade
+class InventoryService {
+    private final StockManager manager;
+    private final TransferService transferService;
+    
+    public InventoryService() {
+        this.manager = new StockManager();
+        this.manager.addObserver(new LowStockAlertService());
+        this.manager.addObserver(new AuditTrailService());
+        this.transferService = new TransferService(manager);
+    }
+    // Facade methods...
+}
+</code></pre>
+    </section>
+
+    <div class="callout callout-warn">
+        <h3>Interview Tip</h3>
+        <p>In Inventory LLDs, interviewers will ask about <strong>Concurrency</strong> and <strong>Deadlocks</strong>. If you are transferring stock between two warehouses, you must lock both records. If you don't lock them in a consistent order (e.g., alphabetically by Warehouse ID), Thread 1 transferring A→B and Thread 2 transferring B→A will cause a deadlock!</p>
+    </div>
+
+    <div class="page-nav">
+      <a href="payment-system.html" class="prev"><span class="label">← Previous</span><span class="title">Payment System</span></a>
+      <a href="ride-sharing.html" class="next"><span class="label">Next →</span><span class="title">Ride Sharing System</span></a>
+    </div>
+  </main>
+</div>
+<button class="scroll-top" aria-label="Scroll to top">↑</button>
+<script src="../../js/main.js"></script>
+</body>
+</html>

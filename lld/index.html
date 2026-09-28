@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Low-Level Design (LLD) Overview — System Design Mastery</title>
+  <link rel="stylesheet" href="../css/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+</head>
+<body>
+<button class="menu-toggle" aria-label="Toggle menu">☰</button>
+<div class="page-wrapper">
+  <aside class="sidebar" id="sidebar"></aside>
+  <main class="main-content">
+    <div class="breadcrumb">
+      <a href="../index.html">Home</a>
+      <span class="sep">›</span>
+      <a href="index.html">Low-Level Design</a>
+      <span class="sep">›</span>
+      <strong>Overview</strong>
+    </div>
+
+    <h1>Low-Level Design (LLD) Overview</h1>
+
+    <div class="callout callout-info">
+      <p>Welcome to the Low-Level Design section! Here we translate high-level architecture into concrete, maintainable code.</p>
+    </div>
+
+    <h2>What is Low-Level Design?</h2>
+    <p>Low-Level Design (LLD) is the phase of the software development process where you define the detailed logic, data structures, algorithms, and classes for individual components of a system.</p>
+    <div class="jargon">📖 <strong>Low-Level Design (LLD)</strong>: The microscopic view of software design. If HLD is the city map, LLD is the architectural blueprint of a single building, detailing where every door and window goes.</div>
+
+    <h3>HLD vs LLD</h3>
+    <table class="comparison">
+      <thead>
+        <tr>
+          <th>High-Level Design (HLD)</th>
+          <th>Low-Level Design (LLD)</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Focuses on system architecture, components, and their interactions.</td>
+          <td>Focuses on classes, interfaces, methods, and data structures.</td>
+        </tr>
+        <tr>
+          <td>Tools: Block diagrams, flowcharts.</td>
+          <td>Tools: Class diagrams, sequence diagrams, code.</td>
+        </tr>
+        <tr>
+          <td>Answers "What" the system will do.</td>
+          <td>Answers "How" the system will do it.</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h2>Why LLD Matters in Interviews</h2>
+    <p>In LLD interviews, interviewers expect you to write actual code. They want to see how you structure your code, how you name variables and classes, and how you apply design principles to make your code scalable and maintainable. It's not enough to just talk about the design; you must implement it.</p>
+
+    <h2>Skills Needed for LLD</h2>
+    <ul class="step">
+      <li class="step-content"><strong>Object-Oriented Programming (OOP)</strong>: Inheritance, Encapsulation, Polymorphism, Abstraction.</li>
+      <li class="step-content"><strong>SOLID Principles</strong>: Guidelines for writing clean, maintainable code.</li>
+      <li class="step-content"><strong>Design Patterns</strong>: Proven solutions to common software design problems.</li>
+      <li class="step-content"><strong>Clean Code Practices</strong>: Meaningful names, small functions, error handling.</li>
+    </ul>
+
+    <h2>LLD Roadmap</h2>
+    <div class="diagram-container">
+      <div class="mermaid">
+        graph TD
+          A[Object-Oriented Programming] --> B[SOLID Principles]
+          B --> C[Design Patterns]
+          C --> D[Creational]
+          C --> E[Structural]
+          C --> F[Behavioral]
+          D --> G[Case Studies]
+          E --> G
+          F --> G
+      </div>
+      <p class="caption">Figure 1: LLD Learning Roadmap</p>
+    </div>
+
+    <h2>Explore LLD Topics</h2>
+    <div class="card-grid">
+      <div class="card">
+        <h3><a href="solid.html">SOLID Principles</a></h3>
+        <p>Learn the 5 essential principles of object-oriented design.</p>
+      </div>
+      <div class="card">
+        <h3><a href="design-patterns/index.html">Design Patterns</a></h3>
+        <p>Master Creational, Structural, and Behavioral patterns.</p>
+      </div>
+      <div class="card">
+        <h3><a href="case-studies/parking-lot.html">Case Studies</a></h3>
+        <p>Apply your knowledge to real-world problems like Parking Lot and Elevator.</p>
+      </div>
+    </div>
+
+    <div class="page-nav">
+      <a href="../hld/cdn.html" class="prev"><span class="label">← Previous</span><span class="title">CDN</span></a>
+      <a href="solid.html" class="next"><span class="label">Next →</span><span class="title">SOLID Principles</span></a>
+    </div>
+  </main>
+</div>
+<button class="scroll-top" aria-label="Scroll to top">↑</button>
+<script src="../js/main.js"></script>
+</body>
+</html>
