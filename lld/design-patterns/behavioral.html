@@ -1,219 +1,143 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Behavioral Design Patterns — System Design Mastery</title>
-  <link rel="stylesheet" href="../../css/style.css">
-  <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Behavioral Design Patterns - Exhaustive Masterclass</title>
+    <link rel="stylesheet" href="../../css/style.css">
+    <script type="module">
+      import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+      mermaid.initialize({ startOnLoad: true });
+    </script>
 </head>
 <body>
-<button class="menu-toggle" aria-label="Toggle menu">☰</button>
-<div class="page-wrapper">
-  <aside class="sidebar" id="sidebar"></aside>
-  <main class="main-content">
-    <div class="breadcrumb">
-      <a href="../../index.html">Home</a>
-      <span class="sep">›</span>
-      <a href="../index.html">Low-Level Design</a>
-      <span class="sep">›</span>
-      <a href="index.html">Design Patterns</a>
-      <span class="sep">›</span>
-      <strong>Behavioral Patterns</strong>
-    </div>
+    <nav class="breadcrumb">
+        <a href="../../index.html">Home</a> &gt; <a href="../index.html">LLD</a> &gt; <a href="index.html">Design Patterns</a> &gt; Behavioral Patterns
+    </nav>
+    <main>
+        <h1>Behavioral Design Patterns: The Definitive Masterclass</h1>
+        <p>Behavioral patterns define not just the structure of objects, but the communication patterns, responsibilities, and algorithms between them.</p>
 
-    <h1>Behavioral Design Patterns</h1>
-    <p>Behavioral patterns are concerned with algorithms and the assignment of responsibilities between objects.</p>
+        <hr>
 
-    <!-- Observer -->
-    <section>
-      <h2>1. Observer</h2>
-      <p>Lets you define a subscription mechanism to notify multiple objects about any events that happen to the object they're observing.</p>
-      <div class="jargon">📖 <strong>Analogy</strong>: YouTube subscription. When a creator uploads a video, all subscribers get notified.</div>
-      
-      <span class="code-label">Java 21</span>
-      <pre>
-import java.util.ArrayList;
-import java.util.List;
+        <section id="observer-pattern">
+            <h2>1. The Observer Pattern</h2>
+            
+            <h3>PILLAR 1: Ground-Zero Theory &amp; The Pain Point</h3>
+            <p>The <strong>Observer Pattern</strong> defines a one-to-many dependency between objects. When one object (the Subject) changes state, all its dependents (Observers) are notified automatically. The massive pain point it solves is the polling anti-pattern, where consumers constantly check a producer for updates, wasting CPU cycles and network bandwidth.</p>
+            
+            <h3>PILLAR 2: Architectural Decision Rationales &amp; Modifier Deep Dives</h3>
+            <p>Using a `CopyOnWriteArrayList` or standard `List` with `synchronized` blocks for observer registries is crucial to prevent `ConcurrentModificationException` when observers add/remove themselves during notification. We often use interfaces for Observers to keep the Subject decoupled from concrete consumer classes.</p>
 
+            <h3>PILLAR 3: Step-by-Step Evolution</h3>
+            <p>From tight coupling -> Polling -> Event-driven push notifications.</p>
+            
+            <h3>PILLAR 4: Production-Grade Java 21 Code</h3>
+<pre><code class="language-java">
 public interface Subscriber {
-    void update(String news);
+    void update(double stockPrice);
 }
 
-public interface Publisher {
-    void subscribe(Subscriber s);
-    void unsubscribe(Subscriber s);
-    void notifySubscribers();
-}
+public class StockExchange {
+    // Thread-safe collection to prevent modification issues during iteration
+    private final List&lt;Subscriber&gt; subscribers = new CopyOnWriteArrayList&lt;&gt;();
+    private double currentPrice;
 
-public class NewsAgency implements Publisher {
-    private List<Subscriber> subscribers = new ArrayList<>();
-    private String news;
-    
-    public void setNews(String news) {
-        this.news = news;
+    public void addSubscriber(Subscriber sub) {
+        subscribers.add(sub);
+    }
+
+    public void setPrice(double newPrice) {
+        this.currentPrice = newPrice;
         notifySubscribers();
     }
-    
-    @Override
-    public void subscribe(Subscriber s) { subscribers.add(s); }
-    
-    @Override
-    public void unsubscribe(Subscriber s) { subscribers.remove(s); }
-    
-    @Override
-    public void notifySubscribers() {
-        for (Subscriber s : subscribers) {
-            s.update(news);
+
+    private void notifySubscribers() {
+        for (Subscriber sub : subscribers) {
+            // Using modern virtual threads for isolated asynchronous notification
+            Thread.startVirtualThread(() -> sub.update(currentPrice));
         }
     }
 }
-      </pre>
-    </section>
+</code></pre>
 
-    <!-- Strategy -->
-    <section>
-      <h2>2. Strategy</h2>
-      <p>Lets you define a family of algorithms, put each of them into a separate class, and make their objects interchangeable.</p>
-      <div class="jargon">📖 <strong>Analogy</strong>: Going to work. You can drive, bike, or take the bus. The destination is the same, but the strategy is different.</div>
-      
-      <span class="code-label">Java 21</span>
-      <pre>
+            <h3>PILLAR 5: The Grill Round</h3>
+            <p><strong>Trap:</strong> The "Lapsed Listener" memory leak.</p>
+            <p><strong>Answer:</strong> "If a subject holds strong references to short-lived observers, those observers cannot be garbage collected. The architectural fix is to use `WeakReference` in the subscriber list or strictly enforce deregistration in `finally` blocks."</p>
+
+            <h3>PILLAR 6: Trade-offs</h3>
+            <p>Notifications can cascade unpredictably in complex systems, leading to infinite loops if Observers trigger state changes in the Subject. It also obscures control flow, making debugging difficult.</p>
+        </section>
+
+        <section id="strategy-pattern">
+            <h2>2. The Strategy Pattern</h2>
+            <h3>PILLAR 1: Theory</h3>
+            <p>The Strategy Pattern extracts families of algorithms into separate classes, allowing them to be swapped at runtime. The pain point is massive, monolithic `switch` statements.</p>
+            <h3>PILLAR 4: Production-Grade Java 21 Code</h3>
+<pre><code class="language-java">
+@FunctionalInterface
 public interface PaymentStrategy {
-    void pay(int amount);
-}
-
-public class CreditCardPayment implements PaymentStrategy {
-    public void pay(int amount) { System.out.println("Paid " + amount + " using Credit Card."); }
-}
-
-public class PayPalPayment implements PaymentStrategy {
-    public void pay(int amount) { System.out.println("Paid " + amount + " using PayPal."); }
+    void pay(double amount);
 }
 
 public class ShoppingCart {
     private PaymentStrategy strategy;
-    
+
     public void setPaymentStrategy(PaymentStrategy strategy) {
         this.strategy = strategy;
     }
-    
-    public void checkout(int amount) {
+
+    public void checkout(double amount) {
+        // Strategy executes without the context knowing the details
         strategy.pay(amount);
     }
 }
-      </pre>
-    </section>
+</code></pre>
+            <h3>PILLAR 5: The Grill Round</h3>
+            <p><strong>Trap:</strong> How is Strategy different from State? <strong>Answer:</strong> "Strategy implies the <em>client</em> chooses the algorithm. State implies the object transitions <em>itself</em> internally, reacting differently based on its internal state life-cycle."</p>
+        </section>
 
-    <!-- Command -->
-    <section>
-      <h2>3. Command</h2>
-      <p>Turns a request into a stand-alone object that contains all information about the request.</p>
-      <div class="jargon">📖 <strong>Analogy</strong>: A restaurant order slip. The waiter doesn't cook; they write the command on a slip and pass it to the kitchen.</div>
-      
-      <span class="code-label">Java 21</span>
-      <pre>
-public interface Command {
-    void execute();
-    void undo();
+        <section id="command-pattern">
+            <h2>3. The Command Pattern</h2>
+            <h3>PILLAR 1: Theory</h3>
+            <p>Encapsulates a request as an object, allowing you to parameterize clients with queues, logs, and undo operations.</p>
+            <h3>PILLAR 5: The Grill Round</h3>
+            <p><strong>Trap:</strong> "How do you handle transaction rollback?" <strong>Answer:</strong> "By storing reverse operations or previous states (using Memento) inside the Command object itself, making `undo()` fully deterministic."</p>
+        </section>
+
+        <section id="state-pattern">
+            <h2>4. The State Pattern</h2>
+            <h3>PILLAR 1: Theory</h3>
+            <p>Allows an object to alter its behavior when its internal state changes. Replaces state machine boolean flags with polymorphic classes.</p>
+            <h3>PILLAR 4: Production-Grade Java 21 Code</h3>
+<pre><code class="language-java">
+public sealed interface VendingMachineState permits HasCoinState, NoCoinState {
+    void insertCoin();
+    void dispense();
 }
+// State transition handled inside the state context gracefully.
+</code></pre>
+            <h3>PILLAR 5: The Grill Round</h3>
+            <p><strong>Trap:</strong> "Who controls transitions?" <strong>Answer:</strong> "For simple, linear workflows, Context controls it. For dynamic graphs, States should return the Next State or mutate the Context directly, though this tightly couples States to the Context."</p>
+        </section>
 
-public class BoldCommand implements Command {
-    private String text;
-    public void execute() { System.out.println("Making text bold: " + text); }
-    public void undo() { System.out.println("Reverting bold text: " + text); }
-}
+        <section id="template-method">
+            <h2>5. The Template Method Pattern</h2>
+            <h3>PILLAR 1: Theory</h3>
+            <p>Defines the skeleton of an algorithm in a base class, letting subclasses override specific steps without changing the overall structure.</p>
+            <h3>PILLAR 5: The Grill Round</h3>
+            <p><strong>Trap:</strong> "Template Method vs Strategy?" <strong>Answer:</strong> "Template Method works at the class level via inheritance (white-box reuse), altering <em>parts</em> of an algorithm. Strategy works at the object level via composition (black-box reuse), replacing the <em>entire</em> algorithm."</p>
+        </section>
 
-public class CommandHistory {
-    private java.util.Stack<Command> history = new java.util.Stack<>();
-    
-    public void executeCommand(Command c) {
-        c.execute();
-        history.push(c);
-    }
-    
-    public void undo() {
-        if (!history.isEmpty()) {
-            history.pop().undo();
-        }
-    }
-}
-      </pre>
-    </section>
+        <section id="chain-of-responsibility">
+            <h2>6. Chain of Responsibility</h2>
+            <h3>PILLAR 1: Theory</h3>
+            <p>Passes a request along a chain of handlers. Handlers can process the request, pass it, or short-circuit the chain.</p>
+            <h3>PILLAR 5: The Grill Round</h3>
+            <p><strong>Trap:</strong> "Where is this used in the real world?" <strong>Answer:</strong> "Java Servlet Filters and Spring Security's `SecurityFilterChain`. Each filter checks headers/auth; if it fails, it short-circuits by writing a 401 response and skipping `chain.doFilter()`."</p>
+        </section>
 
-    <!-- State -->
-    <section>
-      <h2>4. State</h2>
-      <p>Lets an object alter its behavior when its internal state changes. It appears as if the object changed its class.</p>
-      <div class="jargon">📖 <strong>Analogy</strong>: A traffic light. It behaves differently when it is Red, Yellow, or Green.</div>
-      
-      <span class="code-label">Java 21</span>
-      <pre>
-public sealed interface VendingMachineState permits IdleState, HasMoneyState, DispensingState {
-    void insertMoney();
-    void dispenseProduct();
-}
-
-public final class IdleState implements VendingMachineState {
-    public void insertMoney() { System.out.println("Money inserted. State changed to HasMoney."); }
-    public void dispenseProduct() { System.out.println("Cannot dispense. Insert money first."); }
-}
-
-public final class HasMoneyState implements VendingMachineState {
-    public void insertMoney() { System.out.println("Already has money."); }
-    public void dispenseProduct() { System.out.println("Product dispensed. State changed to Dispensing."); }
-}
-
-public final class DispensingState implements VendingMachineState {
-    public void insertMoney() { System.out.println("Please wait. Dispensing product."); }
-    public void dispenseProduct() { System.out.println("Already dispensing."); }
-}
-      </pre>
-    </section>
-
-    <!-- Template Method -->
-    <section>
-      <h2>5. Template Method</h2>
-      <p>Defines the skeleton of an algorithm in the superclass but lets subclasses override specific steps of the algorithm without changing its structure.</p>
-      <div class="jargon">📖 <strong>Analogy</strong>: A recipe template. All cakes need mixing, baking, and decorating, but each cake type does it differently.</div>
-      
-      <span class="code-label">Java 21</span>
-      <pre>
-public abstract class DataParser {
-    // Template method
-    public final void parseDataAndProcess() {
-        readData();
-        processData();
-        writeData();
-    }
-    
-    protected abstract void readData();
-    protected abstract void processData();
-    
-    private void writeData() {
-        System.out.println("Writing data to database (common step).");
-    }
-}
-
-public class CsvParser extends DataParser {
-    protected void readData() { System.out.println("Reading CSV file."); }
-    protected void processData() { System.out.println("Processing CSV data."); }
-}
-
-public class JsonParser extends DataParser {
-    protected void readData() { System.out.println("Reading JSON file."); }
-    protected void processData() { System.out.println("Processing JSON data."); }
-}
-      </pre>
-    </section>
-
-    <div class="page-nav">
-      <a href="structural.html" class="prev"><span class="label">← Previous</span><span class="title">Structural Patterns</span></a>
-      <a href="../case-studies/parking-lot.html" class="next"><span class="label">Next →</span><span class="title">Parking Lot Case Study</span></a>
-    </div>
-  </main>
-</div>
-<button class="scroll-top" aria-label="Scroll to top">↑</button>
-<script src="../../js/main.js"></script>
+    </main>
+    <script src="../../js/main.js"></script>
 </body>
 </html>

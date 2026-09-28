@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Design a Parking Lot System — System Design Mastery</title>
+  <title>Design a Parking Lot System Masterclass — System Design Mastery</title>
   <link rel="stylesheet" href="../../css/style.css">
   <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
 </head>
@@ -15,76 +15,133 @@
     <div class="breadcrumb">
       <a href="../../index.html">Home</a>
       <span class="sep">›</span>
-      LLD Case Studies
+      <a href="../index.html">Low-Level Design</a>
       <span class="sep">›</span>
-      <strong>Parking Lot System</strong>
+      <strong>Parking Lot System Masterclass</strong>
     </div>
 
-    <h1>Design a Parking Lot System</h1>
+    <h1>Design a Parking Lot System — Machine Coding Masterclass</h1>
     
-    <h2>What is a Parking Lot System?</h2>
-    <p>A parking lot system manages the vehicles entering, parking, and exiting a given space. Think of it like a <strong>hotel for cars</strong>. A hotel has different types of rooms (suites, standard) for different types of guests, check-in and check-out processes, and billing based on the stay duration.</p>
-    <div class="jargon">📖 <strong>Low-Level Design (LLD)</strong>: The process of designing the actual classes, interfaces, and relationships that will implement a system.</div>
-
-    <h2>Requirements (Clarifying Questions)</h2>
     <div class="callout callout-info">
-      <p><strong>Interview Tip:</strong> Always ask clarifying questions before jumping into the design.</p>
-      <ul>
-        <li>Does the parking lot have multiple floors? (Yes)</li>
-        <li>Are there different spot sizes for different vehicles? (Yes: compact, regular, large)</li>
-        <li>What vehicle types are supported? (Bike, Car, Truck)</li>
-        <li>How does the billing work? (Hourly rates based on vehicle type)</li>
-        <li>How are spots assigned? (Nearest available spot to the entrance)</li>
-      </ul>
+      <p><strong>The LLD Crucible:</strong> The Parking Lot is the most frequently asked Machine Coding question in Amazon, Uber, and Microsoft interviews. In this exhaustive masterclass, we will traverse through requirement clarification, deep architectural entity modeling, thread-safety, and production-ready Java 21 implementation.</p>
     </div>
 
-    <h2>How does it work?</h2>
-    <div class="diagram-container">
-      <div class="mermaid">
-        classDiagram
-          class ParkingLot {
-             -List~ParkingFloor~ floors
-             +parkVehicle(Vehicle) Ticket
-             +unparkVehicle(Ticket)
-          }
-          class ParkingFloor {
-             -List~ParkingSpot~ spots
-             +findAvailableSpot(VehicleType) ParkingSpot
-          }
-          class ParkingSpot {
-             -SpotSize size
-             -boolean available
-             +park()
-             +unpark()
-          }
-          class Vehicle {
-             <<abstract>>
-          }
-          ParkingLot *-- ParkingFloor
-          ParkingFloor *-- ParkingSpot
-          ParkingSpot -- Vehicle
+    <section>
+      <h2>Phase 1: Interview Dialogue & Clarifying Requirements</h2>
+      <p>Never jump straight into coding. The interviewer is testing your ability to handle ambiguity and scope a problem.</p>
+      
+      <div class="comparison">
+        <div class="side good" style="width: 100%;">
+          <h3>The Clarification Script</h3>
+          <p><strong>Candidate:</strong> "Does the parking lot have multiple floors, or is it a single flat level?"<br>
+          <strong>Interviewer:</strong> "It has multiple floors."</p>
+          <p><strong>Candidate:</strong> "What types of vehicles are we supporting, and do spots have sizes?"<br>
+          <strong>Interviewer:</strong> "We support Motorcycles, Cars, and Trucks. Spots are Compact, Regular, and Large."</p>
+          <p><strong>Candidate:</strong> "Can a Motorcycle park in a Large spot if no Compact spots are available?"<br>
+          <strong>Interviewer:</strong> "No, let's keep it strict 1-to-1 mapping for simplicity."</p>
+          <p><strong>Candidate:</strong> "What is our spot assignment strategy? Nearest to the entry gate, or random?"<br>
+          <strong>Interviewer:</strong> "Nearest to the entry gate. But design it so the strategy can be easily swapped."</p>
+          <p><strong>Candidate:</strong> "How is the fee calculated?"<br>
+          <strong>Interviewer:</strong> "Hourly based on vehicle type. Again, make it flexible."</p>
+          <p><strong>Candidate:</strong> "Is there a reservation system for booking spots ahead of time?"<br>
+          <strong>Interviewer:</strong> "No, just physical drive-ins."</p>
+          <p><strong>Candidate:</strong> "Can multiple cars enter via multiple gates simultaneously?"<br>
+          <strong>Interviewer:</strong> "Yes! The system must handle high concurrency safely."</p>
+        </div>
       </div>
-      <p class="caption">Figure 1: Parking Lot Class Diagram</p>
-    </div>
 
-    <h2>Java 21 Implementation</h2>
-    <span class="code-label">Java</span>
-    <pre>
+      <h3>System Requirements Scoped</h3>
+      <ul>
+        <li><strong>Functional:</strong> Multi-floor, specific vehicle-to-spot mapping, ticket issuance, dynamic fee calculation, multiple entry/exit gates.</li>
+        <li><strong>Non-Functional:</strong> Thread-safe spot allocation, highly extensible for new pricing or allocation algorithms (SOLID).</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>Phase 2: Core Domain Entity Modeling & Thought Process</h2>
+      <p>Here we dictate the structural architecture and justify every Java keyword used.</p>
+      
+      <ul>
+        <li><strong>`Vehicle` (Abstract Class):</strong> Why not an interface? Because all vehicles share intrinsic state (license plate, vehicle type). An abstract class allows us to centralize this state while forcing concrete classes to specify their type.</li>
+        <li><strong>`Car`, `Bike`, `Truck` (Final Classes):</strong> Why final? To prevent arbitrary, deep inheritance hierarchies. A `Car` should not be extended by `SportsCar`. We favor composition over deep inheritance.</li>
+        <li><strong>`VehicleType`, `SpotType` (Enum):</strong> Why enums? The types are fixed domain constants. Enums provide compile-time safety and work perfectly with Java 21's enhanced `switch` expressions.</li>
+        <li><strong>`Ticket` (Java 21 Record):</strong> Why a record? A ticket is a Data Transfer Object (DTO). Once issued, it should be entirely immutable. Records provide thread-safe immutability and auto-generate `equals/hashCode/toString` cleanly.</li>
+        <li><strong>`ParkingStrategy` & `FeeStrategy` (Interfaces):</strong> We use the <strong>Strategy Pattern</strong>. The interviewer explicitly asked for flexible algorithms. Interfaces allow us to swap "Nearest Spot" for "Random Spot" without touching core logic (Open/Closed Principle).</li>
+        <li><strong>`ParkingLot` (Singleton):</strong> The central orchestrator. It must be a thread-safe Singleton because there is exactly one physical parking lot managing the shared state of available spots.</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>Phase 3: Class Diagram & System Architecture</h2>
+      <div class="diagram-container">
+        <div class="mermaid">
+          classDiagram
+            class ParkingLot {
+              -static ParkingLot instance
+              -List~ParkingFloor~ floors
+              -List~Gate~ entryGates
+              -List~Gate~ exitGates
+              +getInstance() ParkingLot
+              +parkVehicle(Vehicle, Gate, ParkingStrategy) Ticket
+              +unparkVehicle(Ticket, Gate, FeeStrategy)
+            }
+            class ParkingFloor {
+              -int floorId
+              -Map~SpotType, List~ParkingSpot~~ spots
+              +getAvailableSpot(SpotType, ParkingStrategy) ParkingSpot
+            }
+            class ParkingSpot {
+              -String spotId
+              -SpotType type
+              -boolean isFree
+              -Vehicle vehicle
+              +assignVehicle(Vehicle)
+              +removeVehicle()
+            }
+            class Vehicle {
+              <<abstract>>
+              -String licensePlate
+              -VehicleType type
+            }
+            class Ticket {
+              <<record>>
+              -String ticketId
+              -String licensePlate
+              -String spotId
+              -LocalDateTime entryTime
+            }
+            ParkingLot *-- ParkingFloor
+            ParkingFloor *-- ParkingSpot
+            ParkingSpot o-- Vehicle
+            ParkingLot ..> Ticket : creates
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>Phase 4: Concurrency & Thread-Safety Design</h2>
+      <p><strong>The Nightmare Scenario:</strong> 10 cars arrive at 10 different entry gates at the exact same millisecond. There is only 1 Compact spot left. If you just iterate and check `if(spot.isFree())`, all 10 threads read `true`, and 10 cars are assigned the same physical spot. <strong>Catastrophe.</strong></p>
+      
+      <p><strong>The Solution:</strong> The critical section is reserving the spot. We must use a <code>ReentrantLock</code> at the <code>ParkingLot</code> level or make the spot assignment atomic. In our code, we will synchronize the spot finding and reservation block to guarantee mutually exclusive access to the pool of free spots.</p>
+    </section>
+
+    <section>
+      <h2>Phase 5: Complete, Robust Java 21 Code</h2>
+      <span class="code-label">Java 21</span>
+      <pre><code>
 import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.UUID;
+import java.time.Duration;
+import java.util.*;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 
-// Enum for fixed set of types
+// --- ENUMS ---
 enum VehicleType { BIKE, CAR, TRUCK }
+enum SpotType { COMPACT, REGULAR, LARGE }
+enum PaymentStatus { PENDING, COMPLETED, FAILED }
 
-// Enum mapping to vehicle types
-enum SpotSize { COMPACT, REGULAR, LARGE }
-
-// SOLID: Record for immutable data carrier
-record Ticket(String id, String vehicleNumber, SpotSize spotSize, int floor, int spotNumber, LocalDateTime entryTime) {}
-
-// SOLID: Liskov Substitution Principle — any Vehicle subclass works in parking logic
+// --- DOMAIN ENTITIES ---
+// OOP: Abstraction & Encapsulation
 abstract sealed class Vehicle permits Bike, Car, Truck {
     private final String licensePlate;
     private final VehicleType type;
@@ -97,7 +154,6 @@ abstract sealed class Vehicle permits Bike, Car, Truck {
     public VehicleType getType() { return type; }
 }
 
-// final = not further extendable
 final class Bike extends Vehicle {
     public Bike(String licensePlate) { super(licensePlate, VehicleType.BIKE); }
 }
@@ -108,98 +164,103 @@ final class Truck extends Vehicle {
     public Truck(String licensePlate) { super(licensePlate, VehicleType.TRUCK); }
 }
 
-// Design Pattern: Strategy — different parking fee strategies
-interface ParkingFeeStrategy {
-    double calculateFee(Ticket ticket, LocalDateTime exitTime);
-}
-
-class HourlyFeeStrategy implements ParkingFeeStrategy {
-    public double calculateFee(Ticket ticket, LocalDateTime exitTime) {
-        long hours = java.time.Duration.between(ticket.entryTime(), exitTime).toHours();
-        hours = Math.max(hours, 1); // Minimum 1 hour
-        return hours * getRate(ticket.spotSize());
-    }
-    private double getRate(SpotSize size) {
-        return switch (size) {
-            case COMPACT -> 10.0;
-            case REGULAR -> 20.0;
-            case LARGE -> 30.0;
-        };
-    }
-}
-
-class FlatFeeStrategy implements ParkingFeeStrategy {
-    public double calculateFee(Ticket ticket, LocalDateTime exitTime) {
-        return 50.0; // Flat fee
-    }
-}
-
-// SOLID: SRP — ParkingSpot only manages spot state
+// SOLID: SRP - ParkingSpot only manages its own state
 class ParkingSpot {
-    private final int number;
-    private final SpotSize size;
-    private boolean available;
-    private Vehicle currentVehicle;
+    private final String spotId;
+    private final SpotType type;
+    private boolean isFree;
+    private Vehicle vehicle;
 
-    public ParkingSpot(int number, SpotSize size) {
-        this.number = number;
-        this.size = size;
-        this.available = true;
+    public ParkingSpot(String spotId, SpotType type) {
+        this.spotId = spotId;
+        this.type = type;
+        this.isFree = true;
     }
 
-    public boolean isAvailable() { return available; }
-    public SpotSize getSize() { return size; }
-    public int getNumber() { return number; }
+    public boolean isFree() { return isFree; }
+    public SpotType getType() { return type; }
+    public String getSpotId() { return spotId; }
 
-    public void park(Vehicle vehicle) {
-        this.currentVehicle = vehicle;
-        this.available = false;
+    public synchronized void assignVehicle(Vehicle vehicle) {
+        this.vehicle = vehicle;
+        this.isFree = false;
     }
 
-    public void unpark() {
-        this.currentVehicle = null;
-        this.available = true;
+    public synchronized void removeVehicle() {
+        this.vehicle = null;
+        this.isFree = true;
     }
 }
 
-class ParkingFloor {
-    private final int floorNumber;
-    private final List&lt;ParkingSpot&gt; spots;
+// --- STRATEGY PATTERNS (SOLID: OCP) ---
+interface ParkingStrategy {
+    ParkingSpot findSpot(List&lt;ParkingFloor&gt; floors, SpotType type);
+}
 
-    public ParkingFloor(int floorNumber, int numSpots) {
-        this.floorNumber = floorNumber;
-        this.spots = new ArrayList&lt;&gt;();
-        for (int i = 0; i &lt; numSpots; i++) {
-            SpotSize size = (i &lt; numSpots / 3) ? SpotSize.COMPACT : 
-                            (i &lt; 2 * numSpots / 3) ? SpotSize.REGULAR : SpotSize.LARGE;
-            spots.add(new ParkingSpot(i, size));
-        }
-    }
-
-    public ParkingSpot findAvailableSpot(SpotSize requiredSize) {
-        for (ParkingSpot spot : spots) {
-            if (spot.isAvailable() && spot.getSize() == requiredSize) {
-                return spot;
+class NearestFirstParkingStrategy implements ParkingStrategy {
+    @Override
+    public ParkingSpot findSpot(List&lt;ParkingFloor&gt; floors, SpotType type) {
+        for (ParkingFloor floor : floors) {
+            for (ParkingSpot spot : floor.getSpots()) {
+                if (spot.getType() == type && spot.isFree()) {
+                    return spot;
+                }
             }
         }
         return null;
     }
-    
-    public int getAvailableSpotsCount() {
-        return (int) spots.stream().filter(ParkingSpot::isAvailable).count();
+}
+
+interface FeeStrategy {
+    double calculateFee(LocalDateTime entryTime, LocalDateTime exitTime, VehicleType type);
+}
+
+class HourlyFeeStrategy implements FeeStrategy {
+    @Override
+    public double calculateFee(LocalDateTime entryTime, LocalDateTime exitTime, VehicleType type) {
+        long hours = Duration.between(entryTime, exitTime).toHours();
+        hours = Math.max(hours, 1); // minimum 1 hour charge
+        return switch(type) {
+            case BIKE -> hours * 10.0;
+            case CAR -> hours * 20.0;
+            case TRUCK -> hours * 30.0;
+        };
     }
 }
 
-// Design Pattern: Singleton
+// Java 21 Record for pure DTO Immutability
+record Ticket(String ticketId, String licensePlate, String spotId, LocalDateTime entryTime) {}
+
+// --- COMPOSITE ENTITIES ---
+class ParkingFloor {
+    private final int floorNumber;
+    private final List&lt;ParkingSpot&gt; spots = new ArrayList&lt;&gt;();
+
+    public ParkingFloor(int floorNumber, int capacity) {
+        this.floorNumber = floorNumber;
+        for (int i = 1; i &lt;= capacity; i++) {
+            SpotType type = (i % 3 == 0) ? SpotType.LARGE : (i % 2 == 0) ? SpotType.REGULAR : SpotType.COMPACT;
+            spots.add(new ParkingSpot(floorNumber + "-" + i, type));
+        }
+    }
+    public List&lt;ParkingSpot&gt; getSpots() { return spots; }
+}
+
+// --- CORE SYSTEM CONTEXT (SINGLETON) ---
 class ParkingLot {
     private static ParkingLot instance;
     private final List&lt;ParkingFloor&gt; floors;
+    private final ParkingStrategy parkingStrategy;
+    
+    // Concurrency Lock for thread-safe assignment
+    private final Lock assignmentLock = new ReentrantLock();
 
     private ParkingLot(int numFloors, int spotsPerFloor) {
         floors = new ArrayList&lt;&gt;();
-        for (int i = 0; i &lt; numFloors; i++) {
+        for (int i = 1; i &lt;= numFloors; i++) {
             floors.add(new ParkingFloor(i, spotsPerFloor));
         }
+        this.parkingStrategy = new NearestFirstParkingStrategy();
     }
 
     public static synchronized ParkingLot getInstance(int numFloors, int spotsPerFloor) {
@@ -209,76 +270,82 @@ class ParkingLot {
         return instance;
     }
 
-    private SpotSize mapVehicleToSpotSize(VehicleType type) {
-        return switch (type) {
-            case BIKE -> SpotSize.COMPACT;
-            case CAR -> SpotSize.REGULAR;
-            case TRUCK -> SpotSize.LARGE;
+    private SpotType getSpotTypeForVehicle(VehicleType vType) {
+        return switch (vType) {
+            case BIKE -> SpotType.COMPACT;
+            case CAR -> SpotType.REGULAR;
+            case TRUCK -> SpotType.LARGE;
         };
     }
 
-    public Ticket entry(Vehicle vehicle) {
-        SpotSize requiredSize = mapVehicleToSpotSize(vehicle.getType());
-        for (int i = 0; i &lt; floors.size(); i++) {
-            ParkingSpot spot = floors.get(i).findAvailableSpot(requiredSize);
-            if (spot != null) {
-                spot.park(vehicle);
-                return new Ticket(UUID.randomUUID().toString(), vehicle.getLicensePlate(), requiredSize, i, spot.getNumber(), LocalDateTime.now());
+    // Thread-safe entry logic
+    public Ticket parkVehicle(Vehicle vehicle) {
+        SpotType requiredType = getSpotTypeForVehicle(vehicle.getType());
+        
+        assignmentLock.lock();
+        try {
+            ParkingSpot spot = parkingStrategy.findSpot(floors, requiredType);
+            if (spot == null) {
+                throw new RuntimeException("Parking Lot Full for vehicle type: " + vehicle.getType());
+            }
+            spot.assignVehicle(vehicle);
+            String ticketId = UUID.randomUUID().toString();
+            return new Ticket(ticketId, vehicle.getLicensePlate(), spot.getSpotId(), LocalDateTime.now());
+        } finally {
+            assignmentLock.unlock();
+        }
+    }
+
+    public double unparkVehicle(Ticket ticket, FeeStrategy feeStrategy) {
+        // Free up the spot
+        for (ParkingFloor floor : floors) {
+            for (ParkingSpot spot : floor.getSpots()) {
+                if (spot.getSpotId().equals(ticket.spotId())) {
+                    spot.removeVehicle();
+                    break;
+                }
             }
         }
-        throw new RuntimeException("Parking Lot Full!");
-    }
-
-    public void exit(Ticket ticket, ParkingFeeStrategy feeStrategy, PaymentProcessor paymentProcessor) {
-        double amount = feeStrategy.calculateFee(ticket, LocalDateTime.now().plusHours(2)); // Simulated 2 hours later
-        paymentProcessor.process(amount);
-        floors.get(ticket.floor()).spots.get(ticket.spotNumber()).unpark();
-    }
-    
-    public void displayBoard() {
-        DisplayBoard.show(floors);
+        // Simulated vehicle lookup - in reality, link ticket to vehicle type
+        return feeStrategy.calculateFee(ticket.entryTime(), LocalDateTime.now().plusHours(3), VehicleType.CAR);
     }
 }
 
-// SOLID: DIP — High-level module (ParkingLot) depends on abstraction (PaymentProcessor)
-interface PaymentProcessor {
-    void process(double amount);
-}
-
-class CashPayment implements PaymentProcessor {
-    public void process(double amount) { System.out.println("Processing cash payment: $" + amount); }
-}
-
-class CardPayment implements PaymentProcessor {
-    public void process(double amount) { System.out.println("Processing card payment: $" + amount); }
-}
-
-// SOLID: SRP — Only responsible for displaying
-class DisplayBoard {
-    public static void show(List&lt;ParkingFloor&gt; floors) {
-        for (int i = 0; i &lt; floors.size(); i++) {
-            System.out.println("Floor " + i + " available spots: " + floors.get(i).getAvailableSpotsCount());
-        }
-    }
-}
-
+// --- MAIN SIMULATION ---
 public class Main {
     public static void main(String[] args) {
+        System.out.println("Initializing Parking Lot with 2 floors, 6 spots each...");
         ParkingLot lot = ParkingLot.getInstance(2, 6);
-        lot.displayBoard();
+
+        Vehicle myCar = new Car("CA-1234");
+        System.out.println("Attempting to park Car: CA-1234...");
         
-        Vehicle myCar = new Car("XYZ-1234");
-        Ticket ticket = lot.entry(myCar);
-        System.out.println("Parked vehicle: " + ticket.vehicleNumber());
+        Ticket ticket = lot.parkVehicle(myCar);
+        System.out.println("Parked successfully! Ticket Details: " + ticket);
+
+        System.out.println("Processing Exit...");
+        FeeStrategy hourlyBilling = new HourlyFeeStrategy();
+        double fee = lot.unparkVehicle(ticket, hourlyBilling);
         
-        lot.displayBoard();
-        
-        lot.exit(ticket, new HourlyFeeStrategy(), new CardPayment());
-        
-        lot.displayBoard();
+        System.out.println("Unparked successfully. Total Fee: $" + fee);
     }
 }
-    </pre>
+      </code></pre>
+    </section>
+
+    <section>
+      <h2>Phase 6: The Interviewer's Deep Follow-Up Questions ("The Grill Round")</h2>
+      <div class="callout callout-warning">
+        <p><strong>Q1: "How would you handle electric vehicle (EV) charging spots with metered electricity billing?"</strong></p>
+        <p><strong>A:</strong> We adhere to OCP. We add a new enum value `SpotType.EV_CHARGING`. We update the `ParkingStrategy` to route EVs to these spots. For billing, we use the Decorator Pattern on `FeeStrategy`. We wrap the base `HourlyFeeStrategy` inside a `MeteredElectricityFeeDecorator`, which adds the kWh usage cost to the base time cost.</p>
+        
+        <p><strong>Q2: "How do you scale this from a single parking garage to a distributed network of 500 parking garages across a city?"</strong></p>
+        <p><strong>A:</strong> This transitions from LLD to HLD. We drop the Singleton `ParkingLot` because state is no longer local to one JVM. We introduce a distributed database (like PostgreSQL or Cassandra) to hold spot state. We replace the `ReentrantLock` with Distributed Locking (e.g., Redis Redlock or ZooKeeper) or Optimistic Concurrency Control using a version column in the database (`UPDATE spot SET free=false WHERE id=1 AND version=2`) to prevent double-booking across 500 physical locations.</p>
+        
+        <p><strong>Q3: "What if the power goes out or a gate scanner crashes while a car is exiting?"</strong></p>
+        <p><strong>A:</strong> We need to design for Idempotency and State Recovery. The ticket and payment transaction must be logged in a persistent ACID database before opening the physical boom gate. If the system crashes, the retry mechanism checks the database state (e.g., `PaymentStatus.COMPLETED`) and triggers the gate open command without double-charging the customer.</p>
+      </div>
+    </section>
 
     <div class="page-nav">
       <a href="../../lld/design-patterns/behavioral.html" class="prev"><span class="label">← Previous</span><span class="title">Behavioral Patterns</span></a>

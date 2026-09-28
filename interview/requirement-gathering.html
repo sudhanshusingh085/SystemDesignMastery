@@ -20,111 +20,302 @@
       <strong>Requirement Gathering</strong>
     </div>
 
-    <h1>Requirement Gathering</h1>
+    <h1>Requirement Gathering: The Architect's First Directive</h1>
 
-    <div class="callout callout-info">
-      <strong>Why this matters:</strong> Requirement gathering is the most critical step in system design. Solving the wrong problem perfectly is still a failure. Many candidates skip this and start drawing boxes—don't be one of them!
+    <div class="callout callout-danger">
+      <strong>The Fatal Mistake:</strong> Entering a System Design interview, hearing "Design Twitter", and immediately turning to the whiteboard to draw a Load Balancer and a Database. This results in an <em>instant rejection</em> at FAANG companies. Solving the wrong problem perfectly is the ultimate architectural failure.
     </div>
 
-    <h2>Categories of Questions to Ask</h2>
-    <p>To systematically gather requirements, break your questions down into these 5 categories:</p>
-    
-    <ol>
-      <li><strong>Users & Scale:</strong> How many users? What is the ratio of daily active users (DAU) to monthly active users (MAU)? Is the system read-heavy or write-heavy?</li>
-      <li><strong>Features:</strong> What are the core features? What is explicitly out of scope (to save time)?</li>
-      <li><strong>Performance:</strong> What is the acceptable latency? What is the availability target (e.g., 99.9% uptime)?</li>
-      <li><strong>Data:</strong> How much data will we store? How long must we retain it? What is the data format?</li>
-      <li><strong>Special Requirements:</strong> Does it need real-time updates? Offline support? Is it a global service requiring multi-region deployment?</li>
-    </ol>
+    <p>
+      Requirement gathering is not a formality; it is a <strong>calibration exercise</strong>. It is where you transform a deliberately vague, impossible prompt into a bounded, deterministic engineering problem. This masterclass will teach you how to extract the exact parameters you need to design a system that scales, survives, and satisfies the interviewer's hidden rubric.
+    </p>
 
-    <h2>Requirement Gathering Decision Tree</h2>
+    <hr>
+
+    <h2>PILLAR 1: Ground-Zero Theory & The Psychology of the Interviewer</h2>
+
+    <p>
+      In a typical System Design interview, the prompt is hilariously vague: <em>"Design WhatsApp"</em> or <em>"Design a Parking Lot"</em>. This is not because the interviewer is lazy. It is a psychological stress test.
+    </p>
+
+    <h3>Why Interviewers Use Vague Prompts</h3>
+    <ul>
+      <li><strong>Ambiguity Resolution:</strong> Senior engineers do not get handed perfect Jira tickets. They navigate corporate ambiguity. The interviewer wants to see if you can impose order on chaos.</li>
+      <li><strong>Scoping Discipline:</strong> Designing <em>all</em> of WhatsApp in 45 minutes is impossible. Designing the 1-to-1 text messaging delivery mechanism is possible. Can you carve out a manageable MVP (Minimum Viable Product)?</li>
+      <li><strong>Architectural Empathy:</strong> Do you ask about the user? <div class="jargon">📖 <strong>Architectural Empathy</strong>: The ability to understand that technical decisions (like consistency vs. availability) directly impact the human user experience.</div></li>
+    </ul>
+
+    <hr>
+
+    <h2>PILLAR 2 & 3: The 5-Step Clarification Playbook & Evolutionary Thought Process</h2>
+    <p>
+      Do not ask random questions. Follow this exact 5-step evolutionary thought process to funnel the prompt into a concrete architectural blueprint.
+    </p>
+
     <div class="diagram-container">
       <div class="mermaid">
         graph TD
-          Start[Interviewer: 'Design X'] --> Clarify[Clarify Scope]
-          Clarify --> F[Functional Features]
-          Clarify --> NF[Non-Functional Metrics]
-          F --> InScope[In Scope]
-          F --> OutScope[Out of Scope]
-          NF --> Scale[Scale & Traffic]
-          NF --> Latency[Latency & Availability]
-          Scale --> Data[Data Volume & Retention]
+          S[Start: Vague Prompt] --> Step1[1. Core Features]
+          Step1 --> Step2[2. Scale & Traffic]
+          Step2 --> Step3[3. SLAs & Non-Functional]
+          Step3 --> Step4[4. Storage & Horizon]
+          Step4 --> Step5[5. Boundaries & Clients]
+          Step5 --> Blueprint[Final Architectural Blueprint]
+          
+          style S fill:#ff9999,stroke:#333,stroke-width:2px
+          style Blueprint fill:#99cc99,stroke:#333,stroke-width:2px
       </div>
-      <p class="caption">Figure 1: Navigating requirement gathering</p>
+      <p class="caption">Figure 1: The 5-Step Clarification Funnel</p>
     </div>
 
-    <h2>Examples of Requirement Gathering</h2>
+    <h3>Step 1: Clarify Core Features (The "What")</h3>
+    <p>Define the exact boundaries of the system. What is explicitly in-scope, and more importantly, what is explicitly <strong>out-of-scope</strong>?</p>
+    <ul>
+      <li><em>"For Twitter, are we focusing purely on the Home Timeline and Tweeting, or do we need to worry about Direct Messages, Search, and Trending Topics?"</em> (Pro-tip: Push DMs and Search out of scope).</li>
+      <li><em>"For the Parking Lot, do we need to handle payment processing, or can we assume a third-party payment gateway?"</em></li>
+    </ul>
+
+    <h3>Step 2: Establish User Scale & Traffic Patterns (The "Who & How Much")</h3>
+    <p>Scale dictates your database choice, caching strategy, and partitioning scheme.</p>
+    <ul>
+      <li><strong>DAU / MAU:</strong> What are the Daily Active Users?</li>
+      <li><strong>Read-to-Write Ratio:</strong> Is this a read-heavy system (Twitter timeline, 100:1) or a write-heavy system (IoT metrics ingestion, 1:100)?</li>
+      <li><strong>Peak vs Average:</strong> Are there massive traffic spikes? (e.g., Ticketmaster during a Taylor Swift concert).</li>
+    </ul>
+
+    <h3>Step 3: Define Non-Functional Requirements & SLAs (The "How Well")</h3>
+    <p>These answers directly map to the CAP Theorem trade-offs you will make.</p>
+    <ul>
+      <li><strong>Latency:</strong> <em>"Does this need to be real-time (< 200ms) or is batch processing acceptable?"</em></li>
+      <li><strong>Availability vs Consistency:</strong> <em>"If a user updates their profile picture, is it okay if their friends see the old picture for 30 seconds (Eventual Consistency), or must it be instantly updated for everyone (Strong Consistency)?"</em></li>
+    </ul>
+
+    <h3>Step 4: Storage & Retention Horizon (The "Where & How Long")</h3>
+    <p>Data volume determines if you need a single relational DB or a sharded NoSQL cluster.</p>
+    <ul>
+      <li><em>"How long do we retain the data? 1 year? 5 years? Forever?"</em></li>
+      <li><em>"What is the average size of a payload? Are we storing 280-character text, or 50MB 4K videos?"</em></li>
+    </ul>
+
+    <h3>Step 5: System Boundaries & Client Interfaces (The "Edges")</h3>
+    <p>Understand the constraints of the clients talking to your system.</p>
+    <ul>
+      <li><em>"Are our users primarily on mobile connections with high latency?"</em></li>
+      <li><em>"Does the app need an offline mode?"</em></li>
+    </ul>
+
+    <hr>
+
+    <h2>PILLAR 2 Extension: The Master Sizing & Capacity Estimation Cheat Sheet</h2>
+    <p>
+      Back-of-the-envelope calculations prove you understand physical hardware limits. Memorize these formulas.
+    </p>
+
+    <div class="callout callout-info">
+      <strong>Mental Math Hack:</strong> There are exactly 86,400 seconds in a day. During an interview, loudly announce: <em>"I will round 86,400 to 100,000 to simplify calculations."</em> Interviewers love this.
+    </div>
+
+    <table class="styled-table">
+      <thead>
+        <tr>
+          <th>Metric</th>
+          <th>Formula / Rule of Thumb</th>
+          <th>Architectural Decision Rationale</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Average QPS</strong></td>
+          <td>(DAU × Requests per user per day) / 100,000</td>
+          <td>Determines how many app servers you need (Assuming 1 server handles ~1k-5k QPS).</td>
+        </tr>
+        <tr>
+          <td><strong>Peak QPS</strong></td>
+          <td>Average QPS × 2 (up to × 5)</td>
+          <td>Determines Auto-scaling groups and Load Balancer provisioning.</td>
+        </tr>
+        <tr>
+          <td><strong>Storage (5-Year)</strong></td>
+          <td>(DAU × Writes/day × Size/Write) × 365 × 5</td>
+          <td>If > 5TB, you must discuss Database Sharding or NoSQL.</td>
+        </tr>
+        <tr>
+          <td><strong>Cache Memory</strong></td>
+          <td>Daily Read Volume × 0.20</td>
+          <td>Based on the 80/20 Pareto principle. Determines Redis cluster sizing.</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <hr>
+
+    <h2>PILLAR 5: The Grill Round — Real-World Requirement Simulations</h2>
+    <p>How does this actually sound in an interview? Here are 3 masterclass dialogues.</p>
 
     <div class="card">
-      <h3>Example 1: "Design Twitter"</h3>
-      <ul>
-        <li><strong>Users:</strong> How many DAU? (e.g., 150M)</li>
-        <li><strong>Features:</strong> Can users post videos or just text? Do we need to design the timeline generation or just the tweeting mechanism?</li>
-        <li><strong>Scale:</strong> Is it read-heavy? (Yes, typically 100:1 read-to-write ratio).</li>
-        <li><strong>Performance:</strong> Does the timeline need to be real-time? (e.g., < 500ms latency).</li>
-      </ul>
+      <h3>Simulation 1: High-Level Design — "Design TinyURL"</h3>
+      <p><strong>Candidate:</strong> "Before we dive in, I’d like to clarify the core features. Are we just generating short aliases for long URLs and redirecting them? Or do we need custom aliases and analytics?"<br>
+      <strong>Interviewer:</strong> "Custom aliases are in scope. Analytics can be out of scope for now."<br>
+      <strong>Candidate:</strong> "Got it. For scale, what traffic are we looking at?"<br>
+      <strong>Interviewer:</strong> "About 100 million new URLs generated per month."<br>
+      <strong>Candidate:</strong> "Okay, and since this is a URL shortener, I assume it’s heavily read-skewed. What's the read-to-write ratio?"<br>
+      <strong>Interviewer:</strong> "Exactly. Assume 100:1 read-to-write."<br>
+      <strong>Candidate:</strong> "Excellent. With 100M writes/month, we have 10 Billion reads/month. That's about 40 write QPS and 4,000 read QPS. Latency for redirection must be minimal, so caching will be critical."</p>
     </div>
 
     <div class="card">
-      <h3>Example 2: "Design a Parking Lot"</h3>
-      <ul>
-        <li><strong>Users:</strong> Is this for a single building or a multi-city enterprise?</li>
-        <li><strong>Features:</strong> Do we need to handle payment processing? Different vehicle sizes (motorcycle, compact, large)?</li>
-        <li><strong>Data:</strong> Do we need to track historical data for analytics?</li>
-      </ul>
+      <h3>Simulation 2: High-Level Design — "Design Twitter Feed"</h3>
+      <p><strong>Candidate:</strong> "For the feed, are we designing the global trending feed or the customized user timeline?"<br>
+      <strong>Interviewer:</strong> "User timeline. showing tweets from people they follow."<br>
+      <strong>Candidate:</strong> "Are we dealing with the 'Celebrity Problem' (Justin Bieber has 100M followers, posting a tweet causes a massive fan-out)? Or can we assume uniform follower counts?"<br>
+      <strong>Interviewer (Smiling):</strong> "Yes, you absolutely must handle the celebrity problem."<br>
+      <strong>Candidate:</strong> "Understood. For consistency vs availability: if a user tweets, is it acceptable if it takes 5 seconds to show up in all 100M followers' feeds, favoring high availability?"<br>
+      <strong>Interviewer:</strong> "Yes, eventual consistency is perfectly fine here."</p>
     </div>
 
-    <h2>Java 21 Code: Modeling Requirements</h2>
-    <p>Using Java 21 <div class="jargon">📖 <strong>Record</strong>: A compact syntax for declaring classes that are transparent carriers for immutable data.</div>, you can clearly model system requirements:</p>
-    <span class="code-label">Java</span>
-    <pre>
+    <div class="card">
+      <h3>Simulation 3: Low-Level Design (LLD) — "Design a Parking Lot"</h3>
+      <p><strong>Candidate:</strong> "Since this is Object-Oriented Design, I'll focus on entities and constraints. Does the parking lot have multiple floors?"<br>
+      <strong>Interviewer:</strong> "Yes, 5 floors."<br>
+      <strong>Candidate:</strong> "Do we support multiple vehicle sizes, like motorcycles, compact cars, and buses?"<br>
+      <strong>Interviewer:</strong> "Yes, all three. And buses take up 5 consecutive large spots."<br>
+      <strong>Candidate:</strong> "Interesting. Are there multiple entrance and exit gates operating concurrently? This will impact thread-safety for spot allocation."<br>
+      <strong>Interviewer:</strong> "Great catch. Yes, 4 entrances and 4 exits. Thread safety is critical."</p>
+    </div>
+
+    <hr>
+
+    <h2>PILLAR 4: Production-Grade Java 21 Code</h2>
+    <p>
+      In a Low-Level Design (LLD) interview or when writing a design doc, you should model the captured requirements explicitly in code using modern Java 21 features. We use <strong>Sealed Interfaces</strong> and <strong>Records</strong> to create a robust, immutable configuration object.
+    </p>
+
+    <span class="code-label">Java 21</span>
+    <pre><code class="language-java">
 /**
- * A record to succinctly capture the parsed requirements during an interview.
+ * PILLAR 4: Using Java 21 Sealed Interfaces and Records to model System Requirements.
+ * 
+ * Architectural Rationale:
+ * - Records provide immutable, thread-safe data carriers for our constraints.
+ * - Sealed interfaces restrict the types of system profiles we allow (e.g., ReadHeavy vs WriteHeavy),
+ *   preventing invalid configurations at compile time.
  */
-public record RequirementSpec(
-    boolean isReadHeavy,
-    long dailyActiveUsers,
-    int readToWriteRatio,
-    double targetLatencyMs,
-    java.util.List<String> coreFeatures
-) {
-    public RequirementSpec {
-        if (targetLatencyMs < 0) {
-            throw new IllegalArgumentException("Latency cannot be negative");
+public sealed interface SystemRequirements permits ReadHeavySpec, WriteHeavySpec {
+    
+    // Common contract
+    long dailyActiveUsers();
+    double slaTargetLatencyMs();
+    boolean requiresStrongConsistency();
+
+    /**
+     * Models a Read-Heavy system (e.g., Twitter, Netflix).
+     * 
+     * @param readToWriteRatio Must be > 1.
+     */
+    public record ReadHeavySpec(
+        long dailyActiveUsers,
+        double slaTargetLatencyMs,
+        boolean requiresStrongConsistency,
+        int readToWriteRatio,
+        double cacheHitRatioTarget
+    ) implements SystemRequirements {
+        public ReadHeavySpec {
+            if (readToWriteRatio <= 1) {
+                throw new IllegalArgumentException("Read-heavy systems must have ratio > 1");
+            }
+            if (cacheHitRatioTarget < 0.0 || cacheHitRatioTarget > 1.0) {
+                throw new IllegalArgumentException("Invalid cache target");
+            }
+        }
+        
+        // Helper to estimate Redis cluster sizing based on the 80/20 rule
+        public long estimateDailyCachedReads() {
+            long totalReads = dailyActiveUsers * 10 * readToWriteRatio; 
+            return (long) (totalReads * cacheHitRatioTarget);
         }
     }
-    
-    // Derived metric helper
-    public long estimatedRequestsPerSecond() {
-        long totalDailyRequests = dailyActiveUsers * 10; // Assuming 10 requests/user/day
-        return totalDailyRequests / 86400; // seconds in a day
+
+    /**
+     * Models a Write-Heavy system (e.g., IoT Telemetry, Log Aggregation).
+     */
+    public record WriteHeavySpec(
+        long dailyActiveUsers,
+        double slaTargetLatencyMs,
+        boolean requiresStrongConsistency,
+        int writeBatchSize,
+        long retentionPeriodDays
+    ) implements SystemRequirements {
+        public WriteHeavySpec {
+            if (writeBatchSize < 1) throw new IllegalArgumentException("Batch size must be positive");
+        }
+        
+        // Helper to estimate Kafka/Storage partitioning needs
+        public long estimateDailyStorageRecords() {
+            return dailyActiveUsers * writeBatchSize * 100; // 100 bursts per user
+        }
     }
 }
-    </pre>
+    </code></pre>
+    <p>
+      <em>Interviewer deep-dive:</em> By using Java 21's <code>sealed</code> hierarchy, you demonstrate deep domain modeling. You ensure that a system cannot accidentally be instantiated as "ReadHeavy" while having a 1:10 ratio.
+    </p>
 
-    <h2>How to Write Down Requirements</h2>
-    <p>During the interview, use the whiteboard or shared document to list requirements explicitly:</p>
-    <pre>
-# Functional
-1. Post tweet
-2. View timeline
-(Out of scope: Search, DMs)
+    <hr>
 
-# Non-Functional
-- 100M DAU
-- Read:Write = 100:1
-- Low latency (< 200ms)
-- High availability (Eventual consistency is fine)
-    </pre>
+    <h2>PILLAR 6: Trade-offs & The 25+ Universal Checklist</h2>
+    <p>
+      There is a trade-off in requirement gathering: Ask too few questions, and you fail for lack of scope. Ask too many questions, and you waste 15 minutes of a 45-minute interview, failing because you never actually design the system. <strong>Timebox this phase to 5-7 minutes.</strong>
+    </p>
 
-    <div class="callout callout-danger">
-      <strong>Red Flags 🚩</strong>
-      <ul>
-        <li>Starting the architecture drawing before agreeing on requirements.</li>
-        <li>Assuming a 1 Billion user scale for a local mom-and-pop shop application.</li>
-        <li>Not asking about read-vs-write ratios, which drastically alters database choices.</li>
-      </ul>
+    <div class="carousel">
+      <h3>Universal Question Checklist</h3>
+      <table class="styled-table">
+        <thead>
+          <tr>
+            <th>Category</th>
+            <th>Crucial Questions</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Functional</strong></td>
+            <td>What are the 2 most important features? Do we need auth? Notifications? Search?</td>
+          </tr>
+          <tr>
+            <td><strong>Non-Functional</strong></td>
+            <td>CAP theorem preference (Availability or Consistency)? Expected latency? P99 latency SLA?</td>
+          </tr>
+          <tr>
+            <td><strong>Data & Scale</strong></td>
+            <td>DAU? Read:Write ratio? Average payload size? Data retention policy? Geographic distribution?</td>
+          </tr>
+        </tbody>
+      </table>
     </div>
+
+    <h3>Red Flags vs. Green Flags</h3>
+    <table class="styled-table">
+      <thead>
+        <tr>
+          <th>Red Flags 🚩 (Instant Fail)</th>
+          <th>Green Flags 🟢 (Staff / Senior Level)</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Writing code or drawing boxes instantly without asking a single question.</td>
+          <td>Explicitly listing "Out of Scope" items on the whiteboard to manage time.</td>
+        </tr>
+        <tr>
+          <td>Asking random, disconnected questions just to fill time.</td>
+          <td>Asking derivative questions: <em>"Since the ratio is 100:1, caching is my primary concern. Can we tolerate eventual consistency for cache invalidation?"</em></td>
+        </tr>
+        <tr>
+          <td>Failing to clarify read-to-write ratio, resulting in a disastrous database choice later.</td>
+          <td>Doing quick back-of-the-envelope math out loud and adjusting the architecture based on the result.</td>
+        </tr>
+      </tbody>
+    </table>
 
     <div class="page-nav">
       <a href="methodology.html" class="prev"><span class="label">← Previous</span><span class="title">Methodology</span></a>

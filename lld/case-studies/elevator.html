@@ -20,192 +20,205 @@
       <strong>Elevator System</strong>
     </div>
 
-    <h1>Design an Elevator System</h1>
+    <h1>Design an Elevator System (Masterclass)</h1>
     
-    <h2>What is an Elevator System?</h2>
-    <p>An elevator system manages the transportation of people between floors in a building. Think of it like a <strong>bus network</strong>. Buses run on routes, pick up passengers at stops, and drop them off. The system needs to decide which bus (elevator) to send to which stop (floor) to minimize waiting time.</p>
+    <h2>Phase 1: Ground-Zero Theory & The Pain Point</h2>
+    <p>At its core, an elevator system is a hardware-software coordination problem. In plain English, we have a set of moving boxes (elevators) serving static locations (floors). The disaster scenario? If we don't manage scheduling effectively, we suffer from <span class="jargon" title="A state where an elevator is starved of resources or time, trapping users on a floor indefinitely.">starvation</span>, where requests at extreme floors are ignored while the elevator bounces between middle floors. Without concurrent state management, two requests could try to move the elevator in opposite directions simultaneously, causing system failure.</p>
+    
+    <h3>Requirement Gathering Dialogue</h3>
+    <p>A senior engineer doesn't just start coding. They scope the problem.</p>
+    <ul>
+      <li><strong>Building properties:</strong> How many floors? How many elevators? (e.g., 50 floors, 4 elevators).</li>
+      <li><strong>Capacity limits:</strong> What is the weight/person limit?</li>
+      <li><strong>Traffic Patterns:</strong> Are there peak morning (up-peak) or evening (down-peak) modes?</li>
+      <li><strong>Emergency Modes:</strong> Fire alarms, maintenance, VIP overrides.</li>
+    </ul>
 
-    <h2>Requirements</h2>
-    <div class="callout callout-info">
-      <ul>
-        <li>Building with N floors, M elevators</li>
-        <li>Users press Up/Down button on a floor</li>
-        <li>Inside elevator: press destination floor</li>
-        <li>Elevator scheduling algorithm</li>
-        <li>Display current floor and direction</li>
-        <li>Handle multiple requests efficiently</li>
-      </ul>
-    </div>
+    <h2>Phase 2: Architectural Decision Rationales & Modifier Deep Dives</h2>
+    
+    <p>Designing this requires precise decision-making around data structures and object-oriented principles.</p>
+    <ul>
+      <li><strong>Why `ElevatorState` and `Direction` are enums?</strong> Enums in Java provide thread-safe singletons and compile-time type safety. <code>MOVING_UP</code>, <code>MOVING_DOWN</code>, <code>IDLE</code>, and <code>MAINTENANCE</code> are finite states. Using Strings would be a disaster for memory and comparison speed.</li>
+      <li><strong>Why `DispatchStrategy` is an interface?</strong> By using the <strong>Strategy Pattern</strong>, we isolate the algorithm logic from the physical elevator mechanics. This allows swapping First-Come-First-Serve (FCFS) for SCAN/LOOK algorithms, or even advanced Destination Dispatch logic without modifying the elevator's core code.</li>
+      <li><strong>Why `ElevatorCar` uses internal concurrent queues (`ConcurrentSkipListSet` or `PriorityQueue` with locks)?</strong> An elevator needs to process requests in a sorted order based on its current direction, not just the order they were received. Using a `TreeSet` (wrapped in locks) allows logarithmic time complexity for finding the next floor in the current direction.</li>
+    </ul>
 
-    <h2>How does it work?</h2>
+    <h2>Phase 3: Step-by-Step Evolution & Thought Process</h2>
+    <p>How do we arrive at the perfect design? Let's trace the naive attempts.</p>
+    <p><strong>Attempt 1: FCFS (First-Come, First-Serve)</strong><br>We put all requests in a simple FIFO queue. If Floor 5 requests UP, then Floor 1 requests UP, the elevator goes to 5, then back down to 1. <em>Result: Thrashing and terrible efficiency.</em></p>
+    <p><strong>Attempt 2: SCAN Algorithm (Elevator Algorithm)</strong><br>The elevator goes all the way up to the top floor, then all the way down. <em>Result: Better, but it travels to the top floor even if the highest request is only on floor 5. Wastes time and energy.</em></p>
+    <p><strong>Attempt 3: LOOK Algorithm (The Winner)</strong><br>The elevator goes up as long as there are requests in that direction. Once the highest requested floor is reached, it reverses direction. This is what modern standard elevators use.</p>
+
     <div class="diagram-container">
       <div class="mermaid">
         classDiagram
           class Building {
-             -List~Elevator~ elevators
+             -List~ElevatorCar~ elevators
              -ElevatorController controller
+             +requestElevator(int floor, Direction dir)
           }
           class ElevatorController {
-             -ElevatorSchedulingStrategy strategy
-             +requestElevator(ElevatorRequest)
+             -DispatchStrategy strategy
+             +dispatch(ElevatorRequest req)
           }
-          class Elevator {
+          class DispatchStrategy {
+             <<interface>>
+             +selectElevator(List~ElevatorCar~, ElevatorRequest) ElevatorCar
+          }
+          class ElevatorCar {
              -int currentFloor
-             -Direction direction
+             -Direction currentDirection
+             -ElevatorState state
+             -NavigableSet~Integer~ upDestinations
+             -NavigableSet~Integer~ downDestinations
+             +pressButton(int floor)
              +move()
-             +addRequest(InternalRequest)
           }
           Building *-- ElevatorController
-          Building *-- Elevator
+          Building *-- ElevatorCar
+          ElevatorController o-- DispatchStrategy
       </div>
-      <p class="caption">Figure 1: Elevator Class Diagram</p>
+      <p class="caption">Figure 1: Domain Entity Class Diagram</p>
     </div>
 
-    <h2>Java 21 Implementation</h2>
+    <div class="diagram-container">
+      <div class="mermaid">
+        sequenceDiagram
+          actor User
+          participant FloorPanel
+          participant Controller as ElevatorController
+          participant Strategy as DispatchStrategy
+          participant Car as ElevatorCar
+
+          User->>FloorPanel: pressUp()
+          FloorPanel->>Controller: requestElevator(floor 5, UP)
+          Controller->>Strategy: selectElevator(...)
+          Strategy-->>Controller: returns Car 2
+          Controller->>Car: addDestination(5)
+          Car-->>User: Arrival indicator lights up
+      </div>
+      <p class="caption">Figure 2: Request Handling Sequence</p>
+    </div>
+
+    <h2>Phase 4: Concurrency & Algorithm Deep Dive</h2>
+    <p>Handling simultaneous button presses is the hardest part. If a user presses the UP button on floor 3 while the elevator is at floor 2 moving up, the request must be safely injected into the elevator's internal memory without causing a <code>ConcurrentModificationException</code> or race condition. We use <code>ReentrantLock</code> to protect the shared sets (upDestinations and downDestinations) to ensure visibility and atomicity across threads.</p>
+    
+    <h2>Phase 5: Production-Grade Java 21 Code</h2>
     <span class="code-label">Java</span>
     <pre>
-import java.util.ArrayList;
-import java.util.List;
-import java.util.PriorityQueue;
+import java.util.*;
+import java.util.concurrent.locks.ReentrantLock;
 
+// PILLAR 2: Enums for type safety and fast comparison
 enum Direction { UP, DOWN, IDLE }
+enum ElevatorState { MOVING, IDLE, MAINTENANCE }
 
-record ElevatorRequest(int fromFloor, Direction direction) {}
-record InternalRequest(int toFloor) {}
+// Java 21 Record for immutable data transfer
+record ElevatorRequest(int floor, Direction direction) {}
 
-// Design Pattern: Strategy
-interface ElevatorSchedulingStrategy {
-    Elevator selectElevator(List&lt;Elevator&gt; elevators, ElevatorRequest request);
+// PILLAR 2: Strategy Pattern Interface
+interface DispatchStrategy {
+    ElevatorCar selectElevator(List&lt;ElevatorCar&gt; elevators, ElevatorRequest request);
 }
 
-class NearestElevatorStrategy implements ElevatorSchedulingStrategy {
-    public Elevator selectElevator(List&lt;Elevator&gt; elevators, ElevatorRequest request) {
-        Elevator best = elevators.get(0);
-        int minDistance = Integer.MAX_VALUE;
-        for (Elevator e : elevators) {
-            int dist = Math.abs(e.getCurrentFloor() - request.fromFloor());
-            if (dist &lt; minDistance) {
-                minDistance = dist;
-                best = e;
-            }
-        }
-        return best;
+// Concrete Strategy: Odd-Even, Zoned, or Nearest (Simplified Nearest shown here)
+class NearestElevatorStrategy implements DispatchStrategy {
+    @Override
+    public ElevatorCar selectElevator(List&lt;ElevatorCar&gt; elevators, ElevatorRequest request) {
+        // Advanced logic: check direction and distance. Simplified here for brevity.
+        return elevators.stream()
+            .filter(e -&gt; e.getState() != ElevatorState.MAINTENANCE)
+            .min(Comparator.comparingInt(e -&gt; Math.abs(e.getCurrentFloor() - request.floor())))
+            .orElseThrow(() -&gt; new RuntimeException("No available elevators"));
     }
 }
 
-class ZonedStrategy implements ElevatorSchedulingStrategy {
-    public Elevator selectElevator(List&lt;Elevator&gt; elevators, ElevatorRequest request) {
-        // Implementation for zoned strategy
-        return elevators.get(0);
-    }
-}
-
-class Elevator {
+class ElevatorCar {
     private final int id;
-    private int currentFloor;
-    private Direction direction;
-    private PriorityQueue&lt;Integer&gt; upQueue;
-    private PriorityQueue&lt;Integer&gt; downQueue;
+    private int currentFloor = 0;
+    private Direction currentDirection = Direction.IDLE;
+    private ElevatorState state = ElevatorState.IDLE;
+    
+    // Concurrent access protection
+    private final ReentrantLock lock = new ReentrantLock();
+    
+    // Treesets give us O(log N) insertions and allow us to pull the "next" floor easily.
+    private final NavigableSet&lt;Integer&gt; upDestinations = new TreeSet&lt;&gt;();
+    private final NavigableSet&lt;Integer&gt; downDestinations = new TreeSet&lt;&gt;(Collections.reverseOrder());
 
-    public Elevator(int id) {
-        this.id = id;
-        this.currentFloor = 0;
-        this.direction = Direction.IDLE;
-        this.upQueue = new PriorityQueue&lt;&gt;();
-        this.downQueue = new PriorityQueue&lt;&gt;((a, b) -> b.compareTo(a));
+    public ElevatorCar(int id) { this.id = id; }
+
+    // Thread-safe request addition
+    public void addDestination(int floor) {
+        lock.lock();
+        try {
+            if (floor &gt; currentFloor) upDestinations.add(floor);
+            else if (floor &lt; currentFloor) downDestinations.add(floor);
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    // PILLAR 4: LOOK Algorithm execution step
+    public void move() {
+        lock.lock();
+        try {
+            if (currentDirection == Direction.UP || currentDirection == Direction.IDLE) {
+                if (!upDestinations.isEmpty()) {
+                    currentDirection = Direction.UP;
+                    state = ElevatorState.MOVING;
+                    currentFloor = upDestinations.pollFirst();
+                    System.out.println("Elevator " + id + " stopping at floor " + currentFloor);
+                } else if (!downDestinations.isEmpty()) {
+                    currentDirection = Direction.DOWN;
+                } else {
+                    currentDirection = Direction.IDLE;
+                    state = ElevatorState.IDLE;
+                }
+            } else if (currentDirection == Direction.DOWN) {
+                if (!downDestinations.isEmpty()) {
+                    currentFloor = downDestinations.pollFirst();
+                    System.out.println("Elevator " + id + " stopping at floor " + currentFloor);
+                } else {
+                    currentDirection = Direction.UP; // Reverse look
+                }
+            }
+        } finally {
+            lock.unlock();
+        }
     }
 
     public int getCurrentFloor() { return currentFloor; }
-    public Direction getDirection() { return direction; }
-
-    public void addRequest(InternalRequest req) {
-        if (req.toFloor() > currentFloor) {
-            upQueue.offer(req.toFloor());
-        } else {
-            downQueue.offer(req.toFloor());
-        }
-    }
-
-    public void addExternalRequest(ElevatorRequest req) {
-        if (req.fromFloor() > currentFloor) {
-            upQueue.offer(req.fromFloor());
-        } else {
-            downQueue.offer(req.fromFloor());
-        }
-    }
-
-    public void move() {
-        if (!upQueue.isEmpty()) {
-            direction = Direction.UP;
-            currentFloor = upQueue.poll();
-            System.out.println("Elevator " + id + " moved UP to floor " + currentFloor);
-        } else if (!downQueue.isEmpty()) {
-            direction = Direction.DOWN;
-            currentFloor = downQueue.poll();
-            System.out.println("Elevator " + id + " moved DOWN to floor " + currentFloor);
-        } else {
-            direction = Direction.IDLE;
-            System.out.println("Elevator " + id + " is IDLE at floor " + currentFloor);
-        }
-    }
+    public ElevatorState getState() { return state; }
 }
 
-// SOLID: DIP
 class ElevatorController {
-    private final List&lt;Elevator&gt; elevators;
-    private final ElevatorSchedulingStrategy strategy;
+    private final List&lt;ElevatorCar&gt; elevators;
+    private final DispatchStrategy strategy;
 
-    public ElevatorController(List&lt;Elevator&gt; elevators, ElevatorSchedulingStrategy strategy) {
-        this.elevators = elevators;
+    public ElevatorController(List&lt;ElevatorCar&gt; elevators, DispatchStrategy strategy) {
+        this.elevators = List.copyOf(elevators); // Immutable copy for safety
         this.strategy = strategy;
     }
 
     public void requestElevator(ElevatorRequest request) {
-        Elevator selected = strategy.selectElevator(elevators, request);
-        selected.addExternalRequest(request);
-        System.out.println("Assigned Elevator to request at floor " + request.fromFloor());
-    }
-}
-
-// Design Pattern: Facade
-class Building {
-    private final List&lt;Elevator&gt; elevators;
-    private final ElevatorController controller;
-
-    public Building(int numElevators) {
-        elevators = new ArrayList&lt;&gt;();
-        for (int i = 0; i &lt; numElevators; i++) {
-            elevators.add(new Elevator(i));
-        }
-        controller = new ElevatorController(elevators, new NearestElevatorStrategy());
-    }
-
-    public void callElevator(int floor, Direction direction) {
-        controller.requestElevator(new ElevatorRequest(floor, direction));
-    }
-
-    public void step() {
-        for (Elevator e : elevators) {
-            e.move();
-        }
-    }
-}
-
-// SOLID: ISP — different interfaces for different panels
-interface Panel { }
-class FloorPanel implements Panel { }
-class ElevatorPanel implements Panel { }
-interface Display { void show(); }
-
-public class Main {
-    public static void main(String[] args) {
-        Building building = new Building(2);
-        building.callElevator(5, Direction.UP);
-        building.step();
-        building.step();
+        ElevatorCar car = strategy.selectElevator(elevators, request);
+        car.addDestination(request.floor());
     }
 }
     </pre>
+
+    <h2>Phase 6: Trade-offs & The Interviewer's Deep Follow-Up Questions</h2>
+    <div class="callout callout-warning">
+      <h4>The Grill Round</h4>
+      <p><strong>Interviewer:</strong> "What happens if there's a VIP override or emergency like a fire?"</p>
+      <p><strong>Candidate:</strong> "We introduce a <code>PriorityQueue</code> for requests with an <code>EmergencyLevel</code> enum. In a fire, the strategy instantly flips all cars to <code>MAINTENANCE</code> or <code>EMERGENCY_RETURN</code>, discarding all queues and forcing movement to the ground floor."</p>
+      
+      <p><strong>Interviewer:</strong> "How do you optimize for morning peak traffic?"</p>
+      <p><strong>Candidate:</strong> "We implement a Zoned Strategy. Elevators 1-2 only serve floors 1-20, and Elevators 3-4 serve 21-50. During peak hours, the controller pre-positions idle elevators at the lobby (floor 0) rather than leaving them at their last dropped-off floor."</p>
+
+      <p><strong>Trade-offs:</strong> Lock contention on the <code>ElevatorCar</code> queues can become a bottleneck if there are thousands of simultaneous requests. In highly scaled environments (like simulating an entire city's elevators), an event-driven architecture using an actor model (like Akka) per elevator avoids lock contention entirely.</p>
+    </div>
 
     <div class="page-nav">
       <a href="parking-lot.html" class="prev"><span class="label">← Previous</span><span class="title">Parking Lot</span></a>

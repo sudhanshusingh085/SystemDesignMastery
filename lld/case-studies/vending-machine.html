@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Vending Machine — System Design Mastery</title>
+  <title>Design a Vending Machine — System Design Mastery</title>
   <link rel="stylesheet" href="../../css/style.css">
   <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
 </head>
@@ -15,233 +15,240 @@
     <div class="breadcrumb">
       <a href="../../index.html">Home</a>
       <span class="sep">›</span>
-      LLD
-      <span class="sep">›</span>
-      <a href="../case-studies.html">Case Studies</a>
+      LLD Case Studies
       <span class="sep">›</span>
       <strong>Vending Machine</strong>
     </div>
 
-    <h1>Design a Vending Machine (LLD)</h1>
+    <h1>Design a Vending Machine (Masterclass)</h1>
+    
+    <h2>Phase 1: Ground-Zero Theory & The Pain Point</h2>
+    <p>A vending machine is a classic Finite State Machine (FSM). In plain English, it behaves differently depending on what state it is in. If you press a button to buy a soda while it's waiting for money, it says "insert coin." If you press the same button <em>after</em> inserting money, it gives you the soda. The disaster happens when we try to implement this logic using massive <code>if/else</code> or <code>switch</code> blocks. The <span class="jargon" title="A measure of how complex the control flow of a program is.">cyclomatic complexity</span> explodes, and eventually, a bug allows someone to get a soda without paying.</p>
 
-    <div class="callout callout-info">
-      <strong>Scenario:</strong> Design a vending machine that takes coins/notes, dispenses items, handles stock, gives change, and supports an admin mode.
-    </div>
-
-    <h2>1. What is a Vending Machine System?</h2>
-    <p>A vending machine is a classic example of a <div class="jargon">📖 <strong>Finite State Machine (FSM)</strong>: A system that can only be in one of a finite number of states at any given time, and transitions between them based on events.</div></p>
-
-    <h2>2. What problem does it solve?</h2>
+    <h3>Requirement Gathering Dialogue</h3>
     <ul>
-      <li>Prevents illegal operations (e.g., dispensing a product without payment).</li>
-      <li>Cleanly manages behavior that drastically changes depending on the system's current situation.</li>
+      <li><strong>Payment Types:</strong> Coins only, or cards as well? (Let's stick to Coins/Cash for algorithmic depth).</li>
+      <li><strong>Inventory Tracking:</strong> What happens if an item runs out? (Must refund inserted money).</li>
+      <li><strong>Change Return:</strong> Can it return exact change? (The Coin Change algorithm).</li>
+      <li><strong>Cancellation:</strong> User can cancel anytime before dispensing to get a full refund.</li>
     </ul>
 
-    <h2>3. How does it work?</h2>
+    <h2>Phase 2: Domain Entity Modeling & Why State Pattern is Essential</h2>
+    <p>Using <code>if(state == IDLE) { ... } else if (state == HAS_MONEY) { ... }</code> inside every single method (insertCoin, pressButton, dispense) is unmaintainable. When adding a new state (like OUT_OF_SERVICE), you must modify every method, violating the Open/Closed Principle.</p>
+    <ul>
+      <li><strong>The State Pattern:</strong> By making <code>VendingMachineState</code> an interface, we encapsulate state-specific behavior in separate classes.</li>
+      <li><strong>Why Sealed Interfaces in Java 21?</strong> By defining <code>public sealed interface VendingMachineState permits IdleState, HasMoneyState, DispensingState</code>, the compiler guarantees that no unauthorized states can be created, and <code>switch</code> expressions over these states are exhaustive.</li>
+    </ul>
+
+    <h2>Phase 3: Visualizing the State and Structure</h2>
+
     <div class="diagram-container">
       <div class="mermaid">
         stateDiagram-v2
-          [*] --> IdleState
-          IdleState --> HasMoneyState : Insert Coin
-          HasMoneyState --> HasMoneyState : Insert More Coin
-          HasMoneyState --> DispensingState : Select Product (Sufficient Funds)
-          HasMoneyState --> IdleState : Cancel
-          DispensingState --> IdleState : Dispense & Return Change
-          IdleState --> MaintenanceState : Enter Admin Mode
-          MaintenanceState --> IdleState : Exit Admin Mode
+          [*] --> Idle
+          Idle --> HasMoney : insertCoin()
+          HasMoney --> HasMoney : insertCoin()
+          HasMoney --> Idle : cancel()
+          HasMoney --> Dispensing : selectProduct()
+          Dispensing --> Idle : dispense() & returnChange()
       </div>
-      <p class="caption">Figure 1: State transitions of the Vending Machine</p>
+      <p class="caption">Figure 1: State Transition Diagram</p>
     </div>
 
-    <h2>4. Java 21 Implementation</h2>
-    <p>We heavily leverage the <strong>State Pattern</strong> here. Using Java 21's <code>sealed interface</code> allows us to strictly bound the states our machine can enter.</p>
+    <div class="diagram-container">
+      <div class="mermaid">
+        classDiagram
+          class VendingMachine {
+             -VendingMachineState state
+             -Inventory inventory
+             -double currentBalance
+             +insertCoin(Coin)
+             +selectItem(String)
+             +dispenseItem()
+          }
+          class VendingMachineState {
+             <<sealed interface>>
+             +insertCoin(VendingMachine, Coin)
+             +selectItem(VendingMachine, String)
+             +dispenseItem(VendingMachine)
+             +cancel(VendingMachine)
+          }
+          class IdleState {
+             <<record>>
+          }
+          class HasMoneyState {
+             <<record>>
+          }
+          class DispensingState {
+             <<record>>
+          }
+          VendingMachineState <|.. IdleState
+          VendingMachineState <|.. HasMoneyState
+          VendingMachineState <|.. DispensingState
+          VendingMachine *-- VendingMachineState
+      </div>
+      <p class="caption">Figure 2: Class Architecture</p>
+    </div>
 
+    <h2>Phase 4: Coin Change Algorithm Deep Dive</h2>
+    <p>When returning change, we can use a Greedy Algorithm (pick the largest coin possible first). However, if the coin denominations are non-standard (e.g., 1, 3, 4) and we owe 6, Greedy gives (4, 1, 1) = 3 coins, while Dynamic Programming (DP) gives (3, 3) = 2 coins. For standard US/EU coins, Greedy is mathematically optimal and faster (O(N)). If exact change cannot be made due to empty coin hoppers, the machine must roll back the transaction and refund the original inserted amount.</p>
+
+    <h2>Phase 5: Production-Grade Java 21 Code</h2>
     <span class="code-label">Java</span>
     <pre>
 import java.util.Map;
-import java.util.HashMap;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.locks.ReentrantLock;
 
-enum Coin { PENNY(1), NICKEL(5), DIME(10), QUARTER(25); 
+// PILLAR 2: Domain entities
+enum Coin { 
+    QUARTER(25), DIME(10), NICKEL(5), PENNY(1);
     final int value;
-    Coin(int v) { this.value = v; }
-}
-enum Note { ONE(100), FIVE(500), TEN(1000); 
-    final int value;
-    Note(int v) { this.value = v; }
+    Coin(int value) { this.value = value; }
 }
 
-record Product(String name, int priceInCents, int quantity) {}
+record Product(String id, String name, int priceCents) {}
 
-// SOLID: SRP — Inventory just manages stock.
+// Thread-safe Inventory
 class Inventory {
-    private Map<String, Product> items = new HashMap<>();
-    public void addProduct(Product p) { items.put(p.name(), p); }
-    public boolean isAvailable(String name) {
-        return items.containsKey(name) && items.get(name).quantity() > 0;
-    }
-    public Product getProduct(String name) { return items.get(name); }
-    public void decrementStock(String name) {
-        Product p = items.get(name);
-        items.put(name, new Product(p.name(), p.priceInCents(), p.quantity() - 1));
-    }
+    private final Map&lt;Product, Integer&gt; stock = new ConcurrentHashMap&lt;&gt;();
+    
+    public void addProduct(Product p, int count) { stock.put(p, count); }
+    public boolean hasItem(Product p) { return stock.getOrDefault(p, 0) &gt; 0; }
+    public void deduct(Product p) { stock.computeIfPresent(p, (k, v) -&gt; v - 1); }
 }
 
-// Design Pattern: STATE — the star of this design!
-// Defines exactly what the machine can DO in any state.
-sealed interface VendingMachineState permits IdleState, HasMoneyState, DispensingState, MaintenanceState {
-    void insertMoney(VendingMachine machine, int amount);
-    void selectProduct(VendingMachine machine, String productName);
-    void cancel(VendingMachine machine);
-    void dispense(VendingMachine machine);
+// PILLAR 2: Sealed interface for exhaustive pattern matching
+sealed interface VendingMachineState permits IdleState, HasMoneyState, DispensingState {
+    void insertCoin(VendingMachine context, Coin coin);
+    void selectProduct(VendingMachine context, Product product);
+    void cancel(VendingMachine context);
+    void dispense(VendingMachine context);
 }
 
-class IdleState implements VendingMachineState {
-    @Override
-    public void insertMoney(VendingMachine machine, int amount) {
-        machine.addBalance(amount);
-        machine.setState(new HasMoneyState());
+// State 1: IDLE
+record IdleState() implements VendingMachineState {
+    public void insertCoin(VendingMachine ctx, Coin coin) {
+        ctx.addBalance(coin.value);
+        ctx.setState(new HasMoneyState());
+        System.out.println("Inserted: " + coin);
     }
-    @Override
-    public void selectProduct(VendingMachine machine, String productName) {
-        System.out.println("Please insert money first.");
+    public void selectProduct(VendingMachine ctx, Product product) {
+        throw new IllegalStateException("Insert money first!");
     }
-    @Override
-    public void cancel(VendingMachine machine) {
+    public void cancel(VendingMachine ctx) {
         System.out.println("Nothing to cancel.");
     }
-    @Override
-    public void dispense(VendingMachine machine) {
-        System.out.println("Payment required.");
+    public void dispense(VendingMachine ctx) {
+        throw new IllegalStateException("Cannot dispense in Idle state.");
     }
 }
 
-class HasMoneyState implements VendingMachineState {
-    @Override
-    public void insertMoney(VendingMachine machine, int amount) {
-        machine.addBalance(amount);
+// State 2: HAS_MONEY
+record HasMoneyState() implements VendingMachineState {
+    public void insertCoin(VendingMachine ctx, Coin coin) {
+        ctx.addBalance(coin.value);
+        System.out.println("Balance: " + ctx.getBalance());
     }
-    @Override
-    public void selectProduct(VendingMachine machine, String productName) {
-        Inventory inv = machine.getInventory();
-        if (!inv.isAvailable(productName)) {
-            System.out.println("Out of stock.");
+    public void selectProduct(VendingMachine ctx, Product product) {
+        if (!ctx.getInventory().hasItem(product)) {
+            System.out.println("Out of stock!");
             return;
         }
-        Product p = inv.getProduct(productName);
-        if (machine.getBalance() < p.priceInCents()) {
-            System.out.println("Insufficient funds. Need " + (p.priceInCents() - machine.getBalance()) + " more.");
+        if (ctx.getBalance() &gt;= product.priceCents()) {
+            ctx.setSelectedProduct(product);
+            ctx.setState(new DispensingState());
+            ctx.getState().dispense(ctx); // Auto trigger transition
         } else {
-            machine.setSelectedProduct(p);
-            machine.setState(new DispensingState());
-            machine.dispense(); // Auto trigger dispensing
+            System.out.println("Insufficient funds!");
         }
     }
-    @Override
-    public void cancel(VendingMachine machine) {
-        System.out.println("Returning balance: " + machine.getBalance());
-        machine.clearBalance();
-        machine.setState(new IdleState());
+    public void cancel(VendingMachine ctx) {
+        System.out.println("Refunding: " + ctx.getBalance());
+        ctx.clearBalance();
+        ctx.setState(new IdleState());
     }
-    @Override
-    public void dispense(VendingMachine machine) {
-        System.out.println("Select a product first.");
+    public void dispense(VendingMachine ctx) {
+        throw new IllegalStateException("Select product first!");
     }
 }
 
-class DispensingState implements VendingMachineState {
-    @Override
-    public void insertMoney(VendingMachine machine, int amount) { System.out.println("Wait, dispensing..."); }
-    @Override
-    public void selectProduct(VendingMachine machine, String productName) { System.out.println("Wait, dispensing..."); }
-    @Override
-    public void cancel(VendingMachine machine) { System.out.println("Too late to cancel."); }
-    
-    @Override
-    public void dispense(VendingMachine machine) {
-        Product p = machine.getSelectedProduct();
-        machine.getInventory().decrementStock(p.name());
-        int change = machine.getBalance() - p.priceInCents();
-        System.out.println("Dispensing " + p.name());
-        if (change > 0) {
-            System.out.println("Returning change: " + change);
+// State 3: DISPENSING
+record DispensingState() implements VendingMachineState {
+    public void insertCoin(VendingMachine ctx, Coin coin) {
+        throw new IllegalStateException("Please wait, dispensing.");
+    }
+    public void selectProduct(VendingMachine ctx, Product product) {
+        throw new IllegalStateException("Already dispensing.");
+    }
+    public void cancel(VendingMachine ctx) {
+        throw new IllegalStateException("Too late to cancel.");
+    }
+    public void dispense(VendingMachine ctx) {
+        Product p = ctx.getSelectedProduct();
+        ctx.getInventory().deduct(p);
+        int change = ctx.getBalance() - p.priceCents();
+        System.out.println("Dispensed: " + p.name());
+        if (change &gt; 0) {
+            System.out.println("Change returned: " + change + " cents");
         }
-        machine.clearBalance();
-        machine.setState(new IdleState());
+        ctx.clearBalance();
+        ctx.setState(new IdleState());
     }
 }
 
-class MaintenanceState implements VendingMachineState {
-    @Override
-    public void insertMoney(VendingMachine m, int a) { System.out.println("Machine in maintenance."); }
-    @Override
-    public void selectProduct(VendingMachine m, String p) { System.out.println("Machine in maintenance."); }
-    @Override
-    public void cancel(VendingMachine m) { System.out.println("Machine in maintenance."); }
-    @Override
-    public void dispense(VendingMachine m) { System.out.println("Machine in maintenance."); }
-    
-    public void refill(VendingMachine machine, Product p) {
-        machine.getInventory().addProduct(p);
-    }
-    public void finishMaintenance(VendingMachine machine) {
-        machine.setState(new IdleState());
-    }
-}
-
-// SOLID: OCP — VendingMachine delegates behavior to state objects.
-// Context class
+// The Context Object
 class VendingMachine {
     private VendingMachineState state;
-    private Inventory inventory;
-    private int currentBalance;
-    private Product selectedProduct;
+    private final Inventory inventory = new Inventory();
+    private int balance = 0;
+    private Product selectedProduct = null;
+    private final ReentrantLock lock = new ReentrantLock(); // Ensures atomic transactions
 
     public VendingMachine() {
-        this.inventory = new Inventory();
         this.state = new IdleState();
-        this.currentBalance = 0;
     }
 
     public void setState(VendingMachineState state) { this.state = state; }
+    public VendingMachineState getState() { return state; }
+    
+    public void addBalance(int amount) { balance += amount; }
+    public int getBalance() { return balance; }
+    public void clearBalance() { balance = 0; }
+    
     public Inventory getInventory() { return inventory; }
-    public void addBalance(int amt) { currentBalance += amt; }
-    public int getBalance() { return currentBalance; }
-    public void clearBalance() { currentBalance = 0; }
+    
     public void setSelectedProduct(Product p) { this.selectedProduct = p; }
     public Product getSelectedProduct() { return selectedProduct; }
 
-    // Delegation to state
-    public void insertCoin(Coin c) { state.insertMoney(this, c.value); }
-    public void insertNote(Note n) { state.insertMoney(this, n.value); }
-    public void selectProduct(String name) { state.selectProduct(this, name); }
-    public void cancel() { state.cancel(this); }
-    public void dispense() { state.dispense(this); }
-}
-
-public class Main {
-    public static void main(String[] args) {
-        VendingMachine vm = new VendingMachine();
-        vm.getInventory().addProduct(new Product("Soda", 150, 10)); // $1.50
-        
-        vm.insertNote(Note.ONE);
-        vm.insertCoin(Coin.QUARTER);
-        vm.insertCoin(Coin.QUARTER); // Total 150
-        
-        vm.selectProduct("Soda"); // Should dispense successfully
+    // Synchronized operations
+    public void insertCoin(Coin coin) {
+        lock.lock();
+        try { state.insertCoin(this, coin); } finally { lock.unlock(); }
+    }
+    public void selectProduct(Product p) {
+        lock.lock();
+        try { state.selectProduct(this, p); } finally { lock.unlock(); }
     }
 }
     </pre>
 
-    <h2>5. Why is it recommended / When to use it?</h2>
-    <p>Using the State pattern completely eliminates massive `if-else` blocks or `switch` statements scattered across the codebase. It ensures that behaviors isolated to a specific state (like returning change while dispensing) cannot be accidentally invoked in another state.</p>
+    <h2>Phase 6: Trade-offs & The Interviewer's Deep Follow-Up Questions</h2>
+    <div class="callout callout-warning">
+      <h4>The Grill Round</h4>
+      <p><strong>Interviewer:</strong> "What happens if two users try to purchase the very last soda concurrently over a network?"</p>
+      <p><strong>Candidate:</strong> "In a distributed system, a <code>ConcurrentHashMap</code> isn't enough. We need a Distributed Lock (like Redis Redlock) or Optimistic Concurrency Control using version numbers on the database row to prevent overselling."</p>
+      
+      <p><strong>Interviewer:</strong> "How do you detect hardware jams?"</p>
+      <p><strong>Candidate:</strong> "We introduce a hardware callback mechanism. The <code>dispense()</code> method sends a command to the hardware API and waits for an ACK/NACK. If NACK (jam), we don't transition to IDLE; instead, we transition to a new <code>OUT_OF_SERVICE</code> state and refund the user's balance."</p>
 
-    <div class="callout callout-purple">
-      <strong>Interview Tip:</strong> The State pattern is arguably the most common answer expected for any Vending Machine or ATM interview question. If you write massive if-else logic here, it is a big red flag for interviewers.
+      <p><strong>Interviewer:</strong> "How would you implement dynamic pricing (e.g., higher prices when it's hot outside)?"</p>
+      <p><strong>Candidate:</strong> "I would use the Decorator or Strategy pattern for pricing. Instead of hardcoding <code>product.priceCents()</code>, we pass the Product through a <code>PricingStrategy.calculatePrice(Product, Context)</code> which considers time of day, weather APIs, or inventory levels."</p>
     </div>
 
     <div class="page-nav">
-      <a href="tic-tac-toe.html" class="prev"><span class="label">← Previous</span><span class="title">Tic-Tac-Toe</span></a>
-      <a href="../../glossary.html" class="next"><span class="label">Next →</span><span class="title">Glossary</span></a>
+      <a href="blackjack.html" class="prev"><span class="label">← Previous</span><span class="title">Blackjack Game</span></a>
+      <a href="parking-lot.html" class="next"><span class="label">Next →</span><span class="title">Parking Lot</span></a>
     </div>
   </main>
 </div>

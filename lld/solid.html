@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>SOLID Principles — System Design Mastery</title>
+  <title>SOLID Principles Masterclass — System Design Mastery</title>
   <link rel="stylesheet" href="../css/style.css">
   <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
 </head>
@@ -17,107 +17,177 @@
       <span class="sep">›</span>
       <a href="index.html">Low-Level Design</a>
       <span class="sep">›</span>
-      <strong>SOLID Principles</strong>
+      <strong>SOLID Principles Masterclass</strong>
     </div>
 
-    <h1>SOLID Principles</h1>
+    <h1>The SOLID Principles Masterclass</h1>
     
     <div class="callout callout-info">
-      <p>SOLID is an acronym for five design principles intended to make software designs more understandable, flexible, and maintainable.</p>
+      <p><strong>Architectural Manifesto:</strong> SOLID is not a checklist to memorize. It is a mathematical framework for managing <em>dependency management</em> and <em>change propagation</em>. In this exhaustive masterclass, we will deconstruct each principle from ground-zero theory to production-grade Java 21 implementation, exploring exact architectural decisions, catastrophic anti-patterns, and the hardest FAANG interview traps.</p>
     </div>
 
     <!-- S: Single Responsibility -->
     <section>
       <h2>1. Single Responsibility Principle (SRP)</h2>
-      <p>A class should have one, and only one, reason to change. In other words, a class should only have one job.</p>
-      <div class="jargon">📖 <strong>Analogy</strong>: A chef should only cook, not also do the restaurant's accounting and clean the floors.</div>
       
-      <div class="comparison">
-        <div class="side bad">
-          <h3>Bad Approach</h3>
-          <span class="code-label">Java</span>
-          <pre>
-public class UserService {
-    public void registerUser(String username) {
-        // 1. Handle user registration logic
-    }
-    public void sendEmail(String email) {
-        // 2. Handle email sending
-    }
-    public void saveToDatabase(Object data) {
-        // 3. Handle database operations
-    }
-}
-          </pre>
-        </div>
-        <div class="side good">
-          <h3>Good Approach</h3>
-          <span class="code-label">Java</span>
-          <pre>
-public class AuthService {
-    private final UserRepository repository;
-    private final EmailService emailService;
-    // Constructor omitted for brevity
-    
-    public void registerUser(String username, String email) {
-        repository.save(username);
-        emailService.sendWelcomeEmail(email);
-    }
-}
+      <h3>1. Ground-Zero Definition</h3>
+      <p>A class should have one, and only one, reason to change. It is about <strong>cohesion</strong>. If you are grouping behaviors that change for different business reasons into the same class, you are violating SRP.</p>
+      <div class="jargon">📖 <strong>Analogy</strong>: A master chef should focus entirely on cooking the perfect meal. If that chef is also forced to do the restaurant's accounting and mop the floors, a change in tax law might accidentally cause the food to burn. Keep roles segregated.</div>
 
-public class EmailService {
-    public void sendWelcomeEmail(String email) { /* ... */ }
-}
+      <h3>2. The Problem / Smells</h3>
+      <p><strong>Code Smell:</strong> The "God Object." A class that imports dozens of unrelated packages (e.g., `java.sql.*`, `javax.mail.*`, `java.io.*`). If a change to the database schema forces you to recompile the business logic, the principle is violated.</p>
 
-public class UserRepository {
-    public void save(String username) { /* ... */ }
+      <h3>3. Flawed Implementation (Anti-pattern)</h3>
+      <p>This class is a ticking time bomb. A change to the email formatting will require modifying the `EmployeeService`, risking breakage in salary calculation.</p>
+      <span class="code-label">Java (Anti-pattern)</span>
+      <pre><code>
+public class EmployeeService {
+    // VIOLATION: Three distinct reasons to change!
+    // 1. Business Logic changes (salary rules)
+    public double calculatePay(Employee emp) {
+        return emp.getBaseSalary() * 1.2;
+    }
+
+    // 2. Database schema changes (persistence)
+    public void saveToDatabase(Employee emp) {
+        // JDBC connection logic here...
+    }
+
+    // 3. Notification requirement changes (formatting, SMTP)
+    public void sendEmail(Employee emp, String msg) {
+        // SMTP logic here...
+    }
 }
-          </pre>
-        </div>
-      </div>
-      
+      </code></pre>
+
+      <h3>4. Refactored Architecture</h3>
       <div class="diagram-container">
         <div class="mermaid">
-          graph LR
-            A[UserService] -->|Refactor| B[AuthService]
-            A -->|Refactor| C[EmailService]
-            A -->|Refactor| D[UserRepository]
+          graph TD
+            A[EmployeeService - God Object] -->|Refactor| B[SalaryCalculator]
+            A -->|Refactor| C[EmployeeRepository]
+            A -->|Refactor| D[NotificationService]
+            B -.-> E[Business Rules]
+            C -.-> F[Persistence Layer]
+            D -.-> G[Infrastructure]
         </div>
-        <p class="caption">Figure 1: Splitting responsibilities</p>
+        <p class="caption">Isolating axes of change via delegation.</p>
+      </div>
+
+      <h3>5. Clean Java 21 Implementation</h3>
+      <p>Notice the deliberate use of <code>final</code>, constructor injection for dependency isolation, and separating data from behavior.</p>
+      <span class="code-label">Java 21 (Clean)</span>
+      <pre><code>
+// Data Transfer Object. 'record' inherently provides immutability.
+public record Employee(String id, double baseSalary, String email) {}
+
+// Reason to change: Business logic modifications
+public final class SalaryCalculator {
+    public double calculatePay(Employee emp) {
+        return emp.baseSalary() * 1.2; // Complex business rules belong here
+    }
+}
+
+// Reason to change: Persistence framework (e.g., migrating from SQL to NoSQL)
+public interface EmployeeRepository {
+    void save(Employee emp);
+}
+
+// Reason to change: Notification medium (Email to SMS)
+public interface NotificationService {
+    void notify(Employee emp, String message);
+}
+
+// Orchestrator - Reason to change: Only if the overarching workflow changes
+public final class EmployeeOnboardingWorkflow {
+    private final EmployeeRepository repository;
+    private final NotificationService notifier;
+    private final SalaryCalculator salaryCalc;
+
+    public EmployeeOnboardingWorkflow(EmployeeRepository repository, 
+                                      NotificationService notifier, 
+                                      SalaryCalculator salaryCalc) {
+        this.repository = repository;
+        this.notifier = notifier;
+        this.salaryCalc = salaryCalc;
+    }
+
+    public void onboard(Employee emp) {
+        repository.save(emp);
+        notifier.notify(emp, "Welcome aboard!");
+    }
+}
+      </code></pre>
+
+      <h3>6. Hard Interview Questions & Gotchas</h3>
+      <div class="callout callout-warning">
+        <p><strong>Q: Does SRP mean a class should only have one method? How do you define 'reason to change'?</strong></p>
+        <p><strong>A:</strong> Absolutely not. SRP is not about method count; it's about <em>cohesion</em> of business actors. A class can have 20 methods if they all serve a single business actor (e.g., a `StringManipulator` class). A "reason to change" corresponds to the stakeholder who requests the change. If the DBA requests a database schema change, and the HR manager requests a tax calculation change, those belong in different classes.</p>
       </div>
     </section>
 
     <!-- O: Open/Closed -->
     <section>
       <h2>2. Open/Closed Principle (OCP)</h2>
-      <p>Software entities should be open for extension, but closed for modification.</p>
-      <div class="jargon">📖 <strong>Analogy</strong>: A power strip. You can plug in new devices (extension) without rewiring the house (modification).</div>
       
-      <div class="comparison">
-        <div class="side bad">
-          <h3>Bad Approach</h3>
-          <span class="code-label">Java</span>
-          <pre>
+      <h3>1. Ground-Zero Definition</h3>
+      <p>Software entities should be open for extension, but closed for modification. You should be able to add new functionality without touching existing, tested code.</p>
+      <div class="jargon">📖 <strong>Analogy</strong>: A standard power strip. You can plug in new devices (extension) without taking a screwdriver to rewire the wall outlet (modification).</div>
+
+      <h3>2. The Problem / Smells</h3>
+      <p><strong>Code Smell:</strong> A class filled with `if-else` or `switch` statements checking object types or enums. Every time a new type is introduced, you are forced to crack open the class and add another `else if`.</p>
+
+      <h3>3. Flawed Implementation (Anti-pattern)</h3>
+      <p>Adding a `Triangle` requires modifying the `AreaCalculator`. This breaks OCP and forces regression testing on previously verified code (`Circle` and `Rectangle`).</p>
+      <span class="code-label">Java (Anti-pattern)</span>
+      <pre><code>
 public class AreaCalculator {
+    // VIOLATION: Modifying this method every time a new shape is added.
     public double calculateArea(Object shape) {
         if (shape instanceof Circle c) {
             return Math.PI * c.radius() * c.radius();
         } else if (shape instanceof Rectangle r) {
             return r.width() * r.height();
         }
-        return 0;
+        // What about Triangle? We have to modify this file!
+        throw new IllegalArgumentException("Unknown shape");
     }
 }
-          </pre>
+      </code></pre>
+
+      <h3>4. Refactored Architecture</h3>
+      <div class="diagram-container">
+        <div class="mermaid">
+          classDiagram
+            class Shape {
+                <<interface>>
+                +calculateArea() double
+            }
+            class Circle {
+                +calculateArea() double
+            }
+            class Rectangle {
+                +calculateArea() double
+            }
+            class AreaCalculator {
+                +calculateTotalArea(List~Shape~) double
+            }
+            Shape <|.. Circle
+            Shape <|.. Rectangle
+            AreaCalculator --> Shape : depends on abstraction
         </div>
-        <div class="side good">
-          <h3>Good Approach</h3>
-          <span class="code-label">Java</span>
-          <pre>
+      </div>
+
+      <h3>5. Clean Java 21 Implementation</h3>
+      <p>Using polymorphic dispatch. Note the modern Java 21 `sealed` interface if we want to restrict the domain, or open interface for infinite extension.</p>
+      <span class="code-label">Java 21 (Clean)</span>
+      <pre><code>
+// Abstraction: Open for extension
 public interface Shape {
     double calculateArea();
 }
 
+// Extension 1
 public record Circle(double radius) implements Shape {
     @Override
     public double calculateArea() {
@@ -125,158 +195,314 @@ public record Circle(double radius) implements Shape {
     }
 }
 
+// Extension 2
 public record Rectangle(double width, double height) implements Shape {
     @Override
     public double calculateArea() {
         return width * height;
     }
 }
-          </pre>
-        </div>
+
+// Extension 3 (Added without touching existing code!)
+public record Triangle(double base, double height) implements Shape {
+    @Override
+    public double calculateArea() {
+        return 0.5 * base * height;
+    }
+}
+
+// Closed for modification: This class never changes, no matter how many shapes we add.
+public final class AreaCalculator {
+    public double calculateTotalArea(List&lt;Shape&gt; shapes) {
+        return shapes.stream()
+                     .mapToDouble(Shape::calculateArea)
+                     .sum();
+    }
+}
+      </code></pre>
+
+      <h3>6. Hard Interview Questions & Gotchas</h3>
+      <div class="callout callout-warning">
+        <p><strong>Q: How do you achieve OCP without premature over-engineering? Should EVERYTHING be an interface?</strong></p>
+        <p><strong>A:</strong> No. Anticipating every possible extension point leads to the "Speculative Generality" anti-pattern. Follow the <strong>Rule of Three</strong> or the principle of "Fool me once." Start concrete. When a change request forces you to modify a module, <em>then</em> refactor it behind an abstraction to protect it from similar future changes. Protect against variations you <em>know</em> are likely (like payment gateways), but don't abstract things that have no business reason to change.</p>
       </div>
     </section>
 
     <!-- L: Liskov Substitution -->
     <section>
       <h2>3. Liskov Substitution Principle (LSP)</h2>
-      <p>Subtypes must be substitutable for their base types without altering the correctness of the program.</p>
-      <div class="jargon">📖 <strong>Analogy</strong>: If you order a taxi, a luxury taxi should also work — it's still a taxi and behaves like one.</div>
       
-      <div class="comparison">
-        <div class="side bad">
-          <h3>Bad Approach</h3>
-          <span class="code-label">Java</span>
-          <pre>
+      <h3>1. Ground-Zero Definition</h3>
+      <p>Derived classes must be perfectly substitutable for their base classes without breaking program correctness. If it looks like a duck, quacks like a duck, but needs batteries, it violates LSP.</p>
+      <div class="jargon">📖 <strong>Analogy</strong>: If you order a taxi, and a luxury sedan arrives, that's fine—it drives you to your destination. If a garbage truck arrives and dumps trash on you, it fails the substitution test, even if it's technically a "Vehicle".</div>
+
+      <h3>2. The Problem / Smells</h3>
+      <p><strong>Code Smell:</strong> Subclasses throwing `UnsupportedOperationException`, or base classes having `if (obj instanceof SubClass)` checks. Empty overridden methods are a dead giveaway.</p>
+
+      <h3>3. Flawed Implementation (Anti-pattern)</h3>
+      <p>The classic Square-Rectangle problem. Mathematically, a square is a rectangle. Behaviorally, it is not.</p>
+      <span class="code-label">Java (Anti-pattern)</span>
+      <pre><code>
 public class Rectangle {
-    protected int width, height;
+    protected int width;
+    protected int height;
+    
     public void setWidth(int width) { this.width = width; }
     public void setHeight(int height) { this.height = height; }
+    public int getArea() { return width * height; }
 }
 
 public class Square extends Rectangle {
+    // VIOLATION: Changing the expected behavior of the base class
     @Override
     public void setWidth(int width) {
         this.width = width;
-        this.height = width; // Breaking expected behavior
+        this.height = width; // Unexpected side effect for a "Rectangle"
+    }
+    
+    @Override
+    public void setHeight(int height) {
+        this.width = height;
+        this.height = height; // Unexpected side effect
     }
 }
-          </pre>
+
+// CATASTROPHIC BUG:
+public void resize(Rectangle r) {
+    r.setWidth(5);
+    r.setHeight(10);
+    // For a Rectangle, area should be 50.
+    // But if 'r' is actually a Square, area is 100! Program logic breaks.
+    assert r.getArea() == 50; 
+}
+      </code></pre>
+
+      <h3>4. Refactored Architecture</h3>
+      <div class="diagram-container">
+        <div class="mermaid">
+          graph TD
+            A[Shape] --> B[Rectangle]
+            A --> C[Square]
+            style A stroke:#333,stroke-width:2px;
         </div>
-        <div class="side good">
-          <h3>Good Approach</h3>
-          <span class="code-label">Java</span>
-          <pre>
+        <p class="caption">Break the false inheritance. Both are Shapes, but a Square does not inherit from Rectangle.</p>
+      </div>
+
+      <h3>5. Clean Java 21 Implementation</h3>
+      <p>Use immutable records and independent implementations of a common behavioral interface.</p>
+      <span class="code-label">Java 21 (Clean)</span>
+      <pre><code>
 public interface Shape {
     int getArea();
 }
 
+// Records are inherently immutable. You can't mutate width/height independently, 
+// eliminating the side-effect bug entirely.
 public record Rectangle(int width, int height) implements Shape {
     @Override
-    public int getArea() { return width * height; }
+    public int getArea() {
+        return width * height;
+    }
 }
 
 public record Square(int side) implements Shape {
     @Override
-    public int getArea() { return side * side; }
+    public int getArea() {
+        return side * side;
+    }
 }
-          </pre>
-        </div>
+      </code></pre>
+
+      <h3>6. Hard Interview Questions & Gotchas</h3>
+      <div class="callout callout-warning">
+        <p><strong>Q: Why does `Square extends Rectangle` break LSP? What is the mathematical vs behavioral subtyping trap?</strong></p>
+        <p><strong>A:</strong> In mathematics, a Square is a specialized Rectangle. In OOP, inheritance is about <em>behavior</em>, not pure taxonomy. A Rectangle promises a behavior: "I can modify my width independently of my height." A Square cannot fulfill this behavioral contract. Therefore, subtyping fails. This highlights that "IS-A" relationships must be evaluated based on the <em>contracts of the methods</em>, not real-world naming.</p>
       </div>
     </section>
 
     <!-- I: Interface Segregation -->
     <section>
       <h2>4. Interface Segregation Principle (ISP)</h2>
-      <p>Clients should not be forced to depend on interfaces they do not use.</p>
-      <div class="jargon">📖 <strong>Analogy</strong>: A restaurant menu shouldn't force you to order dessert just to get the main course.</div>
       
-      <div class="comparison">
-        <div class="side bad">
-          <h3>Bad Approach</h3>
-          <span class="code-label">Java</span>
-          <pre>
-public interface Worker {
-    void work();
-    void eat();
-    void sleep();
+      <h3>1. Ground-Zero Definition</h3>
+      <p>Clients should not be forced to depend on interfaces they do not use. Prefer many client-specific, granular interfaces over one fat, general-purpose interface.</p>
+      <div class="jargon">📖 <strong>Analogy</strong>: At a restaurant, you are given a menu. Imagine if you were forced to order a 5-course meal just because you wanted a glass of water. A modular menu (a la carte) is ISP.</div>
+
+      <h3>2. The Problem / Smells</h3>
+      <p><strong>Code Smell:</strong> Fat interfaces. Classes implementing interfaces but throwing `NotImplementedException` or leaving methods blank for half the contract.</p>
+
+      <h3>3. Flawed Implementation (Anti-pattern)</h3>
+      <span class="code-label">Java (Anti-pattern)</span>
+      <pre><code>
+public interface SmartDevice {
+    void print();
+    void scan();
+    void fax();
 }
 
-public class Robot implements Worker {
-    public void work() { /* Working */ }
-    public void eat() { throw new UnsupportedOperationException(); }
-    public void sleep() { throw new UnsupportedOperationException(); }
-}
-          </pre>
-        </div>
-        <div class="side good">
-          <h3>Good Approach</h3>
-          <span class="code-label">Java</span>
-          <pre>
-public interface Workable {
-    void work();
-}
-
-public interface Eatable {
-    void eat();
-}
-
-public interface Sleepable {
-    void sleep();
-}
-
-public class Robot implements Workable {
+// A basic printer only prints.
+public class BasicPrinter implements SmartDevice {
     @Override
-    public void work() { /* Working */ }
+    public void print() {
+        System.out.println("Printing...");
+    }
+
+    // VIOLATION: Forced to implement methods it doesn't support.
+    @Override
+    public void scan() {
+        throw new UnsupportedOperationException("I cannot scan.");
+    }
+
+    @Override
+    public void fax() {
+        throw new UnsupportedOperationException("I cannot fax.");
+    }
 }
-          </pre>
+      </code></pre>
+
+      <h3>4. Refactored Architecture</h3>
+      <div class="diagram-container">
+        <div class="mermaid">
+          graph TD
+            A[Printer] --> B[BasicPrinter]
+            A --> C[MultiFunctionPrinter]
+            D[Scanner] --> C
+            E[Fax] --> C
         </div>
+      </div>
+
+      <h3>5. Clean Java 21 Implementation</h3>
+      <p>Segregated, granular interfaces. Classes compose only what they need.</p>
+      <span class="code-label">Java 21 (Clean)</span>
+      <pre><code>
+public interface Printer {
+    void print();
+}
+
+public interface Scanner {
+    void scan();
+}
+
+public interface Fax {
+    void fax();
+}
+
+// Client 1: Only needs to print
+public final class BasicPrinter implements Printer {
+    @Override
+    public void print() {
+        System.out.println("Printing document...");
+    }
+}
+
+// Client 2: Needs all features. Composes multiple interfaces.
+public final class MultiFunctionPrinter implements Printer, Scanner, Fax {
+    @Override
+    public void print() { System.out.println("Printing..."); }
+    
+    @Override
+    public void scan() { System.out.println("Scanning..."); }
+    
+    @Override
+    public void fax() { System.out.println("Faxing..."); }
+}
+      </code></pre>
+
+      <h3>6. Hard Interview Questions & Gotchas</h3>
+      <div class="callout callout-warning">
+        <p><strong>Q: How does ISP relate to Single Responsibility? How granular should interfaces be?</strong></p>
+        <p><strong>A:</strong> SRP is about classes having one reason to change; ISP is about interfaces having one set of cohesive behaviors for a specific client. If an interface violates ISP, the classes implementing it will almost certainly violate SRP. However, don't take it to the extreme of "one method per interface" unless that genuinely represents a complete client contract (like `Runnable` or `Callable`). Interfaces should group <em>highly cohesive</em> operations that clients use together.</p>
       </div>
     </section>
 
     <!-- D: Dependency Inversion -->
     <section>
       <h2>5. Dependency Inversion Principle (DIP)</h2>
-      <p>High-level modules should not depend on low-level modules. Both should depend on abstractions.</p>
-      <div class="jargon">📖 <strong>Analogy</strong>: A lamp shouldn't be hardwired to one specific power plant — it uses a standard plug.</div>
       
-      <div class="comparison">
-        <div class="side bad">
-          <h3>Bad Approach</h3>
-          <span class="code-label">Java</span>
-          <pre>
-public class OrderService {
-    private MySqlDatabase database;
+      <h3>1. Ground-Zero Definition</h3>
+      <p>High-level modules (business logic) should not depend on low-level modules (database, I/O, frameworks). Both should depend on abstractions (interfaces). Abstractions should not depend on details; details should depend on abstractions.</p>
+      <div class="jargon">📖 <strong>Analogy</strong>: A lamp does not have its wire soldered directly to the wall wiring of a house. Instead, the wall has a socket (abstraction), and the lamp has a plug (implementation of the abstraction). You can easily swap the lamp for a radio.</div>
 
-    public OrderService() {
-        this.database = new MySqlDatabase(); // Tight coupling
+      <h3>2. The Problem / Smells</h3>
+      <p><strong>Code Smell:</strong> The `new` keyword used inside business logic classes for instantiating volatile dependencies (databases, external APIs). Hardcoded instantiations make unit testing impossible without mocking the universe.</p>
+
+      <h3>3. Flawed Implementation (Anti-pattern)</h3>
+      <span class="code-label">Java (Anti-pattern)</span>
+      <pre><code>
+public class StripePaymentAPI {
+    public void charge(double amount) { /* HTTP call to Stripe */ }
+}
+
+public class CheckoutService {
+    // VIOLATION: Tight coupling to a concrete, low-level detail (Stripe)
+    private StripePaymentAPI stripeApi = new StripePaymentAPI();
+
+    public void checkout(double amount) {
+        // If we want to switch to PayPal, we have to rewrite CheckoutService.
+        // It is also impossible to unit test this without actually hitting Stripe!
+        stripeApi.charge(amount);
     }
 }
-          </pre>
+      </code></pre>
+
+      <h3>4. Refactored Architecture</h3>
+      <div class="diagram-container">
+        <div class="mermaid">
+          graph BT
+            A[CheckoutService] -->|Depends on| B((PaymentProcessor))
+            C[StripeProcessor] -.->|Implements| B
+            D[PayPalProcessor] -.->|Implements| B
+            style B fill:#e1f5fe,stroke:#03a9f4,stroke-width:2px
         </div>
-        <div class="side good">
-          <h3>Good Approach</h3>
-          <span class="code-label">Java</span>
-          <pre>
-public interface Database {
-    void save(Object data);
+        <p class="caption">The dependency is inverted. The low-level module (Stripe) depends on the high-level abstraction (PaymentProcessor) defined by the business layer.</p>
+      </div>
+
+      <h3>5. Clean Java 21 Implementation</h3>
+      <p>Using Constructor Injection to inject the abstraction. The framework/container (like Spring) will handle supplying the concrete instance.</p>
+      <span class="code-label">Java 21 (Clean)</span>
+      <pre><code>
+// Abstraction owned by the High-Level module
+public interface PaymentProcessor {
+    void charge(double amount);
 }
 
-public class OrderService {
-    private final Database database;
+// Low-level module implementation 1
+public final class StripeProcessor implements PaymentProcessor {
+    @Override
+    public void charge(double amount) { System.out.println("Stripe charge: " + amount); }
+}
 
-    // Injected via constructor
-    public OrderService(Database database) {
-        this.database = database;
+// Low-level module implementation 2
+public final class PayPalProcessor implements PaymentProcessor {
+    @Override
+    public void charge(double amount) { System.out.println("PayPal charge: " + amount); }
+}
+
+// High-level module: completely oblivious to HOW payment happens
+public final class CheckoutService {
+    private final PaymentProcessor paymentProcessor;
+
+    // Dependency Injection (Constructor Injection)
+    public CheckoutService(PaymentProcessor paymentProcessor) {
+        this.paymentProcessor = paymentProcessor;
+    }
+
+    public void checkout(double amount) {
+        paymentProcessor.charge(amount);
     }
 }
-          </pre>
-        </div>
+      </code></pre>
+
+      <h3>6. Hard Interview Questions & Gotchas</h3>
+      <div class="callout callout-warning">
+        <p><strong>Q: What is the difference between Dependency Inversion (DIP), Inversion of Control (IoC), and Dependency Injection (DI)?</strong></p>
+        <p><strong>A:</strong> 
+        <br>• <strong>DIP</strong> is the structural <em>Design Principle</em>: high-level modules should depend on abstractions, not concretions.
+        <br>• <strong>IoC</strong> is an architectural <em>Pattern</em>: handing over control of your flow/instantiation to a framework (e.g., the Spring Framework calls your endpoints, rather than your code driving a procedural loop).
+        <br>• <strong>DI</strong> is the specific <em>Technique/Mechanism</em> used to achieve IoC and DIP: passing dependencies to an object (usually via constructor) rather than the object creating them itself. 
+        </p>
       </div>
     </section>
-
-    <div class="callout callout-purple">
-      <strong>Interview Tip:</strong> In the case studies (Parking Lot, Elevator, etc.), we will add comments showing exactly where each SOLID principle is applied. Watch out for these!
-    </div>
 
     <div class="page-nav">
       <a href="index.html" class="prev"><span class="label">← Previous</span><span class="title">LLD Overview</span></a>

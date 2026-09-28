@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Design a Chat System — System Design Mastery</title>
+  <title>Design a Chat System — System Design Masterclass</title>
   <link rel="stylesheet" href="../../css/style.css">
   <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
 </head>
@@ -22,137 +22,225 @@
       <strong>Chat System</strong>
     </div>
 
-    <h1>Design a Chat System (WhatsApp / Messenger)</h1>
-    <p>A chat system enables real-time text-based communication between users.</p>
+    <h1>Design a Chat System (WhatsApp / Slack)</h1>
+    <p>A rigorous masterclass on designing a massive, low-latency, real-time messaging platform handling billions of messages daily.</p>
 
-    <div class="jargon">📖 <strong>Real-time</strong>: Data processing that appears to take place instantaneously upon data entry or receipt.</div>
+    <div class="jargon">📖 <strong>Real-time Messaging</strong>: Systems that push data to clients instantly as it becomes available, bypassing traditional request-response polling limits.</div>
 
-    <h2>Step 1 — Requirements</h2>
+    <h2>PILLAR 1: Ground-Zero Theory & The Pain Point</h2>
+    <p>HTTP is fundamentally stateless and request-driven. The client asks for data, the server responds, and the connection drops. In a chat application, a user can receive a message at any unpredictable millisecond. If we rely on standard HTTP, clients would have to relentlessly poll the server ("Any new messages? Any new messages?"), causing catastrophic network overhead and battery drain on mobile devices.</p>
+    
     <div class="card">
-      <h3>Functional Requirements</h3>
+      <h3>Phase 1: Clarifying Requirements & Capacity</h3>
+      <p><strong>Functional Requirements:</strong></p>
       <ul>
-        <li>1-on-1 messaging</li>
-        <li>Group chat</li>
-        <li>Online/offline status indicator</li>
-        <li>Read receipts</li>
-        <li>Media sharing (images, videos)</li>
+        <li>1-on-1 private messaging and Group chats (up to 500 members).</li>
+        <li>Online presence (status indicators) and Read receipts.</li>
+        <li>Media sharing (Images, Videos, Documents).</li>
+        <li>Push notifications for offline users.</li>
+      </ul>
+      <p><strong>Non-Functional Requirements:</strong></p>
+      <ul>
+        <li><strong>Ultra-Low Latency:</strong> Message delivery in &lt;200ms.</li>
+        <li><strong>Strict Ordering:</strong> Messages must appear in chronological order.</li>
+        <li><strong>High Availability:</strong> Users must be able to view chat history even if underlying nodes fail.</li>
       </ul>
       
-      <h3>Non-functional Requirements</h3>
+      <h4>Capacity Calculations (500M DAU)</h4>
       <ul>
-        <li>Low latency delivery (&lt;200ms)</li>
-        <li>High availability and persistence of chat history</li>
-        <li>Scale: 50M Daily Active Users (DAU)</li>
+        <li><strong>Traffic:</strong> Assuming 500M Daily Active Users, sending 40 messages/day = 20 Billion messages/day.</li>
+        <li><strong>Throughput:</strong> 20B / 86400 ≈ 231,000 messages per second (Peak ~500k MPS).</li>
+        <li><strong>Storage:</strong> 20B messages * 100 bytes = 2 TB / day. Media storage will be exponentially higher (PB/month).</li>
       </ul>
     </div>
 
-    <h2>Step 2 — Architecture</h2>
-    <p>Below is the high-level design of our chat system.</p>
+    <h2>PILLAR 2: Communication Protocol Deep Dive</h2>
+    <p>Choosing the right bidirectional transport is the most critical architectural decision.</p>
+    <div class="comparison">
+      <div class="side bad">
+        <h4>HTTP Short & Long Polling</h4>
+        <p>Short polling creates massive HTTP handshake overhead. Long polling holds connections open but requires re-establishing a connection after every message, leading to latency spikes and excessive server thread consumption.</p>
+      </div>
+      <div class="side good">
+        <h4>WebSockets</h4>
+        <p>A persistent, full-duplex TCP connection. Once the initial HTTP handshake upgrades to WS, data flows efficiently in both directions with negligible overhead. <strong>This is the industry standard for real-time chat.</strong></p>
+      </div>
+    </div>
+
+    <h2>PILLAR 3: High-Level Architecture & Evolution</h2>
 
     <div class="diagram-container">
       <div class="mermaid">
         graph TD
-          UserA[User A] -- WebSocket --> ChatServer[Chat Server]
-          ChatServer -- MQ --> MessageQueue[Message Queue]
-          MessageQueue --> ChatServerB[Chat Server]
-          ChatServerB -- WebSocket --> UserB[User B]
-          ChatServer --> DB[(Message Storage)]
-          ChatServer --> Media[(Media Storage)]
+          UserA[User A] -- WebSocket --> WSGateway[WebSocket Gateway]
+          UserB[User B] -- WebSocket --> WSGatewayB[WebSocket Gateway]
+          WSGateway --> Session[Session Service]
+          WSGateway -- MQ --> Kafka[Message Queue]
+          Kafka --> MsgRouter[Message Service]
+          MsgRouter --> Session
+          MsgRouter --> WSGatewayB
+          MsgRouter --> DB[(Cassandra DB)]
+          WSGateway --> Presence[Presence Service]
+          Presence --> Redis[(Redis)]
       </div>
-      <p class="caption">Figure 1: High Level Architecture of Chat System</p>
+      <p class="caption">Figure 1: Event-Driven Real-time Chat Architecture</p>
     </div>
 
-    <h2>Step 3 — Deep Dive</h2>
-    
-    <h3>Connection Protocols</h3>
-    <div class="comparison">
-      <div class="side good">
-        <h4>WebSocket</h4>
-        <p>Bidirectional, persistent connection. Best for real-time chat.</p>
-      </div>
-      <div class="side bad">
-        <h4>HTTP Polling</h4>
-        <p>Client repeatedly asks server for updates. Wastes bandwidth.</p>
-      </div>
-    </div>
+    <h3>Deep Dive 1: Message Sequencing & Ordering</h3>
+    <p>Using standard database auto-increments fails in a distributed system, and using NTP timestamps fails because server clocks drift. We must use a distributed ID generator like <strong>Twitter Snowflake (64-bit ID)</strong>. Snowflake generates locally ordered IDs based on timestamp, worker ID, and a sequence number, guaranteeing strict chronological ordering across global clusters.</p>
 
-    <h3>Message Storage</h3>
-    <p>Chat applications generate a massive amount of data. We should use a NoSQL database like Cassandra or HBase for storing chat history because they are optimized for fast writes and time-series data.</p>
-    
-    <h3>Online Status</h3>
-    <p>User status is tracked using a heartbeat mechanism. If the server stops receiving heartbeats for a certain period, the user is marked offline.</p>
+    <h3>Deep Dive 2: Message Delivery Flow</h3>
+    <p>User A sends a message to User B: 
+      1) Payload hits User A's connected WebSocket Gateway. 
+      2) Gateway drops it into Kafka to ensure durability. 
+      3) Message Service consumes it, queries Session Service to find which Gateway User B is connected to. 
+      4) Message Service routes it to User B's Gateway, which pushes it over the socket. 
+      5) If User B is offline, push notification triggered via APNS/FCM.</p>
 
-    <h2>Step 4 — Implementation (Java 21)</h2>
-    <span class="code-label">Java</span>
+    <h3>Deep Dive 3: Group Chat Architecture</h3>
+    <p>For small groups (e.g., WhatsApp, max 256/512 members), we use <strong>Fan-out on Write</strong>. One message is cloned into every recipient's individual message inbox queue. For massive channels (e.g., Slack general, Discord), this fails miserably. Instead, we use <strong>Fan-out on Read</strong>, where clients pull messages from a single channel timeline.</p>
+
+    <h3>Deep Dive 4: Online Presence System</h3>
+    <p>Clients send a heartbeat every 5 seconds. The Presence Service updates a Redis key with an expiration (TTL) of 30 seconds. If a user drops connection silently, Redis natively deletes the key after 30s, broadcasting an "Offline" event to their friends.</p>
+
+    <h2>PILLAR 4: Production-Grade Java 21 Code</h2>
+
+    <span class="code-label">Java 21</span>
     <pre>
 import java.util.concurrent.ConcurrentHashMap;
 import java.time.Instant;
-import java.util.List;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.Optional;
 
-// Java 21 Record for chat message
-public record ChatMessage(String id, String senderId, String receiverId, String content, Instant timestamp) {}
+/**
+ * PILLAR 2 Rationales:
+ * - Records provide absolute immutability for thread-safe message passing.
+ * - Sealed types strictly define routing outcomes.
+ */
+public record ChatMessage(long messageId, String senderId, String receiverId, String content, Instant timestamp) {}
 
-// Sealed interface for delivery status
-public sealed interface DeliveryStatus permits DeliveryStatus.Sent, DeliveryStatus.Delivered, DeliveryStatus.Read {
-    record Sent() implements DeliveryStatus {}
-    record Delivered(Instant time) implements DeliveryStatus {}
-    record Read(Instant time) implements DeliveryStatus {}
-}
+public sealed interface RoutingResult permits RoutingResult.Delivered, RoutingResult.QueuedForOffline {}
+    record Delivered() implements RoutingResult {}
+    record QueuedForOffline() implements RoutingResult {}
 
-interface MessageStore {
-    void saveMessage(ChatMessage msg);
-    List&lt;ChatMessage&gt; getHistory(String userId, int limit);
-}
+/**
+ * Snowflake ID Generator for distributed chronological ordering.
+ */
+final class SnowflakeGenerator {
+    private final long machineId;
+    private AtomicLong sequence = new AtomicLong(0L);
+    private volatile long lastTimestamp = -1L;
 
-class OnlineStatusTracker {
-    // Stores userId to last heartbeat timestamp
-    private final ConcurrentHashMap&lt;String, Instant&gt; onlineUsers = new ConcurrentHashMap&lt;&gt;();
-    private static final int OFFLINE_THRESHOLD_SECONDS = 30;
-
-    public void heartbeat(String userId) {
-        onlineUsers.put(userId, Instant.now());
+    public SnowflakeGenerator(long machineId) {
+        this.machineId = machineId;
     }
 
-    public boolean isOnline(String userId) {
-        Instant lastSeen = onlineUsers.get(userId);
-        if (lastSeen == null) return false;
-        return Instant.now().minusSeconds(OFFLINE_THRESHOLD_SECONDS).isBefore(lastSeen);
-    }
-}
-
-class ChatServer {
-    private final MessageStore store;
-    private final OnlineStatusTracker statusTracker;
-
-    public ChatServer(MessageStore store, OnlineStatusTracker statusTracker) {
-        this.store = store;
-        this.statusTracker = statusTracker;
-    }
-
-    public DeliveryStatus sendMessage(ChatMessage msg) {
-        store.saveMessage(msg);
-        
-        if (statusTracker.isOnline(msg.receiverId())) {
-            // Logic to push message to receiver via WebSocket
-            return new DeliveryStatus.Delivered(Instant.now());
+    public synchronized long nextId() {
+        long currentTimestamp = System.currentTimeMillis();
+        if (currentTimestamp < lastTimestamp) {
+            throw new RuntimeException("Clock moved backwards.");
+        }
+        if (currentTimestamp == lastTimestamp) {
+            long seq = sequence.incrementAndGet() & 4095; // 12 bits
+            if (seq == 0) { // Sequence exhausted, wait for next ms
+                while (currentTimestamp <= lastTimestamp) {
+                    currentTimestamp = System.currentTimeMillis();
+                }
+            }
         } else {
-            // Push notification to offline user
-            return new DeliveryStatus.Sent();
+            sequence.set(0L);
+        }
+        lastTimestamp = currentTimestamp;
+        // Simplified shift: 41 bits time | 10 bits machine | 12 bits sequence
+        return (currentTimestamp << 22) | (machineId << 12) | sequence.get();
+    }
+}
+
+/**
+ * WebSocket Connection Manager leveraging Java 21 Virtual Threads 
+ * for handling millions of concurrent persistent connections effortlessly.
+ */
+class WebSocketSessionManager {
+    // Maps userId to their active WebSocket connection
+    private final ConcurrentHashMap&lt;String, WebSocketConnection&gt; activeSessions = new ConcurrentHashMap&lt;&gt;();
+
+    public void onConnect(String userId, WebSocketConnection connection) {
+        activeSessions.put(userId, connection);
+    }
+
+    public void onDisconnect(String userId) {
+        activeSessions.remove(userId);
+    }
+
+    public Optional&lt;WebSocketConnection&gt; getConnection(String userId) {
+        return Optional.ofNullable(activeSessions.get(userId));
+    }
+}
+
+/**
+ * Message Router handling the fan-out and delivery logic.
+ */
+public class MessageRouter {
+    private final WebSocketSessionManager sessionManager;
+    private final NotificationService apnsService;
+    private final Database db;
+
+    public MessageRouter(WebSocketSessionManager sessionManager, NotificationService apnsService, Database db) {
+        this.sessionManager = sessionManager;
+        this.apnsService = apnsService;
+        this.db = db;
+    }
+
+    public RoutingResult routeMessage(ChatMessage msg) {
+        // 1. Persist asynchronously to Cassandra
+        db.save(msg);
+
+        // 2. Check if user is connected to THIS gateway
+        Optional&lt;WebSocketConnection&gt; conn = sessionManager.getConnection(msg.receiverId());
+        
+        if (conn.isPresent()) {
+            conn.get().send(msg); // Push over TCP
+            return new RoutingResult.Delivered();
+        } else {
+            // Push Notification to offline user
+            apnsService.sendPushNotification(msg.receiverId(), "New Message from " + msg.senderId());
+            return new RoutingResult.QueuedForOffline();
         }
     }
 }
+
+interface WebSocketConnection {
+    void send(ChatMessage message);
+}
+interface NotificationService {
+    void sendPushNotification(String userId, String text);
+}
+interface Database {
+    void save(ChatMessage msg);
+}
     </pre>
 
-    <h2>Step 5 — Optimization</h2>
-    <ul>
-        <li><strong>End-to-End Encryption:</strong> Only the sender and receiver hold the keys to decrypt the messages.</li>
-        <li><strong>Message Pagination:</strong> Load chat history in chunks using cursor-based pagination.</li>
-        <li><strong>Media Compression:</strong> Compress images and videos before sending to reduce bandwidth.</li>
-    </ul>
-
-    <div class="callout callout-info">
-      <strong>💡 Interview Tip:</strong> For group chats, explain "fan-out". When a message is sent to a group of 100 people, the server fans out 100 individual messages to the respective receivers.
+    <h2>PILLAR 5: The Interviewer's Deep Follow-Up Questions (The Grill Round)</h2>
+    <div class="callout callout-warning">
+      <strong>Q1: How do you handle End-to-End Encryption (E2EE)?</strong><br>
+      <em>Senior Answer:</em> Implement the Signal Protocol. The server never sees plaintext. Clients exchange public keys (Diffie-Hellman Key Exchange) via the server. Messages are symmetrically encrypted on the device, sent as ciphertexts, and decrypted only by the receiver's private key. The server just routes binary blobs.
     </div>
+    
+    <div class="callout callout-warning">
+      <strong>Q2: How do you handle network blips and out-of-order delivery?</strong><br>
+      <em>Senior Answer:</em> Idempotency keys and local SQLite caching. When a mobile client sends a message, it attaches a unique UUID. The server deduplicates based on this UUID. Clients render messages instantly locally with a "clock" icon, and mark them "Sent" (single tick) only upon server ACK. Snowflake IDs guarantee timeline ordering upon fetch.
+    </div>
+
+    <div class="callout callout-warning">
+      <strong>Q3: How do you synchronize state across multiple devices (Web, Mobile, Tablet)?</strong><br>
+      <em>Senior Answer:</em> Shift from a pure messaging model to an Event Sourcing / Delta Sync model. The server maintains a unified append-only log of events (MessageReceived, MessageRead, MessageDeleted). Devices connect, fetch the last known watermark (Cursor), and pull down all events that happened while they were offline to rebuild local state.
+    </div>
+
+    <h2>PILLAR 6: Trade-offs & When NOT To Use It</h2>
+    <ul>
+      <li><strong>Cassandra vs RDBMS:</strong> We chose Cassandra (Wide-Column NoSQL) because chat generates massive write velocity, and reads are mostly sequential range queries (fetching history). Using MySQL would result in catastrophic B-Tree index fragmentation under this write load. Trade-off: Cassandra lacks strong ACID transactions, which is fine for chat, but disastrous for financial systems.</li>
+      <li><strong>WebSocket vs gRPC:</strong> While gRPC over HTTP/2 supports bi-directional streaming, WebSockets enjoy 100% browser compatibility and pass through corporate firewalls/proxies much more reliably than raw gRPC streams.</li>
+    </ul>
 
     <div class="page-nav">
       <a href="url-shortener.html" class="prev"><span class="label">← Previous</span><span class="title">URL Shortener</span></a>
