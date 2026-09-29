@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>01 · Fundamentals, DML & All Aggregate Functions — SQL Server Mastery</title>
+  <title>01 · Fundamentals, DDL, DML & All Aggregates — SQL Server Mastery</title>
   <link rel="stylesheet" href="css/style.css">
   <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
 </head>
@@ -23,74 +23,234 @@
     </div>
 
     <nav class="breadcrumb">
-      <a href="index.html">SQL Mastery</a> &gt; <span>01 · Fundamentals & Aggregates</span>
+      <a href="index.html">SQL Mastery</a> &gt; <span>01 · Fundamentals, DML & Aggregates</span>
     </nav>
 
     <header>
-      <h1>01 · T-SQL Fundamentals, DML & All Aggregate Functions</h1>
-      <p class="lead">Logical Query Processing Order, 3-Valued Boolean Logic, SARGability, Multi-Dimensional Grouping (ROLLUP, CUBE, GROUPING SETS), and Every Aggregate Function in SQL Server.</p>
+      <h1>01 · T-SQL Fundamentals, DDL, DML & All Aggregate Functions</h1>
+      <p class="lead">The Ground-Zero Architectural Foundation: DDL vs DML Internals, TRUNCATE vs DELETE Page Mechanics, The 11 Phases of Logical Query Processing, 3-Valued Boolean Logic, SARGability, and All Aggregate Functions.</p>
     </header>
 
-    <!-- SECTION 1: LOGICAL QUERY PROCESSING ORDER -->
+    <!-- ================================================================= -->
+    <!-- PILLAR 1: GROUND-ZERO ARCHITECTURE: DDL, DML, DCL, TCL -->
+    <!-- ================================================================= -->
     <section>
-      <h2>1. The Sacred Order of Logical Query Processing</h2>
-      <p>In procedural languages like Java or C++, code executes line-by-line in the order written. In SQL, you declare <strong>what</strong> you want, not <strong>how</strong> to fetch it. The SQL Server query optimizer executes clauses in a strict mathematical sequence that differs fundamentally from lexical typing order.</p>
+      <h2>1. Ground-Zero Architectural Taxonomy: DDL, DML, DCL, TCL</h2>
+      
+      <h3>The Pain Point: Why Is SQL Categorized Into Sub-Languages?</h3>
+      <p>In standard programming languages like Java or Python, you write code that manages memory variables. In database engineering, code operates at different privilege levels and storage boundaries. SQL is divided into four distinct sub-languages, each operating with different transaction log footprints and database lock granularities:</p>
 
-      <div class="mermaid">
-flowchart TD
-    Step1["1. FROM (Evaluate tables & Cartesian products)"] --> Step2["2. ON (Filter join predicates)"]
-    Step2 --> Step3["3. JOIN (Produce joined virtual table)"]
-    Step3 --> Step4["4. WHERE (Filter individual rows)"]
-    Step4 --> Step5["5. GROUP BY (Aggregate rows into buckets)"]
-    Step5 --> Step6["6. WITH CUBE / ROLLUP / GROUPING SETS"]
-    Step6 --> Step7["7. HAVING (Filter aggregated buckets)"]
-    Step7 --> Step8["8. SELECT (Evaluate column expressions & Window Functions)"]
-    Step8 --> Step9["9. DISTINCT (Remove duplicates)"]
-    Step9 --> Step10["10. ORDER BY (Sort result set)"]
-    Step10 --> Step11["11. TOP / OFFSET...FETCH (Paginate & restrict rows)"]
+      <div class="grid grid-2" style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin: 1.5rem 0;">
+        <div class="card" style="border-left: 4px solid var(--primary);">
+          <h4>1. DDL (Data Definition Language)</h4>
+          <p><strong>Commands:</strong> <code>CREATE</code>, <code>ALTER</code>, <code>DROP</code>, <code>TRUNCATE</code>, <code>RENAME</code></p>
+          <p><strong>What it does:</strong> Defines and modifies the <em>schema structure</em> and metadata in the database catalog (e.g. creating tables, adding columns, building indexes). DDL operations acquire heavy <strong>Schema Modification (Sch-M) Locks</strong>, blocking all concurrent reads and writes.</p>
+        </div>
+        <div class="card" style="border-left: 4px solid var(--success);">
+          <h4>2. DML (Data Manipulation Language)</h4>
+          <p><strong>Commands:</strong> <code>SELECT</code>, <code>INSERT</code>, <code>UPDATE</code>, <code>DELETE</code>, <code>MERGE</code></p>
+          <p><strong>What it does:</strong> Queries and modifies the <em>data rows</em> stored inside existing schema structures. Operates with row/page/key locks, modifying 8 KB data pages in the buffer cache and writing to the Transaction Log.</p>
+        </div>
+        <div class="card" style="border-left: 4px solid var(--purple);">
+          <h4>3. TCL (Transaction Control Language)</h4>
+          <p><strong>Commands:</strong> <code>BEGIN TRANSACTION</code>, <code>COMMIT</code>, <code>ROLLBACK</code>, <code>SAVEPOINT</code></p>
+          <p><strong>What it does:</strong> Manages the boundary of ACID atomicity. Enforces whether an entire batch of modifications becomes permanent or rolls back completely.</p>
+        </div>
+        <div class="card" style="border-left: 4px solid var(--accent);">
+          <h4>4. DCL (Data Control Language)</h4>
+          <p><strong>Commands:</strong> <code>GRANT</code>, <code>REVOKE</code>, <code>DENY</code></p>
+          <p><strong>What it does:</strong> Security permissions. Dictates which database users or application roles can execute procedures or access tables.</p>
+        </div>
       </div>
 
-      <div class="card" style="border-left: 4px solid var(--accent); margin-top: 1.5rem;">
-        <h4>⚠️ The Classic Trap: Column Aliases in the WHERE Clause</h4>
-        <p>Why does <code>SELECT FillQuantity * FillPrice AS GrossNotional FROM Executions WHERE GrossNotional > 1000000;</code> fail with <em>"Invalid column name 'GrossNotional'"</em>?</p>
-        <p><strong>Answer:</strong> Because the <code>WHERE</code> clause (Step 4) is evaluated long before the <code>SELECT</code> clause (Step 8) creates the alias! However, you <em>can</em> reference <code>GrossNotional</code> in the <code>ORDER BY</code> clause (Step 10) because <code>ORDER BY</code> executes after <code>SELECT</code>.</p>
-      </div>
-    </section>
+      <!-- TRUNCATE VS DELETE -->
+      <hr style="margin: 2rem 0; border: none; border-top: 1px dashed var(--border);">
+      <h3>The Classic Engineering Showdown: TRUNCATE vs DELETE</h3>
+      <p>Both commands remove data from a table, but their physical mechanics inside the SQL Server storage engine are completely opposite. Choosing the wrong one in production can freeze a live financial system.</p>
 
-    <!-- SECTION 2: 3-VALUED LOGIC & NULL HANDLING -->
-    <section>
-      <h2>2. Three-Valued Logic (3VL) & NULL Traps</h2>
-      <p>In relational algebra, <code>NULL</code> represents an unknown or missing value, not zero or an empty string. Any equality comparison with <code>NULL</code> yields <code>UNKNOWN</code>, not <code>TRUE</code> or <code>FALSE</code>.</p>
-
-      <table border="1" style="width: 100%; border-collapse: collapse; margin: 1rem 0;">
+      <table border="1" style="width: 100%; border-collapse: collapse; margin: 1.5rem 0;">
         <thead>
           <tr style="background: #f1f5f9;">
-            <th>Predicate Expression</th>
-            <th>Result when Value is NULL</th>
-            <th>Explanation</th>
+            <th>Architectural Attribute</th>
+            <th><code>DELETE FROM TableName</code></th>
+            <th><code>TRUNCATE TABLE TableName</code></th>
           </tr>
         </thead>
         <tbody>
           <tr>
-            <td><code>WHERE LimitPrice = NULL</code></td>
-            <td><strong>UNKNOWN</strong> (Evaluates to False in WHERE)</td>
-            <td>Always returns 0 rows! Must use <code>IS NULL</code>.</td>
+            <td><strong>Classification</strong></td>
+            <td>DML (Data Manipulation Language)</td>
+            <td>DDL (Data Definition Language)</td>
           </tr>
           <tr>
-            <td><code>WHERE LimitPrice <> 100</code></td>
-            <td><strong>UNKNOWN</strong> (Filtered out!)</td>
-            <td>Rows where <code>LimitPrice</code> is NULL are excluded because the inequality test evaluates to UNKNOWN!</td>
+            <td><strong>How it Works Under the Hood</strong></td>
+            <td><strong>Row-by-Row:</strong> Traverses the B-tree, marks each row as deleted, updates index pointers, and records every single deleted row payload into the Transaction Log (LDF).</td>
+            <td><strong>Page Deallocation:</strong> Does <em>not</em> read individual rows! It simply updates the Index Allocation Map (IAM) tracking pages, marking entire 8 KB data pages and 64 KB extents as "free".</td>
           </tr>
           <tr>
-            <td><code>WHERE NOT (LimitPrice = 100)</code></td>
-            <td><strong>UNKNOWN</strong> (Filtered out!)</td>
-            <td><code>NOT(UNKNOWN)</code> is still <code>UNKNOWN</code>.</td>
+            <td><strong>Transaction Log Impact</strong></td>
+            <td><strong>Massive Log Generation:</strong> Deleting 10,000,000 rows generates gigabytes of transaction log records, risking disk exhaustion.</td>
+            <td><strong>Minimal Log Generation:</strong> Logs only the deallocation of extents (a few kilobytes total!).</td>
+          </tr>
+          <tr>
+            <td><strong>Identity Value Reset</strong></td>
+            <td>Does <strong>not</strong> reset <code>IDENTITY(1,1)</code> counters. The next insert continues from the highest historical value.</td>
+            <td><strong>Resets</strong> the <code>IDENTITY</code> seed back to its original baseline definition (e.g. 1).</td>
+          </tr>
+          <tr>
+            <td><strong>WHERE Clause Filtering</strong></td>
+            <td>Supported (e.g. <code>WHERE OrderStatus = 'CANCELLED'</code>).</td>
+            <td><strong>Not supported!</strong> It is strictly an all-or-nothing wipe of the entire table.</td>
+          </tr>
+          <tr>
+            <td><strong>Trigger Execution</strong></td>
+            <td>Fires <code>AFTER DELETE</code> and <code>INSTEAD OF DELETE</code> triggers for each affected batch.</td>
+            <td><strong>Bypasses and does NOT fire triggers!</strong></td>
+          </tr>
+          <tr>
+            <td><strong>Foreign Key Restrictions</strong></td>
+            <td>Can execute if child tables contain no matching rows.</td>
+            <td><strong>Forbidden!</strong> Will fail immediately if the table is referenced by ANY foreign key constraint in another table, even if the child table is 100% empty!</td>
+          </tr>
+          <tr>
+            <td><strong>Can it be Rolled Back?</strong></td>
+            <td><strong>YES!</strong> Fully logged, rolls back cleanly.</td>
+            <td><strong>YES!</strong> (Common Interview Myth Debunked: TRUNCATE <em>can</em> be rolled back if executed inside an explicit <code>BEGIN TRANSACTION</code>!).</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <!-- ================================================================= -->
+    <!-- PILLAR 2: THE 11 PHASES OF LOGICAL QUERY PROCESSING -->
+    <!-- ================================================================= -->
+    <section>
+      <h2>2. The 11 Phases of Logical Query Processing: What Really Happens Under the Hood</h2>
+
+      <p>When you write a SQL query, you write it in <strong>lexical syntax order</strong>:</p>
+      <div class="card" style="background: #f1f5f9; font-family: var(--font-code); padding: 0.75rem 1rem;">
+        SELECT &rarr; FROM &rarr; JOIN &rarr; WHERE &rarr; GROUP BY &rarr; HAVING &rarr; ORDER BY
+      </div>
+
+      <p>However, SQL is a <strong>declarative relational language</strong> based on set theory and relational calculus. The SQL Server query optimizer executes clauses in a strict mathematical sequence that differs fundamentally from lexical order. Each phase takes one or more virtual tables as input and emits a new virtual table as output.</p>
+
+      <div class="mermaid">
+flowchart TD
+    Step1["Phase 1: FROM (Evaluate tables & Cartesian cross-products)"] --> Step2["Phase 2: ON (Filter join predicates)"]
+    Step2 --> Step3["Phase 3: JOIN (Generate joined virtual table VT1)"]
+    Step3 --> Step4["Phase 4: WHERE (Filter atomic rows before aggregation VT2)"]
+    Step4 --> Step5["Phase 5: GROUP BY (Partition rows into group buckets VT3)"]
+    Step5 --> Step6["Phase 6: WITH CUBE / ROLLUP (Generate multi-dimensional super-aggregates VT4)"]
+    Step6 --> Step7["Phase 7: HAVING (Filter aggregated group buckets VT5)"]
+    Step7 --> Step8["Phase 8: SELECT (Evaluate expressions, aliases & window functions VT6)"]
+    Step8 --> Step9["Phase 9: DISTINCT (Deduplicate duplicate rows VT7)"]
+    Step9 --> Step10["Phase 10: ORDER BY (Sort result set cursor VT8)"]
+    Step10 --> Step11["Phase 11: TOP / OFFSET...FETCH (Paginate & truncate rows VT9)"]
+      </div>
+
+      <h3>Detailed Phase-by-Phase Execution Walkthrough:</h3>
+
+      <div class="card" style="margin-bottom: 1rem;">
+        <h4>Phase 1 to 3: FROM &rarr; ON &rarr; JOIN</h4>
+        <p>The query engine identifies the source tables. If multiple tables are specified, a Cartesian product is logically generated, and the <code>ON</code> clause filters out rows that do not satisfy the join predicate. For outer joins (LEFT/RIGHT/FULL), unmatched preserved rows are added back with NULLs, emitting Virtual Table 1 (VT1).</p>
+      </div>
+
+      <div class="card" style="margin-bottom: 1rem;">
+        <h4>Phase 4: WHERE</h4>
+        <p>Filters individual rows from VT1 based on the predicate expression. <strong>Critical Principle:</strong> Rows are filtered <em>before</em> any grouping or aggregation occurs. This minimizes the data volume that must be held in working memory for the next phase.</p>
+      </div>
+
+      <div class="card" style="margin-bottom: 1rem;">
+        <h4>Phase 5 & 6: GROUP BY & Multi-Dimensional Super-Aggregates (ROLLUP/CUBE)</h4>
+        <p>Organizes the surviving rows into discrete buckets based on the grouping keys. If <code>WITH ROLLUP</code> or <code>GROUPING SETS</code> is specified, additional subtotal and grand-total rows are generated.</p>
+      </div>
+
+      <div class="card" style="margin-bottom: 1rem;">
+        <h4>Phase 7: HAVING</h4>
+        <p>Filters the <em>aggregated buckets</em> produced by Phase 5. Only groups that satisfy the aggregate condition (e.g. <code>HAVING COUNT(*) > 10</code>) are passed to the next phase.</p>
+      </div>
+
+      <div class="card" style="margin-bottom: 1rem;">
+        <h4>Phase 8: SELECT</h4>
+        <p>This is where the query projections, mathematical calculations, string manipulations, and <strong>Window Functions</strong> are finally evaluated! Column aliases (e.g. <code>AS NetTotal</code>) are born here.</p>
+        <p><strong>Why you cannot use a SELECT alias in WHERE or HAVING:</strong> Because WHERE (Phase 4) and HAVING (Phase 7) execute long <em>before</em> SELECT (Phase 8). The alias does not exist yet!</p>
+      </div>
+
+      <div class="card" style="margin-bottom: 1rem;">
+        <h4>Phase 9 to 11: DISTINCT &rarr; ORDER BY &rarr; TOP / OFFSET-FETCH</h4>
+        <p><code>DISTINCT</code> eliminates duplicate projected rows. Next, <code>ORDER BY</code> sorts the stream (which is why you <em>can</em> reference SELECT aliases in ORDER BY, because Phase 10 runs after Phase 8!). Finally, <code>TOP</code> or <code>OFFSET...FETCH</code> truncates the stream for client pagination.</p>
+      </div>
+    </section>
+
+    <!-- ================================================================= -->
+    <!-- PILLAR 3: THREE-VALUED LOGIC & NULL MECHANICS -->
+    <!-- ================================================================= -->
+    <section>
+      <h2>3. Three-Valued Boolean Logic (3VL) & NULL Mechanics</h2>
+
+      <h3>What is NULL in Relational Theory?</h3>
+      <p>In standard programming languages, a variable is either true or false. In SQL relational algebra (invented by E.F. Codd), <code>NULL</code> is <strong>not a value</strong>. It is not zero (<code>0</code>), not an empty string (<code>''</code>), and not a space. <code>NULL</code> represents <strong>the absence of a value</strong>—an unknown, unrecorded, or inapplicable state.</p>
+
+      <p>Because NULL represents the unknown, any equality or mathematical comparison with NULL cannot be proven true or false. It evaluates to a third truth state: <strong>UNKNOWN</strong>.</p>
+
+      <table border="1" style="width: 100%; border-collapse: collapse; margin: 1.5rem 0;">
+        <thead>
+          <tr style="background: #f1f5f9;">
+            <th>Boolean Expression</th>
+            <th>Evaluation Result</th>
+            <th>Why?</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>100 = NULL</code></td>
+            <td><strong>UNKNOWN</strong></td>
+            <td>Is 100 equal to an unknown value? We cannot know.</td>
+          </tr>
+          <tr>
+            <td><code>NULL = NULL</code></td>
+            <td><strong>UNKNOWN</strong></td>
+            <td>Are two unknown values equal to each other? They could be anything!</td>
+          </tr>
+          <tr>
+            <td><code>NULL <> NULL</code></td>
+            <td><strong>UNKNOWN</strong></td>
+            <td>Are two unknown values different? We cannot know.</td>
+          </tr>
+          <tr>
+            <td><code>TRUE AND UNKNOWN</code></td>
+            <td><strong>UNKNOWN</strong></td>
+            <td>If one half of an AND is unknown, the total result is unknown.</td>
+          </tr>
+          <tr>
+            <td><code>FALSE AND UNKNOWN</code></td>
+            <td><strong>FALSE</strong></td>
+            <td>Because one half is definitively FALSE, the AND condition is definitively FALSE!</td>
+          </tr>
+          <tr>
+            <td><code>TRUE OR UNKNOWN</code></td>
+            <td><strong>TRUE</strong></td>
+            <td>Because one half is definitively TRUE, the OR condition is definitively TRUE!</td>
+          </tr>
+          <tr>
+            <td><code>NOT (UNKNOWN)</code></td>
+            <td><strong>UNKNOWN</strong></td>
+            <td>The inverse of unknown is still unknown.</td>
           </tr>
         </tbody>
       </table>
 
-      <h3>ISNULL() vs COALESCE() — The Critical Interview Difference</h3>
-      <table border="1" style="width: 100%; border-collapse: collapse; margin: 1rem 0;">
+      <div class="card" style="border-left: 5px solid var(--danger); background: #fef2f2;">
+        <h4>⚠️ The WHERE Clause Filter Rule for UNKNOWN</h4>
+        <p>A <code>WHERE</code> clause only admits rows where the predicate evaluates to strictly <strong>TRUE</strong>. If an expression evaluates to <strong>FALSE</strong> or <strong>UNKNOWN</strong>, the row is discarded!</p>
+        <p>This is why writing: <code>WHERE LimitPrice = NULL</code> or <code>WHERE LimitPrice <> 100</code> <strong>filters out every row where LimitPrice is NULL</strong>! You must strictly use the predicate: <code>WHERE LimitPrice IS NULL</code> or <code>WHERE LimitPrice IS NOT NULL</code>.</p>
+      </div>
+
+      <!-- ISNULL VS COALESCE -->
+      <hr style="margin: 2rem 0; border: none; border-top: 1px dashed var(--border);">
+      <h3>ISNULL() vs COALESCE(): The Deep Architectural Differences</h3>
+      
+      <table border="1" style="width: 100%; border-collapse: collapse; margin: 1.5rem 0;">
         <thead>
           <tr style="background: #f1f5f9;">
             <th>Feature</th>
@@ -100,32 +260,39 @@ flowchart TD
         </thead>
         <tbody>
           <tr>
-            <td><strong>Origin</strong></td>
-            <td>Proprietary T-SQL built-in function</td>
-            <td>ANSI SQL Standard compliant expression</td>
+            <td><strong>Standard Compliance</strong></td>
+            <td>Proprietary Microsoft T-SQL function.</td>
+            <td>ANSI SQL Standard compliant.</td>
           </tr>
           <tr>
-            <td><strong>Parameter Count</strong></td>
-            <td>Strictly 2 parameters</td>
-            <td>2 to unlimited parameters (returns first non-null)</td>
+            <td><strong>Arguments Allowed</strong></td>
+            <td>Strictly exactly <strong>2 arguments</strong>.</td>
+            <td>Accepts <strong>2 to unlimited arguments</strong> (returns the first non-null argument).</td>
           </tr>
           <tr>
-            <td><strong>Data Type Resolution</strong></td>
-            <td>Takes the data type of the <strong>first</strong> expression. If 1st is <code>VARCHAR(5)</code> and replacement is <code>VARCHAR(20)</code>, replacement is truncated!</td>
-            <td>Takes the data type with the <strong>highest precedence</strong> according to SQL Server type precedence rules.</td>
+            <td><strong>Data Type Resolution (The Silent Bug Trap!)</strong></td>
+            <td>Takes the data type and length of the <strong>first expression</strong>. If expr1 is <code>VARCHAR(3)</code> and replacement is <code>VARCHAR(20)</code>, replacement is <strong>truncated to 3 characters</strong>!</td>
+            <td>Takes the data type with the <strong>highest precedence</strong> among all expressions according to SQL Server type precedence hierarchy. No silent truncation!</td>
           </tr>
           <tr>
-            <td><strong>Subquery Evaluation</strong></td>
-            <td>Evaluates subqueries only once.</td>
-            <td>Internally rewrites to a <code>CASE WHEN</code> construct; subqueries might be evaluated multiple times in older builds!</td>
+            <td><strong>Nullability of Result</strong></td>
+            <td>Always non-nullable if replacement expression is non-null.</td>
+            <td>Can be nullable if all arguments are nullable.</td>
+          </tr>
+          <tr>
+            <td><strong>Query Plan Evaluation</strong></td>
+            <td>Evaluates subqueries passed as arguments only once.</td>
+            <td>Internally rewrites to a <code>CASE WHEN</code> expression; subqueries passed as parameters can be evaluated multiple times in older SQL Server builds!</td>
           </tr>
         </tbody>
       </table>
     </section>
 
-    <!-- SECTION 3: ALL AGGREGATE FUNCTIONS -->
+    <!-- ================================================================= -->
+    <!-- PILLAR 4: ALL AGGREGATE FUNCTIONS -->
+    <!-- ================================================================= -->
     <section>
-      <h2>3. Deep Dive: All SQL Server Aggregate Functions Explained from First Principles</h2>
+      <h2>4. Deep Dive: All SQL Server Aggregate Functions Explained from First Principles</h2>
       <p>An <strong>Aggregate Function</strong> performs a calculation across a set of values in a column and collapses them into a single scalar value. In relational theory, aggregate functions ignore <code>NULL</code> values in their calculations (with the single exception of <code>COUNT(*)</code>).</p>
 
       <!-- COUNT VARIANTS -->
@@ -254,375 +421,96 @@ GROUP BY AccountID;
       </table>
     </section>
 
-    <!-- SECTION 4: SARGABILITY -->
+    <!-- ================================================================= -->
+    <!-- PILLAR 5: SARGABILITY INTERNALS -->
+    <!-- ================================================================= -->
     <section>
-      <h2>4. SARGability (Search Argument Able) Internals</h2>
-      <p>A query predicate is <strong>SARGable</strong> if the query engine can exploit a B-Tree index seek instead of scanning every page in the table.</p>
+      <h2>5. SARGability (Search Argument Able) Internals</h2>
+      
+      <h3>What is SARGability & Why Does It Dictate 90% of Performance?</h3>
+      <p>A query predicate is <strong>SARGable</strong> if the SQL Server Query Optimizer can utilize an <strong>Index Seek</strong> down the B-Tree index to pinpoint matching rows directly, instead of scanning every single 8 KB data page in the entire table.</p>
 
-      <div class="card" style="border-left: 4px solid var(--danger);">
-        <h4>🚫 Anti-Pattern: Non-SARGable Query (Forces Table/Clustered Index Scan)</h4>
-<pre><code class="language-sql">-- Non-SARGable: Wrapping indexed column in a function
-SELECT OrderID, LimitPrice FROM Orders
-WHERE YEAR(OrderTime) = 2024 AND MONTH(OrderTime) = 3;
+      <div class="mermaid">
+flowchart TD
+    Predicate["Query Predicate (WHERE clause)"] --> Check{"Is Predicate SARGable?"}
+    Check -- Yes --> Seek["Index Seek (B-Tree traversal)<br/>Touches 3-4 pages in 0.5ms!"]
+    Check -- No --> Scan["Table / Clustered Index Scan<br/>Reads 5,000,000 pages from disk in 15 seconds!"]
+      </div>
 
--- Non-SARGable: Data type mismatch causing implicit conversion
-SELECT OrderID FROM Orders WHERE AccountNumber = 1001; -- If AccountNumber is VARCHAR
+      <h3>The 3 Universal SARGability Violations (Anti-Patterns):</h3>
+
+      <div class="card" style="border-left: 4px solid var(--danger); margin-bottom: 1rem;">
+        <h4>Violation 1: Wrapping Indexed Columns in Mathematical or String Functions</h4>
+        <pre><code class="language-sql">-- 🚫 NON-SARGABLE (Forces Full Table Scan):
+-- The engine cannot predict the output of YEAR() without evaluating it for every single row!
+SELECT OrderID FROM Orders WHERE YEAR(OrderTime) = 2024;
+
+-- ✅ SARGABLE REFACTOR (Enables B-Tree Index Seek):
+SELECT OrderID FROM Orders 
+WHERE OrderTime >= '2024-01-01 00:00:00' AND OrderTime < '2025-01-01 00:00:00';
 </code></pre>
       </div>
 
-      <div class="card" style="border-left: 4px solid var(--success); margin-top: 1rem;">
-        <h4>✅ SARGable Query (Enables B-Tree Index Seek)</h4>
-<pre><code class="language-sql">-- SARGable: Isolate column on one side of comparison with a date boundary
-SELECT OrderID, LimitPrice FROM Orders
-WHERE OrderTime >= '2024-03-01 00:00:00' 
-  AND OrderTime < '2024-04-01 00:00:00';
+      <div class="card" style="border-left: 4px solid var(--danger); margin-bottom: 1rem;">
+        <h4>Violation 2: Implicit Data Type Conversions</h4>
+        <pre><code class="language-sql">-- If AccountNumber is VARCHAR(20) in the table, but the query passes NVARCHAR:
+-- SQL Server type precedence rules dictate that VARCHAR must convert to NVARCHAR!
+-- The engine rewrites the query internally to: WHERE CONVERT(NVARCHAR(20), AccountNumber) = N'ACC-1001'
+-- This function wrapper completely disables the Index Seek!
+SELECT AccountID FROM Accounts WHERE AccountNumber = N'ACC-1001'; -- 🚫
+
+-- ✅ Ensure data types match strictly:
+SELECT AccountID FROM Accounts WHERE AccountNumber = 'ACC-1001'; -- ✅ Index Seek!
+</code></pre>
+      </div>
+
+      <div class="card" style="border-left: 4px solid var(--danger); margin-bottom: 1rem;">
+        <h4>Violation 3: Leading Wildcards in LIKE Predicates</h4>
+        <pre><code class="language-sql">-- 🚫 NON-SARGABLE: Leading wildcard requires scanning every string
+SELECT ClientID FROM Clients WHERE ClientName LIKE '%Capital';
+
+-- ✅ SARGABLE: Trailing wildcard seeks down the B-Tree alphabetically
+SELECT ClientID FROM Clients WHERE ClientName LIKE 'Capital%';
 </code></pre>
       </div>
     </section>
 
-    <!-- SECTION 5: HANDS-ON EXERCISES -->
+    <!-- ================================================================= -->
+    <!-- PILLAR 6: INTERVIEW SCRIPT & FOLLOW-UP GRILL ROUND -->
+    <!-- ================================================================= -->
     <section>
-      <h2>🏋️ Module 01 Exercises (With Toggleable Solutions)</h2>
-      <p>Practice these 8 production-grade problems on your local instance. Click each solution toggle to inspect the optimal T-SQL query and architectural explanation.</p>
-
-      <!-- Exercise 1 -->
-      <div class="exercise-box">
-        <div class="exercise-header">
-          <div class="exercise-title">Exercise 1.1: Aggregated Trade Volumes with Integer Truncation Guard</div>
-          <span class="badge badge-easy">Easy</span>
-        </div>
-        <div class="schema-context">
-          <strong>Context:</strong> Table <code>Executions (ExecutionID, OrderID, FillQuantity, FillPrice, ExecutionFee, LiquidityFlag)</code>
-        </div>
-        <p><strong>Requirement:</strong> Write a query to calculate for each liquidity flag ('A' for Added, 'R' for Removed): total execution count, total shares filled, total execution fees, and the exact arithmetic average fill price formatted to 4 decimal places. Ensure that average calculation does not suffer from integer division truncation.</p>
-
-        <div class="solution-details">
-          <details>
-            <summary class="solution-summary"><span>💡 View Solution & Explanation</span> <span>▼</span></summary>
-            <div class="solution-content">
-<pre><code class="language-sql">SELECT 
-    LiquidityFlag,
-    COUNT(*) AS TotalFills,
-    SUM(CAST(FillQuantity AS BIGINT)) AS TotalSharesFilled,
-    SUM(ExecutionFee) AS TotalFees,
-    CAST(AVG(CAST(FillPrice AS DECIMAL(18,4))) AS DECIMAL(18,4)) AS AvgFillPrice,
-    -- Or Weighted Average Price (VWAP):
-    CAST(SUM(CAST(FillQuantity AS DECIMAL(18,4)) * FillPrice) / 
-         NULLIF(SUM(CAST(FillQuantity AS DECIMAL(18,4))), 0) AS DECIMAL(18,4)) AS VWAP
-FROM Executions
-GROUP BY LiquidityFlag;
-</code></pre>
-              <div class="solution-explanation">
-                <strong>Why this works:</strong> <code>CAST(FillQuantity AS BIGINT)</code> avoids arithmetic overflow when trading volumes exceed 2.14 billion shares. <code>NULLIF(..., 0)</code> prevents a fatal divide-by-zero exception if a group has 0 volume.
-              </div>
-            </div>
-          </details>
-        </div>
-      </div>
-
-      <!-- Exercise 2 -->
-      <div class="exercise-box">
-        <div class="exercise-header">
-          <div class="exercise-title">Exercise 1.2: Delimited Tickers Per Client using STRING_AGG</div>
-          <span class="badge badge-easy">Easy</span>
-        </div>
-        <div class="schema-context">
-          <strong>Context:</strong> <code>Clients</code>, <code>Accounts</code>, <code>Orders</code>, <code>Securities</code>
-        </div>
-        <p><strong>Requirement:</strong> For each active Institutional Client, generate a single comma-separated list of distinct stock tickers they have placed orders for, ordered alphabetically within the string (e.g. <code>"AAPL, MSFT, NVDA"</code>). Do not include NULLs or duplicates.</p>
-
-        <div class="solution-details">
-          <details>
-            <summary class="solution-summary"><span>💡 View Solution & Explanation</span> <span>▼</span></summary>
-            <div class="solution-content">
-<pre><code class="language-sql">WITH DistinctClientOrders AS (
-    SELECT DISTINCT 
-        c.ClientID,
-        c.ClientName,
-        s.Ticker
-    FROM Clients c
-    INNER JOIN Accounts a ON c.ClientID = a.ClientID
-    INNER JOIN Orders o ON a.AccountID = o.AccountID
-    INNER JOIN Securities s ON o.SecurityID = s.SecurityID
-    WHERE c.ClientType = 'INSTITUTIONAL'
-)
-SELECT 
-    ClientID,
-    ClientName,
-    STRING_AGG(Ticker, ', ') WITHIN GROUP (ORDER BY Ticker ASC) AS TradedTickers
-FROM DistinctClientOrders
-GROUP BY ClientID, ClientName;
-</code></pre>
-              <div class="solution-explanation">
-                <strong>Key Insight:</strong> <code>STRING_AGG()</code> requires SQL Server 2017+. Because <code>STRING_AGG(DISTINCT col)</code> is not natively supported in earlier T-SQL versions, deduplication is cleanly pre-computed in a Common Table Expression (CTE) first.
-              </div>
-            </div>
-          </details>
-        </div>
-      </div>
-
-      <!-- Exercise 3 -->
-      <div class="exercise-box">
-        <div class="exercise-header">
-          <div class="exercise-title">Exercise 1.3: Multi-Dimensional Matrix Reporting with GROUPING SETS</div>
-          <span class="badge badge-medium">Medium</span>
-        </div>
-        <div class="schema-context">
-          <strong>Context:</strong> <code>Securities (Sector, AssetClass)</code>, <code>Orders (LimitPrice, Quantity)</code>
-        </div>
-        <p><strong>Requirement:</strong> Generate an institutional risk summary showing total gross notional value (<code>Quantity * LimitPrice</code>) sliced by: (1) Sector and AssetClass, (2) Sector only, (3) AssetClass only, and (4) Grand Total. Include a column <code>ReportLevel</code> that cleanly labels the aggregation tier using <code>GROUPING_ID()</code>.</p>
-
-        <div class="solution-details">
-          <details>
-            <summary class="solution-summary"><span>💡 View Solution & Explanation</span> <span>▼</span></summary>
-            <div class="solution-content">
-<pre><code class="language-sql">SELECT 
-    CASE GROUPING_ID(s.Sector, s.AssetClass)
-        WHEN 0 THEN 'Sector & Asset Class'
-        WHEN 1 THEN 'Sector Subtotal'
-        WHEN 2 THEN 'Asset Class Subtotal'
-        WHEN 3 THEN 'Company Grand Total'
-    END AS ReportLevel,
-    ISNULL(s.Sector, '[ALL SECTORS]') AS Sector,
-    ISNULL(s.AssetClass, '[ALL ASSET CLASSES]') AS AssetClass,
-    COUNT(o.OrderID) AS TotalOrders,
-    SUM(CAST(o.Quantity AS DECIMAL(18,4)) * ISNULL(o.LimitPrice, 0.00)) AS TotalNotional
-FROM Securities s
-INNER JOIN Orders o ON s.SecurityID = o.SecurityID
-GROUP BY GROUPING SETS (
-    (s.Sector, s.AssetClass),
-    (s.Sector),
-    (s.AssetClass),
-    ()
-)
-ORDER BY GROUPING_ID(s.Sector, s.AssetClass), s.Sector, s.AssetClass;
-</code></pre>
-              <div class="solution-explanation">
-                <strong>Engine Mechanism:</strong> <code>GROUPING_ID()</code> returns a binary bitmask where a bit is 1 if the corresponding column is aggregated into a subtotal, and 0 if it is grouped. This allows unambiguous distinction between real NULLs in the table versus subtotal NULLs.
-              </div>
-            </div>
-          </details>
-        </div>
-      </div>
-
-      <!-- Exercise 4 -->
-      <div class="exercise-box">
-        <div class="exercise-header">
-          <div class="exercise-title">Exercise 1.4: Refactoring a Non-SARGable Audit Query for Index Optimization</div>
-          <span class="badge badge-medium">Medium</span>
-        </div>
-        <div class="schema-context">
-          <strong>Context:</strong> <code>AuditLogs (LogID, TableName, LoggedAt, ChangedBy)</code> with an index on <code>LoggedAt</code>.
-        </div>
-        <p><strong>Requirement:</strong> A production report uses this slow query:
-        <br><code>SELECT * FROM AuditLogs WHERE DATEDIFF(day, LoggedAt, GETUTCDATE()) <= 7;</code>
-        <br>Refactor this query to be 100% SARGable so the query engine utilizes an Index Seek on <code>LoggedAt</code>, and explain why.</p>
-
-        <div class="solution-details">
-          <details>
-            <summary class="solution-summary"><span>💡 View Solution & Explanation</span> <span>▼</span></summary>
-            <div class="solution-content">
-<pre><code class="language-sql">-- SARGable Refactor:
-DECLARE @CutoffDate DATETIME2(3) = DATEADD(DAY, -7, SYSUTCDATETIME());
-
-SELECT LogID, TableName, RecordID, ChangedBy, LoggedAt
-FROM AuditLogs
-WHERE LoggedAt >= @CutoffDate;
-</code></pre>
-              <div class="solution-explanation">
-                <strong>Why this is faster:</strong> In the original query, <code>DATEDIFF()</code> had to be computed for every single row in <code>AuditLogs</code>, forcing an Index Scan across millions of pages. The refactored version calculates the parameter once and performs an instantaneous B-Tree <strong>Index Seek</strong> with a range scan.
-              </div>
-            </div>
-          </details>
-        </div>
-      </div>
-
-      <!-- Exercise 5 -->
-      <div class="exercise-box">
-        <div class="exercise-header">
-          <div class="exercise-title">Exercise 1.5: Detecting Missing High-Value Settlements with Anti-Null Guards</div>
-          <span class="badge badge-hard">Hard</span>
-        </div>
-        <div class="schema-context">
-          <strong>Context:</strong> <code>Accounts</code>, <code>LedgerTransactions</code>
-        </div>
-        <p><strong>Requirement:</strong> Find all Accounts that have never had a <code>WITHDRAWAL</code> transaction exceeding $100,000, but currently maintain an active CashBalance > $500,000. Write this using three distinct patterns: <code>LEFT JOIN / IS NULL</code>, <code>NOT EXISTS</code>, and <code>NOT IN</code>. Explain which one is safest when NULLs exist.</p>
-
-        <div class="solution-details">
-          <details>
-            <summary class="solution-summary"><span>💡 View Solution & Explanation</span> <span>▼</span></summary>
-            <div class="solution-content">
-<pre><code class="language-sql">-- Method 1: NOT EXISTS (Safest & Most Performant with proper indexes)
-SELECT a.AccountID, a.AccountNumber, a.CashBalance
-FROM Accounts a
-WHERE a.CashBalance > 500000.00
-  AND NOT EXISTS (
-      SELECT 1 
-      FROM LedgerTransactions lt
-      WHERE lt.AccountID = a.AccountID
-        AND lt.TransactionType = 'WITHDRAWAL'
-        AND lt.Amount > 100000.00
-  );
-
--- Method 2: LEFT JOIN with IS NULL filter
-SELECT a.AccountID, a.AccountNumber, a.CashBalance
-FROM Accounts a
-LEFT JOIN LedgerTransactions lt 
-       ON a.AccountID = lt.AccountID 
-      AND lt.TransactionType = 'WITHDRAWAL' 
-      AND lt.Amount > 100000.00
-WHERE a.CashBalance > 500000.00
-  AND lt.TransactionID IS NULL;
-
--- Method 3: NOT IN (FATAL TRAP WARNING!)
--- If the subquery returns even a SINGLE NULL, NOT IN returns ZERO rows total!
-SELECT a.AccountID, a.AccountNumber, a.CashBalance
-FROM Accounts a
-WHERE a.CashBalance > 500000.00
-  AND a.AccountID NOT IN (
-      SELECT lt.AccountID 
-      FROM LedgerTransactions lt
-      WHERE lt.TransactionType = 'WITHDRAWAL'
-        AND lt.Amount > 100000.00
-        AND lt.AccountID IS NOT NULL -- Mandatory NULL guard!
-  );
-</code></pre>
-              <div class="solution-explanation">
-                <strong>Critical Interview Trap:</strong> If a subquery used with <code>NOT IN</code> returns a NULL, the condition evaluates to <code>UNKNOWN</code> for all outer rows, causing the entire query to return 0 rows! Always prefer <code>NOT EXISTS</code>.
-              </div>
-            </div>
-          </details>
-        </div>
-      </div>
-
-      <!-- Exercise 6 -->
-      <div class="exercise-box">
-        <div class="exercise-header">
-          <div class="exercise-title">Exercise 1.6: Probabilistic Counting on Multi-Billion Row Settlement Logs</div>
-          <span class="badge badge-medium">Medium</span>
-        </div>
-        <div class="schema-context">
-          <strong>Context:</strong> Table <code>AuditLogs (LogID, ChangedBy, RecordID, LoggedAt)</code>
-        </div>
-        <p><strong>Requirement:</strong> Write a query comparing the execution time and cardinality output of <code>COUNT(DISTINCT ChangedBy)</code> versus <code>APPROX_COUNT_DISTINCT(ChangedBy)</code> across the audit table. Explain the internal HyperLogLog algorithm.</p>
-
-        <div class="solution-details">
-          <details>
-            <summary class="solution-summary"><span>💡 View Solution & Explanation</span> <span>▼</span></summary>
-            <div class="solution-content">
-<pre><code class="language-sql">-- Compare exact vs approximate aggregation
-SELECT 
-    COUNT(DISTINCT ChangedBy) AS ExactUniqueUsers,
-    APPROX_COUNT_DISTINCT(ChangedBy) AS ApproxUniqueUsers,
-    ABS(COUNT(DISTINCT ChangedBy) - APPROX_COUNT_DISTINCT(ChangedBy)) * 100.0 / 
-        NULLIF(COUNT(DISTINCT ChangedBy), 0) AS ErrorPercentage
-FROM AuditLogs;
-</code></pre>
-              <div class="solution-explanation">
-                <strong>Internal Mechanics:</strong> <code>COUNT(DISTINCT)</code> requires sorting or hashing every single distinct value into TempDB memory worktables. <code>APPROX_COUNT_DISTINCT</code> uses HyperLogLog (HLL) hashing: it hashes values into 64-bit binaries and tracks the maximum number of leading zeros in buckets. It guarantees within 2% of actual cardinality using only ~1.5 KB of fixed memory!
-              </div>
-            </div>
-          </details>
-        </div>
-      </div>
-
-      <!-- Exercise 7 -->
-      <div class="exercise-box">
-        <div class="exercise-header">
-          <div class="exercise-title">Exercise 1.7: Instant Table Tamper Detection with CHECKSUM_AGG</div>
-          <span class="badge badge-hard">Hard</span>
-        </div>
-        <div class="schema-context">
-          <strong>Context:</strong> <code>Securities (SecurityID, Ticker, IsActive, LotSize)</code>
-        </div>
-        <p><strong>Requirement:</strong> Write a query that computes a single 4-byte signature representing the exact state of all active securities. Demonstrate how changing a single lot size alters the checksum without querying the entire table.</p>
-
-        <div class="solution-details">
-          <details>
-            <summary class="solution-summary"><span>💡 View Solution & Explanation</span> <span>▼</span></summary>
-            <div class="solution-content">
-<pre><code class="language-sql">-- 1. Compute table state signature
-SELECT CHECKSUM_AGG(BINARY_CHECKSUM(SecurityID, Ticker, LotSize, IsActive)) AS TableSignature
-FROM Securities
-WHERE IsActive = 1;
-
--- 2. Verification scenario:
--- If an external process modifies a lot size, CHECKSUM_AGG immediately returns a different integer.
--- High-frequency trading engines poll this signature to invalidate local in-memory caches.
-</code></pre>
-              <div class="solution-explanation">
-                <strong>Engineering Pattern:</strong> <code>BINARY_CHECKSUM</code> computes an XOR/hash of the row attributes, and <code>CHECKSUM_AGG</code> reduces the column of checksums to a single integer. Ideal for cache invalidation protocols.
-              </div>
-            </div>
-          </details>
-        </div>
-      </div>
-
-      <!-- Exercise 8 -->
-      <div class="exercise-box">
-        <div class="exercise-header">
-          <div class="exercise-title">Exercise 1.8: Atomic Upsert using T-SQL MERGE with OUTPUT Clause</div>
-          <span class="badge badge-hard">Hard</span>
-        </div>
-        <div class="schema-context">
-          <strong>Context:</strong> <code>PortfolioPositions (AccountID, SecurityID, PositionUnits, AverageEntryPrice)</code>
-        </div>
-        <p><strong>Requirement:</strong> When a new fill arrives, upsert the position: if the (AccountID, SecurityID) pair exists, update the units and recalculate weighted average price; if it does not exist, insert it. Output the action taken (<code>$action</code>) and before/after values.</p>
-
-        <div class="solution-details">
-          <details>
-            <summary class="solution-summary"><span>💡 View Solution & Explanation</span> <span>▼</span></summary>
-            <div class="solution-content">
-<pre><code class="language-sql">DECLARE @NewAccountID INT = 1001;
-DECLARE @NewSecurityID INT = 5001;
-DECLARE @FilledQty INT = 500;
-DECLARE @FillPrice DECIMAL(18,4) = 185.50;
-
-MERGE PortfolioPositions WITH (HOLDLOCK) AS target
-USING (SELECT @NewAccountID AS AccountID, @NewSecurityID AS SecurityID) AS source
-   ON target.AccountID = source.AccountID 
-  AND target.SecurityID = source.SecurityID
-WHEN MATCHED THEN
-    UPDATE SET 
-        target.AverageEntryPrice = 
-            ((target.PositionUnits * target.AverageEntryPrice) + (@FilledQty * @FillPrice)) / 
-            (target.PositionUnits + @FilledQty),
-        target.PositionUnits = target.PositionUnits + @FilledQty,
-        target.LastValuationTime = SYSUTCDATETIME()
-WHEN NOT MATCHED THEN
-    INSERT (AccountID, SecurityID, PositionUnits, AverageEntryPrice, CurrentMarketPrice, LastValuationTime)
-    VALUES (source.AccountID, source.SecurityID, @FilledQty, @FillPrice, @FillPrice, SYSUTCDATETIME())
-OUTPUT 
-    $action AS MergeAction,
-    inserted.AccountID,
-    inserted.SecurityID,
-    deleted.PositionUnits AS OldUnits,
-    inserted.PositionUnits AS NewUnits,
-    inserted.AverageEntryPrice AS NewAvgPrice;
-</code></pre>
-              <div class="solution-explanation">
-                <strong>Concurrency Warning:</strong> Always include <code>WITH (HOLDLOCK)</code> on the target of a T-SQL <code>MERGE</code> statement. Without <code>HOLDLOCK</code>, concurrent transactions can experience race conditions leading to <code>PRIMARY KEY</code> / <code>UNIQUE</code> constraint violations!
-              </div>
-            </div>
-          </details>
-        </div>
-      </div>
-    </section>
-
-    <!-- SECTION 6: INTERVIEW SCRIPT -->
-    <section>
-      <h2>📋 How to Answer This in an Interview</h2>
-      <div class="card" style="background: #f8fafc; border-left: 5px solid var(--purple);">
+      <h2>📋 How to Master This in an Interview</h2>
+      
+      <div class="card" style="background: #f8fafc; border-left: 5px solid var(--purple); margin-bottom: 1.5rem;">
         <h4>Interviewer Question: "Explain the Logical Query Processing Order in SQL Server and why it matters."</h4>
-        <p><strong>Staff Engineer Response:</strong></p>
+        <p><strong>Staff Engineer Model Response:</strong></p>
         <blockquote style="font-style: italic; color: #334155; margin: 0.5rem 0;">
-          "In SQL Server, queries do not execute in the syntactic order they are written (SELECT-FROM-WHERE). Instead, logical processing follows an 11-step sequence: FROM and ON first evaluate tables and joins, followed by WHERE which filters atomic rows before any grouping. GROUP BY then partitions the surviving rows into buckets, optional super-aggregates like ROLLUP or CUBE generate subtotals, and HAVING filters those aggregated buckets."
+          "In SQL Server, queries do not execute in the syntactic order they are written (SELECT-FROM-WHERE). Instead, logical processing follows an 11-step sequence: FROM and ON first evaluate tables and joins, followed by WHERE which filters atomic rows before any grouping. GROUP BY then partitions the surviving rows into buckets, optional super-aggregates like ROLLUP or CUBE generate subtotals, and HAVING filters those aggregated buckets.
           <br><br>
-          "Only then does the SELECT phase execute, evaluating projected expressions, aliases, and window function calculations. Finally, DISTINCT deduplicates the stream, ORDER BY sorts the rows, and TOP or OFFSET-FETCH truncates the result set."
+          Only then does the SELECT phase execute, evaluating projected expressions, aliases, and window function calculations. Finally, DISTINCT deduplicates the stream, ORDER BY sorts the rows, and TOP or OFFSET-FETCH truncates the result set.
           <br><br>
-          "Understanding this sequence is critical for two reasons: First, it explains syntax boundaries—such as why column aliases created in SELECT cannot be referenced in WHERE or HAVING, but are valid in ORDER BY. Second, it dictates optimization: filtering rows early in WHERE before the GROUP BY phase significantly minimizes working memory grants and TempDB spilling compared to filtering post-aggregation in HAVING."
+          Understanding this sequence is critical for two reasons: First, it explains syntax boundaries—such as why column aliases created in SELECT cannot be referenced in WHERE or HAVING, but are valid in ORDER BY. Second, it dictates optimization: filtering rows early in WHERE before the GROUP BY phase significantly minimizes working memory grants and TempDB spilling compared to filtering post-aggregation in HAVING."
         </blockquote>
       </div>
+
+      <div class="card" style="background: #fffbeb; border-left: 5px solid var(--accent);">
+        <h4>🎯 The Interviewer Grill Round (Trap Follow-Ups)</h4>
+        <ul>
+          <li><strong>Trap:</strong> <em>"Can TRUNCATE be rolled back inside an explicit transaction?"</em><br>
+          <strong>Answer:</strong> "Yes! Contrary to popular myth, <code>TRUNCATE TABLE</code> is a fully transaction-safe DDL command. If executed inside <code>BEGIN TRANSACTION ... ROLLBACK TRANSACTION</code>, the page deallocations recorded in the log are rolled back, and all data is completely restored."</li>
+          <li><strong>Trap:</strong> <em>"What is the difference between ISNULL and COALESCE regarding data type resolution?"</em><br>
+          <strong>Answer:</strong> "<code>ISNULL</code> strictly adopts the data type and length of the first argument. If the first argument is <code>VARCHAR(3)</code> and the replacement is <code>VARCHAR(20)</code>, <code>ISNULL</code> truncates the replacement to 3 characters! <code>COALESCE</code> follows standard SQL Server data type precedence rules, taking the type with highest precedence among all arguments without truncation."</li>
+          <li><strong>Trap:</strong> <em>"Why does COUNT(*) execute faster than COUNT(ColumnName)?"</em><br>
+          <strong>Answer:</strong> "Because <code>COUNT(*)</code> counts rows, not column values. The SQL Server query optimizer can satisfy <code>COUNT(*)</code> by reading the leaf pages of the smallest, narrowest non-clustered index on the table, minimizing logical I/O reads. <code>COUNT(ColumnName)</code> must evaluate non-null values specifically in that column, which may require scanning larger indexes or the clustered index."</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- SECTION: EXERCISES LINK -->
+    <section style="margin-top: 3rem;">
+      <h2>🏋️ Ready for Hands-On Practice?</h2>
+      <p>Test your knowledge with 8 real-world production exercises on VWAP calculations, STRING_AGG, Multi-dimensional matrix reporting, SARGable date refactoring, and atomic MERGE with OUTPUT in the Exercises module.</p>
+      <a href="exercises.html" class="nav-next" style="display: inline-block; margin-top: 0.5rem;">👉 View All 50+ Exercises & Solutions →</a>
     </section>
 
     <div class="page-nav" style="margin-top: 3rem;">
