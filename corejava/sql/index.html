@@ -1,17 +1,22 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SQL & Database — Mastering Financial Data Queries</title>
-    <link rel="stylesheet" href="../css/style.css">
-    <script type="module">
-        import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
-        mermaid.initialize({ startOnLoad: true, theme: 'dark' });
-    </script>
+    <link rel="stylesheet" href="../../css/style.css">
+    
+  <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
 </head>
 <body>
-    <nav class="breadcrumb">
+
+<button class="menu-toggle" aria-label="Toggle menu">☰</button>
+
+<div class="page-wrapper">
+  <aside class="sidebar" id="sidebar"></aside>
+
+  <main class="main-content">
+<nav class="breadcrumb">
         <a href="../index.html">Home</a> &gt; <span>SQL & Database</span>
     </nav>
     
@@ -20,7 +25,7 @@
         <p>Advanced SQL techniques, query optimization, and ACID properties for financial systems.</p>
     </header>
 
-    <main>
+    
         <section class="pillar">
             <h2>PILLAR 1: Ground-Zero Theory & The Pain Point</h2>
             <p><strong>The Pain Point:</strong> Financial data must be impeccably accurate and highly available. Bad queries can lock up the settlement database, causing millions in losses. Knowing how the database executes queries and manages locks is critical.</p>
@@ -102,7 +107,11 @@ WHERE s.settlement_id IS NULL; -- Trades that haven't been settled
             <h2>PILLAR 6: Trade-offs & When NOT To Use It</h2>
             <p><strong>Relational DB Trade-offs:</strong> ACID compliance guarantees data integrity, but vertical scaling is expensive and horizontal scaling (sharding) is very complex compared to NoSQL databases. Don't use RDBMS for unstructured data, high-velocity time-series data (use InfluxDB/Kdb+), or heavy document storage.</p>
         </section>
-    </main>
-    <script src="../js/main.js"></script>
+  </main>
+</div>
+
+<button class="scroll-top" aria-label="Scroll to top">↑</button>
+<script src="../../js/main.js"></script>
 </body>
 </html>
+

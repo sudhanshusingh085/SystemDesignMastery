@@ -1,58 +1,99 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Collections Framework Internals — The Engine of Financial Data Processing</title>
-    <link rel="stylesheet" href="../css/style.css">
+    <link rel="stylesheet" href="../../css/style.css">
     <script src="../js/main.js" defer></script>
-    <script type="module">
-        import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
-        mermaid.initialize({ startOnLoad: true, theme: 'dark' });
-    </script>
-    <style>
-        :root {
-            --bg-color: #0d1117;
-            --text-color: #c9d1d9;
-            --heading-color: #58a6ff;
-            --code-bg: #161b22;
-            --callout-bg: #1c2128;
-            --callout-border: #30363d;
-            --border-color: #30363d;
-            --highlight-color: #f0883e;
-            --accent-color: #238636;
-        }
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            line-height: 1.6;
-            color: var(--text-color);
-            background-color: var(--bg-color);
-            max-width: 1200px;
-            margin: 0 auto;
-            padding: 2rem;
-        }
-        h1, h2, h3, h4 { color: var(--heading-color); margin-top: 2rem; }
-        .breadcrumb { font-size: 0.9rem; color: #8b949e; margin-bottom: 2rem; }
-        .callout {
-            background-color: var(--callout-bg);
-            border-left: 4px solid var(--accent-color);
-            padding: 1.5rem;
-            margin: 1.5rem 0;
-            border-radius: 0 8px 8px 0;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
-        }
-        .callout.interview { border-left-color: var(--highlight-color); }
-        .callout.grill { border-left-color: #f85149; }
-        .callout h4 { margin-top: 0; color: #fff; display: flex; align-items: center; gap: 0.5rem; }
-        pre { background-color: var(--code-bg); padding: 1.5rem; border-radius: 8px; overflow-x: auto; border: 1px solid var(--border-color); }
-        code { font-family: 'Consolas', 'Courier New', monospace; font-size: 0.9rem; }
-        .mermaid { background-color: var(--code-bg); padding: 1rem; border-radius: 8px; border: 1px solid var(--border-color); display: flex; justify-content: center; margin: 1.5rem 0; }
-        table { width: 100%; border-collapse: collapse; margin: 1.5rem 0; }
-        th, td { border: 1px solid var(--border-color); padding: 0.75rem; text-align: left; }
-        th { background-color: var(--callout-bg); color: var(--heading-color); }
-    </style>
+    
+    
+  <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
 </head>
 <body>
+
+<button class="menu-toggle" aria-label="Toggle menu">☰</button>
+
+<div class="page-wrapper">
+  <aside class="sidebar" id="sidebar"></aside>
+
+  <main class="main-content">
+<div class="breadcrumb">Home &gt; 03 &middot; Collections Internals</div>
+
+<h1>Collections Framework Internals — The Engine of Financial Data Processing</h1>
+
+<p>In high-frequency electronic trading, milliseconds equate to millions. The structures you choose to store, index, and retrieve financial primitives—Orders, Trades, Market Data Ticks—determine the scalability and latency profile of your entire trading system. A superficial understanding of <code>java.util</code> results in catastrophic production outages under market volatility. In this module, we dissect the internal mechanics of the Java Collections Framework (JCF) as applied to Tier-1 financial systems.</p>
+
+<hr>
+
+<h2>1. Collections Hierarchy Overview</h2>
+
+<p><strong>The Real-World Finance Pain Point:</strong> Choosing the wrong collection for an Order Book or a Trade Ledger leads to $O(n)$ traversals during critical market hours, causing queue build-ups and potentially breaching FIX sequence numbers or missing execution windows.</p>
+
+<div class="mermaid">
+classDiagram
+    class Iterable~E~ {
+        <<interface>>
+        iterator() Iterator~E~
+    }
+    class Collection~E~ {
+        <<interface>>
+    }
+    class List~E~ {
+        <<interface>>
+    }
+    class Set~E~ {
+        <<interface>>
+    }
+    class Queue~E~ {
+        <<interface>>
+    }
+    class Map~K,V~ {
+        <<interface>>
+    }
+    
+    Iterable <|-- Collection
+    Collection <|-- List
+    Collection <|-- Set
+    Collection <|-- Queue
+    
+    class ArrayList~E~
+    class LinkedList~E~
+    class HashSet~E~
+    class TreeSet~E~
+    class ConcurrentLinkedQueue~E~
+    class HashMap~K,V~
+    class ConcurrentHashMap~K,V~
+    class TreeMap~K,V~
+    
+    List <|.. ArrayList
+    List <|.. LinkedList
+    Set <|.. HashSet
+    Set <|.. TreeSet
+    Queue <|.. ConcurrentLinkedQueue
+    Map <|.. HashMap
+    Map <|.. ConcurrentHashMap
+    Map <|.. TreeMap
+</div>
+
+<p><em>Architectural Note:</em> <code>Map</code> does not inherit from <code>Collection</code> because maps associate keys to values (a set of key-value pairs), representing a mathematically distinct paradigm from a set or list of single elements.</p>
+
+<hr>
+
+<h2>2. HashMap Internals (The Holy Grail of Java Interviews)</h2>
+
+<p><strong>Ground-Zero Conceptual Theory:</strong> An Order Management System (OMS) needs to retrieve an <code>Order</code> by its <code>String clOrdId</code> (Client Order ID) instantly. $O(1)$ lookup is mandatory. <code>HashMap</code> achieves this via hashing, but the mechanics of collisions, loading, and capacity are where the battle is won.</p>
+
+<h3>Data Structure & Hashing</h3>
+<p>A <code>HashMap</code> is fundamentally an array of buckets: <code>transient Node&lt;K,V&gt;[] table;</code>.</p>
+<ul>
+    <li><strong>Hash Function:</strong> <code>(key == null) ? 0 : (h = key.hashCode()) ^ (h &gt;&gt;&gt; 16)</code>. This XORs the upper 16 bits with the lower 16 bits. Why? Because the table capacity is always a power of 2, the index calculation <code>(n - 1) &amp; hash</code> only uses the lower bits. Bit-spreading prevents collisions when keys have hash codes that differ only in higher bits.</li>
+    <li><strong>Index Calculation:</strong> <code>(n - 1) &amp; hash</code>. If $n = 16$, $n-1 = 15$ (binary <code>0000 1111</code>). The bitwise AND acts as a modulo operator but is significantly faster for CPU instruction cycles.</li>
+</ul>
+
+<h3>Collision Resolution & Treeification</h3>
+<p>When multiple keys map to the same bucket, Java uses <strong>separate chaining</strong> via a singly linked list.</p>
+<p>Since Java 8, to mitigate Denial of Service (DoS) attacks or poor hash functions, if a bucket's list length exceeds <code>TREEIFY_THRESHOLD = 8</code> AND the total table capacity is $\ge 64$, the linked list converts to a Red-Black Tree (<code>TreeNode</code>). Why 8? Assuming a high-quality hash function, the distribution of elements in buckets follows a Poisson distribution. The probability of 8 elements landing in the same bucket is roughly <body>
 
 <div class="breadcrumb">Home &gt; 03 &middot; Collections Internals</div>
 
@@ -392,5 +433,274 @@ Comparator&lt;Trade&gt; volumeComparator = Comparator.comparingDouble(Trade::vol
 </div>
 
 <br><br>
+</body>.00000006$ (less than 1 in 10 million). Untreeification happens when the bucket drops to <code>UNTREEIFY_THRESHOLD = 6</code> (providing a hysteresis buffer to prevent thrashing).</p>
+
+<div class="mermaid">
+flowchart TD
+    A[Key: clOrdId] --> B["hash = (h = key.hashCode()) ^ (h >>> 16)"]
+    B --> C["index = (n - 1) & hash"]
+    C --> D{Bucket Empty?}
+    D -- Yes --> E[Store Node in table[index]]
+    D -- No --> F{Same Key?}
+    F -- Yes --> G[Update Value]
+    F -- No --> H{Is TreeNode?}
+    H -- Yes --> I[Insert into Red-Black Tree, O(log N)]
+    H -- No --> J[Append to Linked List]
+    J --> K{List Length >= 8 && Cap >= 64?}
+    K -- Yes --> L[Treeify: Convert to Red-Black Tree]
+    K -- No --> M[Done, O(1) expected]
+</div>
+
+<h3>Production-Grade Java 21 Code</h3>
+<pre><code>package com.tier1.oms.cache;
+
+import java.util.HashMap;
+import java.util.Map;
+
+/**
+ * Cache for active FIX Orders. 
+ * Expected size: ~1,000,000 active orders during market open.
+ */
+public class ActiveOrderCache {
+    // Architectural Rationale: 
+    // expected = 1,000,000. Default load factor = 0.75.
+    // required capacity = 1,000,000 / 0.75 = 1,333,333.
+    // Next power of 2 is 2,097,152 (1 << 21).
+    // Initializing with exact capacity prevents costly O(N) rehash/resize operations.
+    private final Map&lt;String, Order&gt; orderMap = new HashMap&lt;&gt;(2097152);
+
+    public void cacheOrder(Order order) {
+        // Warning: HashMap is NOT thread-safe. This assumes a single-threaded 
+        // actor model (e.g., LMAX Disruptor handler) or external synchronization.
+        orderMap.put(order.clOrdId(), order);
+    }
+    
+    public Order retrieveOrder(String clOrdId) {
+        return orderMap.get(clOrdId);
+    }
+}
+
+// Using Java 16+ records for immutable keys/values
+public record Order(String clOrdId, String symbol, long qty, long priceTenthOfPennies) {}
+</code></pre>
+
+<div class="callout interview">
+    <h4>📋 How to Answer This in an Interview</h4>
+    <p><strong>Q: How does HashMap work internally in Java 8+?</strong></p>
+    <p><strong>Script:</strong> "HashMap is backed by an array of <code>Node</code> buckets with a power-of-two capacity. When <code>put()</code> is called, it calculates the hash using <code>hashCode() ^ (hash &gt;&gt;&gt; 16)</code> to spread higher bits, preventing collisions since the bucket index is computed using a bitwise AND <code>(n-1) &amp; hash</code>. Collisions are handled via separate chaining (a linked list). To protect against worst-case $O(n)$ traversals from poor hash distributions, Java 8 introduced treeification: if a bucket exceeds 8 nodes and the table capacity is at least 64, the list converts into a Red-Black tree, improving worst-case search time to $O(\log n)$. When the load factor exceeds 0.75, the map doubles in size and redistributes nodes based on whether the newly revealed high-bit of their hash is 0 or 1."</p>
+</div>
+
+<div class="callout grill">
+    <h4>🎯 Interviewer Follow-Up Questions (The Grill Round)</h4>
+    <ol>
+        <li><strong>Trap:</strong> <em>"Why is the Treeify threshold exactly 8? Why not 4 or 16?"</em><br>
+        <strong>Answer:</strong> It's rooted in the Poisson distribution. With a good hash function, the probability of collisions drops exponentially. The probability of 8 collisions is roughly $10^{-8}$. Making it lower would cause unnecessary treeification overhead; making it higher leaves us vulnerable to performance degradation.</li>
+        <li><strong>Trap:</strong> <em>"During a resize, does HashMap recompute the hash for every key?"</em><br>
+        <strong>Answer:</strong> No. The hash is cached in the <code>Node</code>. When the capacity doubles, the new index only depends on one additional bit (the bit corresponding to the old capacity). Nodes are split into two lists: those where <code>hash &amp; oldCap == 0</code> stay at the original index, and those where it's non-zero move to <code>index + oldCap</code>.</li>
+        <li><strong>Trap:</strong> <em>"Can you use a mutable object as a HashMap key? Say, a Trade object where the status changes?"</em><br>
+        <strong>Answer:</strong> Absolutely not. If a key's fields used in <code>hashCode()</code> or <code>equals()</code> change after insertion, the object is effectively lost in the map because it resides in the bucket for its old hash, but subsequent <code>get()</code> calls will look in the bucket for its new hash.</li>
+    </ol>
+</div>
+
+<hr>
+
+<h2>3. HashMap vs ConcurrentHashMap (Crucial for Multi-Threaded Trading)</h2>
+
+<p><strong>The Real-World Finance Pain Point:</strong> Multiple threads (e.g., FIX listener, Risk Engine, Market Data feed) attempting to update an Order Cache simultaneously. <code>HashMap</code> will corrupt its structure (historically causing infinite loops during resize in Java 7, data loss in Java 8+). <code>Hashtable</code> synchronizes every method, causing massive lock contention and stalling the entire trading engine.</p>
+
+<h3>Java 8+ Architecture</h3>
+<p><code>ConcurrentHashMap</code> abandons the Java 7 Segment (striping) model. It synchronizes only on the <strong>first node (head) of the specific bucket</strong> being modified, using `synchronized` blocks. For empty buckets, it uses Lock-Free CAS (Compare-And-Swap) operations (via `Unsafe` or `VarHandle`) to insert the first node.</p>
+
+<p><strong>Why nulls are banned:</strong> <code>ConcurrentHashMap</code> prohibits <code>null</code> keys and values. In a concurrent environment, if <code>map.get(key)</code> returns <code>null</code>, it is fundamentally ambiguous: does the key not exist, or is it explicitly mapped to <code>null</code>? In a single-threaded <code>HashMap</code>, you can check <code>containsKey(key)</code>. In concurrent maps, the map could be modified between the <code>get</code> and <code>containsKey</code> calls, leading to a race condition. Thus, <code>null</code> values are banned to ensure that a <code>null</code> return strictly means "key not found."</p>
+
+<pre><code>package com.tier1.oms.cache;
+
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.Map;
+
+/**
+ * High-throughput concurrent trade cache.
+ */
+public class ConcurrentTradeManager {
+    // Supports extremely high concurrency. No global lock.
+    private final Map&lt;String, Trade&gt; executedTrades = new ConcurrentHashMap&lt;&gt;(65536);
+
+    public void onTradeExecution(Trade trade) {
+        // CAS operation if bucket is empty, or fine-grained lock on bucket head.
+        executedTrades.put(trade.execId(), trade);
+    }
+    
+    public Trade getTrade(String execId) {
+        // Fully lock-free read operation utilizing volatile reads.
+        return executedTrades.get(execId);
+    }
+}
+</code></pre>
+
+<div class="callout grill">
+    <h4>🎯 Interviewer Follow-Up Questions (The Grill Round)</h4>
+    <ol>
+        <li><strong>Trap:</strong> <em>"How does ConcurrentHashMap calculate size() without a global lock?"</em><br>
+        <strong>Answer:</strong> It uses a base counter and an array of <code>CounterCell</code> objects (Striped64 architecture, similar to <code>LongAdder</code>). Threads increment different cells to avoid cache line contention. <code>size()</code> aggregates the base count and all cells, providing an eventually consistent estimate.</li>
+    </ol>
+</div>
+
+<hr>
+
+<h2>4. IdentityHashMap vs HashMap</h2>
+
+<p><strong>The Real-World Finance Pain Point:</strong> You are writing a custom FIX serializer or deep-copy framework for complex graph objects (e.g., a <code>Portfolio</code> containing <code>Positions</code> pointing back to the <code>Portfolio</code>). You need to track exactly which object references you have visited to prevent infinite recursion, regardless of what their <code>equals()</code> method says.</p>
+
+<p><code>IdentityHashMap</code> uses reference equality (<code>==</code>) instead of object equality (<code>equals()</code>). It hashes using <code>System.identityHashCode(k)</code>. It uses a single array for both keys and values (linear probing) instead of separate chaining, making it extremely cache-friendly and fast for this specific use case.</p>
+
+<pre><code>import java.util.IdentityHashMap;
+
+public class CycleDetector {
+    private final IdentityHashMap&lt;Object, Boolean&gt; visited = new IdentityHashMap&lt;&gt;();
+
+    public void process(Object obj) {
+        if (visited.put(obj, Boolean.TRUE) != null) {
+            // Reference was already seen! Cycle detected.
+            return;
+        }
+        // Traverse object graph...
+    }
+}
+</code></pre>
+
+<hr>
+
+<h2>5. LinkedHashMap &amp; LRU Cache for Price Feeds</h2>
+
+<p><strong>The Real-World Finance Pain Point:</strong> Your memory is limited, but you need to cache the latest Market Data quotes for fast price-checks before routing an order. You want an in-memory cache that automatically evicts the least recently used (LRU) quotes.</p>
+
+<p><code>LinkedHashMap</code> extends <code>HashMap</code> but maintains a doubly-linked list through all its entries. By passing <code>accessOrder = true</code> to the constructor, the list is reordered every time a node is accessed (put or get). By overriding <code>removeEldestEntry()</code>, it becomes a production-ready LRU cache.</p>
+
+<pre><code>import java.util.LinkedHashMap;
+import java.util.Map;
+
+/**
+ * LRU Cache for Market Data Quotes. O(1) access and eviction.
+ */
+public class LruQuoteCache extends LinkedHashMap&lt;String, Quote&gt; {
+    private final int capacity;
+
+    public LruQuoteCache(int capacity) {
+        // initialCapacity, loadFactor, accessOrder (true = LRU)
+        super(capacity, 0.75f, true);
+        this.capacity = capacity;
+    }
+
+    @Override
+    protected boolean removeEldestEntry(Map.Entry&lt;String, Quote&gt; eldest) {
+        // Evict the tail of the list when capacity is breached
+        return size() &gt; capacity;
+    }
+}
+</code></pre>
+
+<hr>
+
+<h2>6. TreeMap &amp; Order Book Matching Engine</h2>
+
+<p><strong>The Real-World Finance Pain Point:</strong> A Matching Engine must sort Bids (buy orders) descending (highest price first) and Asks (sell orders) ascending (lowest price first). When a new order arrives, it must be matched against the top of the book. <code>TreeMap</code> provides a Red-Black Tree implementation guaranteeing $O(\log n)$ insertion and removal, and $O(1)$ access to the first entry (min/max).</p>
+
+<pre><code>import java.math.BigDecimal;
+import java.util.*;
+
+public class OrderBook {
+    // Bids: Sorted Descending (Highest price at top)
+    private final NavigableMap&lt;BigDecimal, Queue&lt;Order&gt;&gt; bids = 
+        new TreeMap&lt;&gt;(Comparator.reverseOrder());
+        
+    // Asks: Sorted Ascending (Lowest price at top)
+    private final NavigableMap&lt;BigDecimal, Queue&lt;Order&gt;&gt; asks = 
+        new TreeMap&lt;&gt;(Comparator.naturalOrder());
+
+    public void addOrder(Order order) {
+        if (order.side() == Side.BUY) {
+            bids.computeIfAbsent(order.price(), k -&gt; new LinkedList&lt;&gt;()).add(order);
+        } else {
+            asks.computeIfAbsent(order.price(), k -&gt; new LinkedList&lt;&gt;()).add(order);
+        }
+    }
+    
+    public Map.Entry&lt;BigDecimal, Queue&lt;Order&gt;&gt; getBestBid() {
+        return bids.firstEntry(); // O(1) via internal pointers
+    }
+}
+</code></pre>
+
+<hr>
+
+<h2>7. ArrayList vs LinkedList</h2>
+
+<p><strong>Architectural Rationale:</strong> In modern low-latency Java, <code>LinkedList</code> is almost universally banned. Why? CPU Cache Locality.</p>
+<p>Modern CPUs read memory in 64-byte Cache Lines. An <code>ArrayList</code> is backed by a contiguous <code>Object[]</code> array. Accessing <code>list.get(i)</code> prefetches adjacent elements into L1/L2 cache, resulting in nanosecond access times. <code>LinkedList</code> nodes are scattered across the heap, resulting in constant Cache Misses (main memory fetches taking 100+ ns). Furthermore, the overhead of <code>Node</code> object headers and pointers wastes massive heap space and strains the Garbage Collector.</p>
+
+<p><code>ArrayList</code> grows by 50% when full (<code>newCapacity = oldCapacity + (oldCapacity &gt;&gt; 1)</code>). Always pre-allocate capacity: <code>new ArrayList&lt;&gt;(expectedSize)</code> to avoid $O(n)$ array copies.</p>
+
+<hr>
+
+<h2>8. Fail-Fast vs Fail-Safe Iterators</h2>
+
+<p><strong>The Real-World Finance Pain Point:</strong> You iterate over active orders to cancel them at End of Day. If another thread adds an order, or you remove an order directly from the collection during iteration, a <code>ConcurrentModificationException</code> is thrown, aborting the EOD process.</p>
+
+<ul>
+    <li><strong>Fail-Fast (ArrayList, HashMap):</strong> Rely on a <code>modCount</code> variable. If <code>expectedModCount != modCount</code> during iteration, it throws CME. To remove elements safely, you MUST use <code>Iterator.remove()</code>, not <code>List.remove()</code>.</li>
+    <li><strong>Fail-Safe (CopyOnWriteArrayList, ConcurrentHashMap):</strong> Do not throw CME. <code>CopyOnWriteArrayList</code> makes a literal array copy on every write operation, allowing lock-free iterators to read a snapshot. Excellent for read-heavy publisher/subscriber lists (e.g., Market Data listeners).</li>
+</ul>
+
+<hr>
+
+<h2>9. Comparable vs Comparator</h2>
+
+<p><strong>Architectural Rationale:</strong></p>
+<ul>
+    <li><code>Comparable&lt;T&gt;</code> defines the <strong>natural ordering</strong> of an entity. Implemented on the class itself (e.g., <code>PriceTick implements Comparable&lt;PriceTick&gt;</code> ordered by timestamp).</li>
+    <li><code>Comparator&lt;T&gt;</code> defines <strong>strategy ordering</strong>. You might need to sort <code>Trade</code> objects by Volume for a VWAP calculation, or by P&amp;L for a risk report.</li>
+</ul>
+
+<pre><code>// Natural ordering by exec time
+public record Trade(String id, long timestamp, double volume) implements Comparable&lt;Trade&gt; {
+    @Override
+    public int compareTo(Trade o) {
+        return Long.compare(this.timestamp, o.timestamp);
+    }
+}
+
+// Strategy ordering by volume
+Comparator&lt;Trade&gt; volumeComparator = Comparator.comparingDouble(Trade::volume).reversed();
+</code></pre>
+
+<hr>
+
+<h2>10. Production Crisis Scenario</h2>
+
+<div class="callout interview">
+    <h4>🔥 Production Crisis Scenario</h4>
+    <p><strong>The Situation:</strong> "Our HashMap containing 1 million FIX Session tokens has degraded to O(N) lookup times. Profilers show massive CPU burn inside HashMap.get(). What happened and how do you fix it?"</p>
+    
+    <p><strong>Root Cause Analysis:</strong></p>
+    <ol>
+        <li><strong>Hash Collision Attack / Poor HashCode:</strong> The key's <code>hashCode()</code> implementation is returning a constant or tightly clustered value, causing massive bucket collisions. Even with Treeification, performance degrades from $O(1)$ to $O(\log n)$.</li>
+        <li><strong>Capacity Thrashing:</strong> The map was initialized with default capacity (16). To reach 1,000,000 items, it had to dynamically resize and rehash all elements ~17 times, causing severe latency spikes.</li>
+    </ol>
+    
+    <p><strong>The Resolution:</strong></p>
+    <ol>
+        <li><strong>Pre-size the Collection:</strong> <code>new HashMap&lt;&gt;(1_333_333)</code>. Formula: <code>(expectedSize / loadFactor) + 1</code>.</li>
+        <li><strong>Audit HashCode:</strong> Ensure the key's <code>hashCode()</code> uses well-distributed prime multipliers (like <code>Objects.hash()</code> uses 31) across immutable fields.</li>
+        <li><strong>Immutable Keys:</strong> Verify keys (like tokens) are immutable records or final classes to prevent hash drift.</li>
+    </ol>
+</div>
+
+<br><br>
+  </main>
+</div>
+
+<button class="scroll-top" aria-label="Scroll to top">↑</button>
+<script src="../../js/main.js"></script>
 </body>
 </html>
+

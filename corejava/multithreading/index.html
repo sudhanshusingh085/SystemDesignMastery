@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -6,16 +6,23 @@
     <link rel="stylesheet" href="../../css/style.css">
     <script src="../../js/main.js" defer></script>
     <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
-    <script>mermaid.initialize({startOnLoad:true});</script>
+    
 </head>
 <body>
-    <nav aria-label="breadcrumb">
+
+<button class="menu-toggle" aria-label="Toggle menu">☰</button>
+
+<div class="page-wrapper">
+  <aside class="sidebar" id="sidebar"></aside>
+
+  <main class="main-content">
+<nav aria-label="breadcrumb">
         <ol class="breadcrumb">
             <li><a href="../../index.html">Home</a></li>
             <li>Multithreading</li>
         </ol>
     </nav>
-    <main>
+    
         <h1>Multithreading — Concurrent Trading System Internals</h1>
         
         <section id="pillar-1">
@@ -124,6 +131,11 @@ public class AccountManager {
             <h2>PILLAR 6: Trade-offs & When NOT To Use It</h2>
             <p><strong>Trade-off:</strong> Raw threads map 1:1 to OS platform threads (1MB stack space each). Spawning 10,000 platform threads will crash the JVM. Context switching between OS threads is expensive (saving/restoring registers, CPU cache invalidation). For massive concurrency (e.g., maintaining 100k open FIX connections), raw <code>Thread</code> is obsolete—use Java 21 Virtual Threads instead.</p>
         </section>
-    </main>
+  </main>
+</div>
+
+<button class="scroll-top" aria-label="Scroll to top">↑</button>
+<script src="../../js/main.js"></script>
 </body>
 </html>
+

@@ -1,14 +1,22 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AWS & Deployment — Cloud Infrastructure for Trading Systems</title>
-    <link rel="stylesheet" href="../css/style.css">
+    <link rel="stylesheet" href="../../css/style.css">
     <script type="module" src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
 </head>
 <body>
-    <nav class="breadcrumbs">
+
+<button class="menu-toggle" aria-label="Toggle menu">☰</button>
+
+<div class="page-wrapper">
+  <aside class="sidebar" id="sidebar"></aside>
+
+  <main class="main-content">
+<nav class="breadcrumbs">
         <a href="../index.html">Home</a> &gt; AWS & Deployment
     </nav>
     <header>
@@ -16,7 +24,7 @@
         <p>Architecting low-latency, highly available financial systems on the Cloud.</p>
     </header>
 
-    <main>
+    
         <!-- TOPIC 1: EC2 vs ECS vs Lambda -->
         <section id="compute">
             <h2>1. Compute: EC2 vs ECS vs Lambda</h2>
@@ -217,9 +225,15 @@ public class TradeReconciliationHandler implements RequestHandler&lt;S3Event, St
             </ul>
         </section>
 
-    </main>
+    
     <script>
         mermaid.initialize({ startOnLoad: true });
     </script>
+  </main>
+</div>
+
+<button class="scroll-top" aria-label="Scroll to top">↑</button>
+<script src="../../js/main.js"></script>
 </body>
 </html>
+

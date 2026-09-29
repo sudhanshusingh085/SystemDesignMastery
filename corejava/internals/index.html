@@ -1,13 +1,21 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Java Internals — ClassLoader, Reflection & Serialization</title>
     <link rel="stylesheet" href="../../css/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
 </head>
 <body>
-    <nav class="breadcrumbs">
+
+<button class="menu-toggle" aria-label="Toggle menu">☰</button>
+
+<div class="page-wrapper">
+  <aside class="sidebar" id="sidebar"></aside>
+
+  <main class="main-content">
+<nav class="breadcrumbs">
         <a href="../index.html">Home</a> &gt; <span>Java Internals</span>
     </nav>
     <header>
@@ -15,7 +23,7 @@
         <p>Mastering the inner workings of the JVM for dynamic, secure, and robust financial systems.</p>
     </header>
 
-    <main>
+    
         <section id="classloader">
             <h2>1. ClassLoader Hierarchy</h2>
             <p>The ClassLoader dynamically loads Java classes into the JVM during runtime. It follows a parent-first delegation model to ensure core Java classes are not overridden securely.</p>
@@ -103,12 +111,11 @@ strategy.execute(marketData);
             <h2>6. Marker Interface vs Annotation</h2>
             <p>Marker interfaces (like <code>Serializable</code>, <code>Cloneable</code>) have no methods. They signal to the JVM/frameworks that a class has a specific property. Modern Java prefers Annotations (like <code>@Deprecated</code>) because they can carry metadata and target specific elements (fields, methods).</p>
         </section>
+  </main>
+</div>
 
-    </main>
-    <script src="../../js/main.js"></script>
-    <script type="module">
-        import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
-        mermaid.initialize({ startOnLoad: true });
-    </script>
+<button class="scroll-top" aria-label="Scroll to top">↑</button>
+<script src="../../js/main.js"></script>
 </body>
 </html>
+

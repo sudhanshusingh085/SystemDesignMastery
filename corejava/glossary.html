@@ -1,53 +1,22 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Glossary — 200+ Terms Explained</title>
-    <link rel="stylesheet" href="css/style.css">
-    <style>
-        .search-container {
-            margin: 20px 0;
-            text-align: center;
-        }
-        #glossarySearch {
-            width: 80%;
-            padding: 15px;
-            font-size: 1.2rem;
-            border: 2px solid #333;
-            border-radius: 8px;
-        }
-        .glossary-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-            gap: 20px;
-        }
-        .jargon {
-            background: #f9f9f9;
-            border-left: 4px solid #0056b3;
-            padding: 15px;
-            border-radius: 4px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-        .jargon h3 {
-            margin-top: 0;
-            color: #0056b3;
-        }
-        .term-category {
-            font-size: 0.8rem;
-            color: #666;
-            text-transform: uppercase;
-            font-weight: bold;
-            margin-bottom: 5px;
-            display: block;
-        }
-        .hidden {
-            display: none !important;
-        }
-    </style>
+    <link rel="stylesheet" href="../../css/style.css">
+    
+  <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
 </head>
 <body>
-    <nav class="breadcrumbs">
+
+<button class="menu-toggle" aria-label="Toggle menu">☰</button>
+
+<div class="page-wrapper">
+  <aside class="sidebar" id="sidebar"></aside>
+
+  <main class="main-content">
+<nav class="breadcrumbs">
         <a href="index.html">Home</a> &gt; Glossary
     </nav>
     <header>
@@ -55,7 +24,7 @@
         <p>A comprehensive dictionary of Java, Architecture, and Finance domain terminology.</p>
     </header>
 
-    <main>
+    
         <div class="search-container">
             <input type="text" id="glossarySearch" placeholder="Search terms (e.g., CAS, FIX, Lambda, JVM)...">
         </div>
@@ -117,9 +86,9 @@
             <div class="jargon"><span class="term-category">Finance</span><h3>Dark Pool</h3><p>A private financial forum or exchange for trading securities, allowing investors to trade without public exposure until execution.</p></div>
 
         </div>
-    </main>
+    
 
-    <script src="js/main.js"></script>
+    
     <script>
         document.getElementById('glossarySearch').addEventListener('keyup', function(e) {
             const term = e.target.value.toLowerCase();
@@ -135,5 +104,11 @@
             });
         });
     </script>
+  </main>
+</div>
+
+<button class="scroll-top" aria-label="Scroll to top">↑</button>
+<script src="../../js/main.js"></script>
 </body>
 </html>
+

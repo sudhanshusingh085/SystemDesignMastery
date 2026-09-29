@@ -1,13 +1,21 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>JVM Architecture & Memory Management — Under the Hood of Trading Engines</title>
-    <link rel="stylesheet" href="../css/style.css">
+    <link rel="stylesheet" href="../../css/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
 </head>
 <body>
-    <nav class="breadcrumb">
+
+<button class="menu-toggle" aria-label="Toggle menu">☰</button>
+
+<div class="page-wrapper">
+  <aside class="sidebar" id="sidebar"></aside>
+
+  <main class="main-content">
+<nav class="breadcrumb">
         <a href="../index.html">Home</a> &gt; <span>09 · JVM & Memory</span>
     </nav>
 
@@ -16,7 +24,7 @@
         <p class="subtitle">Under the Hood of Trading Engines: Minimizing Latency, Maximizing Predictability</p>
     </header>
 
-    <main>
+    
         <section id="jvm-subsystems">
             <h2>1. JVM Subsystems Overview</h2>
             <p><strong>The Real-World Finance Pain Point:</strong> In a high-frequency trading (HFT) environment, understanding how the JVM operates under the hood is not an academic exercise—it is the difference between capturing a cross-market arbitrage opportunity and missing it by 5 milliseconds. The JVM sits between your trading logic and the operating system. If you do not understand how it loads classes, compiles bytecode to native machine instructions, or reclaims memory, your application will suffer unpredictable latency spikes, leading to slippage and catastrophic financial losses.</p>
@@ -197,8 +205,11 @@ String s3 = new String("USD/JPY"); // Allocates a NEW object in Heap memory
                 <br>2. The <code>java.lang.ref.Cleaner</code> API (introduced in Java 9) for asynchronous, phantom-reference-based cleanup, which operates safely in a background thread without polluting the GC cycle."</p>
             </div>
         </section>
+  </main>
+</div>
 
-    </main>
-    <script src="../js/main.js"></script>
+<button class="scroll-top" aria-label="Scroll to top">↑</button>
+<script src="../../js/main.js"></script>
 </body>
 </html>
+

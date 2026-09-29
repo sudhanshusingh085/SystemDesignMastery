@@ -1,30 +1,23 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Java Fundamentals — The Bedrock of Financial Systems</title>
-    <link rel="stylesheet" href="../css/style.css">
+    <link rel="stylesheet" href="../../css/style.css">
     <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
-    <script>mermaid.initialize({startOnLoad:true, theme: 'dark'});</script>
-    <style>
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; line-height: 1.6; color: #333; max-width: 1200px; margin: 0 auto; padding: 20px; }
-        h1, h2, h3 { color: #004d99; }
-        .breadcrumbs { font-size: 0.9em; margin-bottom: 20px; color: #666; }
-        .breadcrumbs a { color: #004d99; text-decoration: none; }
-        .callout { background-color: #f8f9fa; border-left: 5px solid #004d99; padding: 15px; margin: 20px 0; border-radius: 0 4px 4px 0; }
-        .callout.interview { border-left-color: #d9534f; background-color: #fdf7f7; }
-        .callout.grill { border-left-color: #f0ad4e; background-color: #fcf8e3; }
-        .jargon { font-weight: bold; color: #d9534f; }
-        .comparison { display: flex; gap: 20px; }
-        .comparison > div { flex: 1; background: #f4f4f4; padding: 15px; border-radius: 5px; }
-        pre { background: #2d2d2d; color: #ccc; padding: 15px; border-radius: 5px; overflow-x: auto; font-family: 'Consolas', monospace; }
-        code { color: #e06c75; font-family: 'Consolas', monospace; }
-        .mermaid { text-align: center; margin: 30px 0; }
-    </style>
+    
+    
 </head>
 <body>
-    <nav class="breadcrumbs">
+
+<button class="menu-toggle" aria-label="Toggle menu">☰</button>
+
+<div class="page-wrapper">
+  <aside class="sidebar" id="sidebar"></aside>
+
+  <main class="main-content">
+<nav class="breadcrumbs">
         <a href="../index.html">Home</a> &gt; <span>00 · Java Fundamentals</span>
     </nav>
 
@@ -33,7 +26,7 @@
         <p class="subtitle">A definitive guide to the foundational mechanics of the Java ecosystem, precision-engineered for developers targeting high-frequency trading platforms, risk calculation engines, and tier-1 banking infrastructure.</p>
     </header>
 
-    <main>
+    
         <!-- 1. JDK vs JRE vs JVM -->
         <section id="jdk-jre-jvm">
             <h2>1. JDK vs JRE vs JVM: The Architecture of Execution</h2>
@@ -438,9 +431,12 @@ public final class ExecutionReport {
                 <p>"The `final` keyword enforces immutability and design intent. A `final` class prevents inheritance, securing core system mechanics. A `final` method prevents subclasses from altering critical algorithms, like margin calculation logic. Most crucially, `final` fields are essential for thread safety. Under the Java Memory Model, `final` fields have special initialization safety guarantees. If a thread publishes an `ExecutionReport` object to a concurrent queue, the JMM guarantees that any thread reading that object will see the fully initialized values of its `final` fields, without requiring explicit synchronization or `volatile` keywords. This allows us to build fast, lock-free data structures by passing immutable, final-field-heavy objects between threads."</p>
             </div>
         </section>
+  </main>
+</div>
 
-    </main>
-
-    <script src="../js/main.js"></script>
+<button class="scroll-top" aria-label="Scroll to top">↑</button>
+<script src="../../js/main.js"></script>
 </body>
 </html>
+
+

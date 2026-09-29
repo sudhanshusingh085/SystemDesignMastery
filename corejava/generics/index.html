@@ -1,13 +1,21 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Generics & Type System — Writing Flexible, Type-Safe Code</title>
     <link rel="stylesheet" href="../../css/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
 </head>
 <body>
-    <nav class="breadcrumbs">
+
+<button class="menu-toggle" aria-label="Toggle menu">☰</button>
+
+<div class="page-wrapper">
+  <aside class="sidebar" id="sidebar"></aside>
+
+  <main class="main-content">
+<nav class="breadcrumbs">
         <a href="../index.html">Home</a> &gt; <span>Generics & Type System</span>
     </nav>
     <header>
@@ -15,7 +23,7 @@
         <p>Leveraging Java's type system to build robust, reusable financial algorithms.</p>
     </header>
 
-    <main>
+    
         <section id="why-generics">
             <h2>1. Why Generics?</h2>
             <p>Before Java 5, collections held <code>Object</code>. You had to cast elements, risking <code>ClassCastException</code> at runtime. Generics move type checking to compile time.</p>
@@ -96,11 +104,11 @@ public void addTrade(List&lt;? super Trade&gt; dest) {
 }
 </code></pre>
         </section>
-    </main>
-    <script src="../../js/main.js"></script>
-    <script type="module">
-        import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
-        mermaid.initialize({ startOnLoad: true });
-    </script>
+  </main>
+</div>
+
+<button class="scroll-top" aria-label="Scroll to top">↑</button>
+<script src="../../js/main.js"></script>
 </body>
 </html>
+

@@ -1,143 +1,550 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Behavioral Design Patterns - Exhaustive Masterclass</title>
-    <link rel="stylesheet" href="../../css/style.css">
-    <script type="module">
-      import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
-      mermaid.initialize({ startOnLoad: true });
-    </script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Behavioral Design Patterns — System Design Mastery</title>
+  <link rel="stylesheet" href="../../css/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
 </head>
 <body>
-    <nav class="breadcrumb">
-        <a href="../../index.html">Home</a> &gt; <a href="../index.html">LLD</a> &gt; <a href="index.html">Design Patterns</a> &gt; Behavioral Patterns
-    </nav>
-    <main>
-        <h1>Behavioral Design Patterns: The Definitive Masterclass</h1>
-        <p>Behavioral patterns define not just the structure of objects, but the communication patterns, responsibilities, and algorithms between them.</p>
 
-        <hr>
+<button class="menu-toggle" aria-label="Toggle menu">☰</button>
 
-        <section id="observer-pattern">
-            <h2>1. The Observer Pattern</h2>
-            
-            <h3>PILLAR 1: Ground-Zero Theory &amp; The Pain Point</h3>
-            <p>The <strong>Observer Pattern</strong> defines a one-to-many dependency between objects. When one object (the Subject) changes state, all its dependents (Observers) are notified automatically. The massive pain point it solves is the polling anti-pattern, where consumers constantly check a producer for updates, wasting CPU cycles and network bandwidth.</p>
-            
-            <h3>PILLAR 2: Architectural Decision Rationales &amp; Modifier Deep Dives</h3>
-            <p>Using a `CopyOnWriteArrayList` or standard `List` with `synchronized` blocks for observer registries is crucial to prevent `ConcurrentModificationException` when observers add/remove themselves during notification. We often use interfaces for Observers to keep the Subject decoupled from concrete consumer classes.</p>
+<div class="page-wrapper">
+  <aside class="sidebar" id="sidebar"></aside>
 
-            <h3>PILLAR 3: Step-by-Step Evolution</h3>
-            <p>From tight coupling -> Polling -> Event-driven push notifications.</p>
-            
-            <h3>PILLAR 4: Production-Grade Java 21 Code</h3>
-<pre><code class="language-java">
-public interface Subscriber {
-    void update(double stockPrice);
+  <main class="main-content">
+    <div class="breadcrumb">
+      <a href="../../index.html">Home</a>
+      <span class="sep">›</span>
+      <a href="../index.html">Low-Level Design</a>
+      <span class="sep">›</span>
+      <a href="index.html">Design Patterns</a>
+      <span class="sep">›</span>
+      <strong>Behavioral Patterns</strong>
+    </div>
+
+    <h1>Behavioral Design Patterns: The Definitive Masterclass</h1>
+    <p style="font-size:1.1rem; color:var(--text-muted); margin-bottom:2rem;">
+      Behavioral design patterns characterize complex control flows that are difficult to follow at runtime. They shift your focus away from simple flow of control to the way objects are interconnected and communicate.
+    </p>
+
+    <!-- ============================================================ -->
+    <!-- 1. OBSERVER PATTERN -->
+    <!-- ============================================================ -->
+    <section id="observer">
+      <h2>1. The Observer Pattern (Publisher-Subscriber)</h2>
+      
+      <div class="callout callout-info">
+        <div class="callout-title">📖 Ground-Zero Definition</div>
+        <p>The <strong>Observer Pattern</strong> defines a one-to-many dependency between objects so that when one object (the <strong>Subject</strong> or <strong>Publisher</strong>) changes state, all its dependents (the <strong>Observers</strong> or <strong>Subscribers</strong>) are automatically notified and updated.</p>
+        <p><strong>Real-World Analogy:</strong> Think of a YouTube channel or newspaper subscription. Instead of you walking to the newsstand every 10 minutes asking <em>"Is the new paper out yet?"</em> (the wasteful <strong>polling anti-pattern</strong>), you simply subscribe once. The moment a new edition prints, delivery workers push it directly to your doorstep.</p>
+      </div>
+
+      <h3>The Catastrophic Pain Point It Solves</h3>
+      <p>Without the Observer pattern, components that need state updates are forced into <strong>polling loops</strong>:</p>
+      <pre><code>// BAD: Polling Anti-Pattern
+while (!order.isDelivered()) {
+    Thread.sleep(1000); // Wastes CPU cycles, network bandwidth, creates latency lag
+}</code></pre>
+      <p>This burns CPU cycles, floods databases with redundant read queries, and creates an artificial delay between when an event occurs and when consumers react.</p>
+
+      <h3>Architectural Decisions &amp; Modifier Deep Dives</h3>
+      <ul>
+        <li><strong>CopyOnWriteArrayList for Observer Registries:</strong> In multi-threaded applications, an observer might unsubscribe while the subject is iterating over the subscriber list. Using a regular <code>ArrayList</code> triggers a catastrophic <code>ConcurrentModificationException</code>. <code>CopyOnWriteArrayList</code> creates a safe snapshot for iterations, making notification delivery lock-free and thread-safe.</li>
+        <li><strong>Push vs. Pull Model:</strong> In the <em>Push model</em>, the subject passes detailed event data directly into the observer's update method (e.g., <code>update(OrderEvent event)</code>). In the <em>Pull model</em>, the subject simply passes a reference to itself (e.g., <code>update(Subject s)</code>), forcing the observer to query for specific details. Modern event-driven architectures strongly favor the Push model with immutable records.</li>
+        <li><strong>Memory Leak Risk (The Lapsed Listener Problem):</strong> If a long-lived subject holds strong references to short-lived observers, the Garbage Collector cannot reclaim the observers even when they are no longer needed. In production systems, register observers using <code>WeakReference</code> or ensure mandatory explicit deregistration.</li>
+      </ul>
+
+      <h3>Mermaid Architecture Diagram</h3>
+      <div class="mermaid">
+      classDiagram
+        class StockExchange {
+          -List~StockObserver~ observers
+          -Map~String, BigDecimal~ prices
+          +registerObserver(StockObserver o)
+          +removeObserver(StockObserver o)
+          +setPrice(String ticker, BigDecimal newPrice)
+          -notifyObservers(StockPriceEvent event)
+        }
+        class StockObserver {
+          &lt;&lt;interface&gt;&gt;
+          +onPriceUpdate(StockPriceEvent event)
+        }
+        class TradingBot {
+          +onPriceUpdate(StockPriceEvent event)
+        }
+        class MobileAlertService {
+          +onPriceUpdate(StockPriceEvent event)
+        }
+        StockExchange o-- StockObserver : notifies
+        StockObserver &lt;|.. TradingBot : implements
+        StockObserver &lt;|.. MobileAlertService : implements
+      </div>
+
+      <h3>Production-Grade Java 21 Implementation</h3>
+      <span class="code-label">Java 21</span>
+      <pre><code>import java.math.BigDecimal;
+import java.time.Instant;
+import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
+
+// 1. Immutable Event DTO using Java 21 Record
+public record StockPriceEvent(String ticker, BigDecimal price, Instant timestamp) {}
+
+// 2. Observer Contract
+@FunctionalInterface
+public interface StockObserver {
+    void onPriceUpdate(StockPriceEvent event);
 }
 
-public class StockExchange {
-    // Thread-safe collection to prevent modification issues during iteration
-    private final List&lt;Subscriber&gt; subscribers = new CopyOnWriteArrayList&lt;&gt;();
-    private double currentPrice;
+// 3. Subject (Observable)
+public final class StockExchange {
+    // Thread-safe copy-on-write registry prevents ConcurrentModificationException
+    private final List&lt;StockObserver&gt; observers = new CopyOnWriteArrayList&lt;&gt;();
 
-    public void addSubscriber(Subscriber sub) {
-        subscribers.add(sub);
+    public void register(StockObserver observer) {
+        if (observer != null) {
+            observers.add(observer);
+        }
     }
 
-    public void setPrice(double newPrice) {
-        this.currentPrice = newPrice;
-        notifySubscribers();
+    public void unregister(StockObserver observer) {
+        observers.remove(observer);
     }
 
-    private void notifySubscribers() {
-        for (Subscriber sub : subscribers) {
-            // Using modern virtual threads for isolated asynchronous notification
-            Thread.startVirtualThread(() -> sub.update(currentPrice));
+    public void updatePrice(String ticker, BigDecimal price) {
+        StockPriceEvent event = new StockPriceEvent(ticker, price, Instant.now());
+        notifyObservers(event);
+    }
+
+    private void notifyObservers(StockPriceEvent event) {
+        for (StockObserver observer : observers) {
+            try {
+                observer.onPriceUpdate(event);
+            } catch (Exception e) {
+                // Isolate failure so one faulty observer does not crash the notification pipeline
+                System.err.println("Failed to notify observer: " + e.getMessage());
+            }
         }
     }
 }
-</code></pre>
 
-            <h3>PILLAR 5: The Grill Round</h3>
-            <p><strong>Trap:</strong> The "Lapsed Listener" memory leak.</p>
-            <p><strong>Answer:</strong> "If a subject holds strong references to short-lived observers, those observers cannot be garbage collected. The architectural fix is to use `WeakReference` in the subscriber list or strictly enforce deregistration in `finally` blocks."</p>
+// 4. Concrete Observers
+public final class HighFrequencyTradingBot implements StockObserver {
+    @Override
+    public void onPriceUpdate(StockPriceEvent event) {
+        System.out.println("HFT Bot analyzing tick: " + event.ticker() + " @ $" + event.price());
+    }
+}
 
-            <h3>PILLAR 6: Trade-offs</h3>
-            <p>Notifications can cascade unpredictably in complex systems, leading to infinite loops if Observers trigger state changes in the Subject. It also obscures control flow, making debugging difficult.</p>
-        </section>
+public final class MobilePushNotifier implements StockObserver {
+    @Override
+    public void onPriceUpdate(StockPriceEvent event) {
+        System.out.println("Push Notification: " + event.ticker() + " moved to $" + event.price());
+    }
+}</code></pre>
 
-        <section id="strategy-pattern">
-            <h2>2. The Strategy Pattern</h2>
-            <h3>PILLAR 1: Theory</h3>
-            <p>The Strategy Pattern extracts families of algorithms into separate classes, allowing them to be swapped at runtime. The pain point is massive, monolithic `switch` statements.</p>
-            <h3>PILLAR 4: Production-Grade Java 21 Code</h3>
-<pre><code class="language-java">
+      <div class="callout callout-warning">
+        <div class="callout-title">📋 How to Answer This in an Interview</div>
+        <p><em>"I use the Observer pattern when a change in one object requires broadcasting state to an open-ended number of dependent objects without creating compile-time coupling between them. In Java, I implement the registry using <code>CopyOnWriteArrayList</code> to ensure thread-safe iterations during dynamic subscribe/unsubscribe actions. I design events as immutable Java 21 records and isolate observer execution inside try-catch blocks so a failure in an external listener doesn't short-circuit the event dispatch loop."</em></p>
+      </div>
+
+      <div class="callout callout-danger">
+        <div class="callout-title">🎯 Interviewer Follow-Up Questions (The Grill Round)</div>
+        <ol>
+          <li><strong>"What happens if one observer takes 5 seconds to process an event? Does it block all other observers?"</strong><br>
+          <em>Answer:</em> In synchronous dispatch, yes. In production systems, we decouple notifications by submitting events to an executor service (e.g. <code>CompletableFuture.runAsync()</code>) or pushing them onto a message queue (Kafka/RabbitMQ) for asynchronous consumption.</li>
+          <li><strong>"How do you prevent memory leaks when observers are created dynamically?"</strong><br>
+          <em>Answer:</em> Either by using <code>WeakReference</code> wrappers in the registry or by managing observer lifecycles through explicit <code>AutoCloseable</code> unregistration tokens.</li>
+        </ol>
+      </div>
+    </section>
+
+    <hr>
+
+    <!-- ============================================================ -->
+    <!-- 2. STRATEGY PATTERN -->
+    <!-- ============================================================ -->
+    <section id="strategy">
+      <h2>2. The Strategy Pattern</h2>
+      
+      <div class="callout callout-info">
+        <div class="callout-title">📖 Ground-Zero Definition</div>
+        <p>The <strong>Strategy Pattern</strong> defines a family of algorithms, encapsulates each one in a separate class, and makes them interchangeable at runtime. It lets the algorithm vary independently from clients that use it.</p>
+        <p><strong>Real-World Analogy:</strong> Navigation GPS (Google Maps). When routing from Point A to Point B, you can select walking, driving, biking, or public transit. The destination is identical, but the routing algorithm swaps dynamically based on your chosen strategy.</p>
+      </div>
+
+      <h3>The Catastrophic Pain Point It Solves</h3>
+      <p>Without Strategy, codebases degrade into monstrous, fragile <code>if-else</code> or <code>switch</code> blocks that violate the <strong>Open/Closed Principle</strong>:</p>
+      <pre><code>// BAD: Violates Open/Closed Principle
+public double calculateFee(Order order, String type) {
+    if (type.equals("CREDIT_CARD")) return order.amount() * 0.03;
+    else if (type.equals("CRYPTO")) return order.amount() * 0.01;
+    else if (type.equals("UPI")) return 0.0;
+    // Every new payment method requires modifying and re-testing this core class!
+}</code></pre>
+
+      <h3>Production-Grade Java 21 Implementation</h3>
+      <span class="code-label">Java 21</span>
+      <pre><code>import java.math.BigDecimal;
+
+// 1. Strategy Interface (Functional Interface enables Lambdas)
 @FunctionalInterface
-public interface PaymentStrategy {
-    void pay(double amount);
+public interface PricingStrategy {
+    BigDecimal calculatePrice(BigDecimal basePrice);
 }
 
-public class ShoppingCart {
-    private PaymentStrategy strategy;
-
-    public void setPaymentStrategy(PaymentStrategy strategy) {
-        this.strategy = strategy;
-    }
-
-    public void checkout(double amount) {
-        // Strategy executes without the context knowing the details
-        strategy.pay(amount);
+// 2. Concrete Strategies
+public final class RegularPricingStrategy implements PricingStrategy {
+    @Override
+    public BigDecimal calculatePrice(BigDecimal basePrice) {
+        return basePrice;
     }
 }
-</code></pre>
-            <h3>PILLAR 5: The Grill Round</h3>
-            <p><strong>Trap:</strong> How is Strategy different from State? <strong>Answer:</strong> "Strategy implies the <em>client</em> chooses the algorithm. State implies the object transitions <em>itself</em> internally, reacting differently based on its internal state life-cycle."</p>
-        </section>
 
-        <section id="command-pattern">
-            <h2>3. The Command Pattern</h2>
-            <h3>PILLAR 1: Theory</h3>
-            <p>Encapsulates a request as an object, allowing you to parameterize clients with queues, logs, and undo operations.</p>
-            <h3>PILLAR 5: The Grill Round</h3>
-            <p><strong>Trap:</strong> "How do you handle transaction rollback?" <strong>Answer:</strong> "By storing reverse operations or previous states (using Memento) inside the Command object itself, making `undo()` fully deterministic."</p>
-        </section>
+public final class SurgePricingStrategy implements PricingStrategy {
+    private final BigDecimal multiplier;
 
-        <section id="state-pattern">
-            <h2>4. The State Pattern</h2>
-            <h3>PILLAR 1: Theory</h3>
-            <p>Allows an object to alter its behavior when its internal state changes. Replaces state machine boolean flags with polymorphic classes.</p>
-            <h3>PILLAR 4: Production-Grade Java 21 Code</h3>
-<pre><code class="language-java">
-public sealed interface VendingMachineState permits HasCoinState, NoCoinState {
-    void insertCoin();
-    void dispense();
+    public SurgePricingStrategy(BigDecimal multiplier) {
+        this.multiplier = multiplier;
+    }
+
+    @Override
+    public BigDecimal calculatePrice(BigDecimal basePrice) {
+        return basePrice.multiply(multiplier);
+    }
 }
-// State transition handled inside the state context gracefully.
-</code></pre>
-            <h3>PILLAR 5: The Grill Round</h3>
-            <p><strong>Trap:</strong> "Who controls transitions?" <strong>Answer:</strong> "For simple, linear workflows, Context controls it. For dynamic graphs, States should return the Next State or mutate the Context directly, though this tightly couples States to the Context."</p>
-        </section>
 
-        <section id="template-method">
-            <h2>5. The Template Method Pattern</h2>
-            <h3>PILLAR 1: Theory</h3>
-            <p>Defines the skeleton of an algorithm in a base class, letting subclasses override specific steps without changing the overall structure.</p>
-            <h3>PILLAR 5: The Grill Round</h3>
-            <p><strong>Trap:</strong> "Template Method vs Strategy?" <strong>Answer:</strong> "Template Method works at the class level via inheritance (white-box reuse), altering <em>parts</em> of an algorithm. Strategy works at the object level via composition (black-box reuse), replacing the <em>entire</em> algorithm."</p>
-        </section>
+// 3. Context Class
+public final class RideCheckoutService {
+    private PricingStrategy pricingStrategy;
 
-        <section id="chain-of-responsibility">
-            <h2>6. Chain of Responsibility</h2>
-            <h3>PILLAR 1: Theory</h3>
-            <p>Passes a request along a chain of handlers. Handlers can process the request, pass it, or short-circuit the chain.</p>
-            <h3>PILLAR 5: The Grill Round</h3>
-            <p><strong>Trap:</strong> "Where is this used in the real world?" <strong>Answer:</strong> "Java Servlet Filters and Spring Security's `SecurityFilterChain`. Each filter checks headers/auth; if it fails, it short-circuits by writing a 401 response and skipping `chain.doFilter()`."</p>
-        </section>
+    public RideCheckoutService(PricingStrategy initialStrategy) {
+        this.pricingStrategy = initialStrategy;
+    }
 
-    </main>
-    <script src="../../js/main.js"></script>
+    public void setPricingStrategy(PricingStrategy pricingStrategy) {
+        this.pricingStrategy = pricingStrategy;
+    }
+
+    public BigDecimal checkout(BigDecimal baseFare) {
+        return pricingStrategy.calculatePrice(baseFare);
+    }
+}</code></pre>
+
+      <div class="callout callout-warning">
+        <div class="callout-title">📋 How to Answer This in an Interview</div>
+        <p><em>"Strategy pattern isolates volatile business rules or algorithms behind a common contract. In Java 21, because strategy interfaces usually contain a single method, we can implement them cleanly using functional interfaces and lambdas, completely eliminating bloated if-else ladders and ensuring strict adherence to the Open/Closed Principle."</em></p>
+      </div>
+    </section>
+
+    <hr>
+
+    <!-- ============================================================ -->
+    <!-- 3. COMMAND PATTERN -->
+    <!-- ============================================================ -->
+    <section id="command">
+      <h2>3. The Command Pattern</h2>
+      
+      <div class="callout callout-info">
+        <div class="callout-title">📖 Ground-Zero Definition</div>
+        <p>The <strong>Command Pattern</strong> encapsulates a request as a standalone object containing all information about the request. This transformation lets you parameterize methods with different requests, queue or log requests, and support <strong>undoable operations</strong>.</p>
+        <p><strong>Real-World Analogy:</strong> A waiter taking an order at a restaurant. The waiter writes your request on an order pad. That piece of paper (the Command) contains all parameters (table number, dishes, special instructions). It gets queued in the kitchen, assigned to any chef, and can be cancelled or modified before cooking begins.</p>
+      </div>
+
+      <h3>Production-Grade Java 21 Implementation (with Undo Support)</h3>
+      <span class="code-label">Java 21</span>
+      <pre><code>import java.util.ArrayDeque;
+import java.util.Deque;
+
+// 1. Command Interface
+public interface FinancialCommand {
+    void execute();
+    void undo();
+}
+
+// 2. Receiver (The Business Object)
+public final class TradingAccount {
+    private double balance = 10000.0;
+
+    public void deposit(double amount) { balance += amount; }
+    public void withdraw(double amount) { balance -= amount; }
+    public double getBalance() { return balance; }
+}
+
+// 3. Concrete Command
+public final class PlaceBuyOrderCommand implements FinancialCommand {
+    private final TradingAccount account;
+    private final double cost;
+    private boolean executed = false;
+
+    public PlaceBuyOrderCommand(TradingAccount account, double cost) {
+        this.account = account;
+        this.cost = cost;
+    }
+
+    @Override
+    public void execute() {
+        account.withdraw(cost);
+        executed = true;
+    }
+
+    @Override
+    public void undo() {
+        if (executed) {
+            account.deposit(cost);
+            executed = false;
+        }
+    }
+}
+
+// 4. Invoker with Undo Stack
+public final class OrderExecutionEngine {
+    private final Deque&lt;FinancialCommand&gt; history = new ArrayDeque&lt;&gt;();
+
+    public void executeCommand(FinancialCommand cmd) {
+        cmd.execute();
+        history.push(cmd);
+    }
+
+    public void undoLast() {
+        if (!history.isEmpty()) {
+            FinancialCommand cmd = history.pop();
+            cmd.undo();
+        }
+    }
+}</code></pre>
+
+      <div class="callout callout-warning">
+        <div class="callout-title">📋 How to Answer This in an Interview</div>
+        <p><em>"I apply the Command pattern when user actions need to be decoupled from receiver logic, such as in transaction queues, audit logs, or multi-level undo/redo systems. By encapsulating state and actions into an object, I can serialize commands for asynchronous replay or rollback transactions when downstream failures occur."</em></p>
+      </div>
+    </section>
+
+    <hr>
+
+    <!-- ============================================================ -->
+    <!-- 4. STATE PATTERN -->
+    <!-- ============================================================ -->
+    <section id="state">
+      <h2>4. The State Pattern</h2>
+      
+      <div class="callout callout-info">
+        <div class="callout-title">📖 Ground-Zero Definition</div>
+        <p>The <strong>State Pattern</strong> allows an object to alter its behavior when its internal state changes. The object will appear to change its class.</p>
+        <p><strong>Real-World Analogy:</strong> A smartphone's power button. If the phone is powered off, pressing the button boots the OS. If the phone is on and unlocked, pressing the button locks the screen. If the phone is ringing, pressing it silences the ringtone. The identical button press triggers vastly different behaviors based purely on the device's internal state.</p>
+      </div>
+
+      <h3>Production-Grade Java 21 Implementation (Order Lifecycle)</h3>
+      <span class="code-label">Java 21</span>
+      <pre><code>// 1. State Contract
+public interface OrderState {
+    void handlePayment(OrderContext context);
+    void ship(OrderContext context);
+    void cancel(OrderContext context);
+}
+
+// 2. Context Object
+public final class OrderContext {
+    private OrderState currentState;
+
+    public OrderContext() {
+        this.currentState = new CreatedState();
+    }
+
+    public void setState(OrderState state) {
+        this.currentState = state;
+    }
+
+    public void processPayment() { currentState.handlePayment(this); }
+    public void shipOrder()      { currentState.ship(this); }
+    public void cancelOrder()    { currentState.cancel(this); }
+}
+
+// 3. Concrete States
+public final class CreatedState implements OrderState {
+    @Override
+    public void handlePayment(OrderContext context) {
+        System.out.println("Payment verified. Transitioning to PAID state.");
+        context.setState(new PaidState());
+    }
+
+    @Override
+    public void ship(OrderContext context) {
+        throw new IllegalStateException("Cannot ship an unpaid order!");
+    }
+
+    @Override
+    public void cancel(OrderContext context) {
+        System.out.println("Order cancelled.");
+        context.setState(new CancelledState());
+    }
+}
+
+public final class PaidState implements OrderState {
+    @Override
+    public void handlePayment(OrderContext context) {
+        System.out.println("Order is already paid.");
+    }
+
+    @Override
+    public void ship(OrderContext context) {
+        System.out.println("Order shipped successfully.");
+        context.setState(new ShippedState());
+    }
+
+    @Override
+    public void cancel(OrderContext context) {
+        System.out.println("Refunding payment and cancelling order.");
+        context.setState(new CancelledState());
+    }
+}
+
+public final class ShippedState implements OrderState {
+    @Override
+    public void handlePayment(OrderContext context) { throw new IllegalStateException("Already shipped."); }
+    @Override
+    public void ship(OrderContext context) { throw new IllegalStateException("Already shipped."); }
+    @Override
+    public void cancel(OrderContext context) { throw new IllegalStateException("Cannot cancel a shipped order!"); }
+}
+
+public final class CancelledState implements OrderState {
+    @Override
+    public void handlePayment(OrderContext context) { throw new IllegalStateException("Order is cancelled."); }
+    @Override
+    public void ship(OrderContext context) { throw new IllegalStateException("Order is cancelled."); }
+    @Override
+    public void cancel(OrderContext context) { System.out.println("Already cancelled."); }
+}</code></pre>
+    </section>
+
+    <hr>
+
+    <!-- ============================================================ -->
+    <!-- 5. TEMPLATE METHOD PATTERN -->
+    <!-- ============================================================ -->
+    <section id="template-method">
+      <h2>5. The Template Method Pattern</h2>
+      
+      <div class="callout callout-info">
+        <div class="callout-title">📖 Ground-Zero Definition</div>
+        <p>The <strong>Template Method Pattern</strong> defines the skeleton of an algorithm in the superclass but lets subclasses override specific steps of the algorithm without changing its overall structure.</p>
+        <p><strong>The Hollywood Principle:</strong> <em>"Don't call us, we'll call you."</em> The parent class dictates the execution flow, calling into child classes only for custom hook implementations.</p>
+      </div>
+
+      <h3>Production-Grade Java 21 Implementation</h3>
+      <span class="code-label">Java 21</span>
+      <pre><code>public abstract class FinancialReportGenerator {
+
+    // Final prevents subclasses from corrupting the mandatory algorithm skeleton
+    public final void generateReport() {
+        fetchFinancialData();
+        formatHeader();
+        generateBody();
+        formatFooter();
+        if (requiresAuditLog()) {
+            auditExport();
+        }
+    }
+
+    private void fetchFinancialData() { System.out.println("Fetching general ledger entries..."); }
+    private void formatHeader()       { System.out.println("Header: Confidential Financial Statement"); }
+    private void formatFooter()       { System.out.println("Footer: Page 1 of 1"); }
+
+    // Primitive operations to be customized by subclasses
+    protected abstract void generateBody();
+
+    // Hook method with default implementation
+    protected boolean requiresAuditLog() {
+        return true;
+    }
+
+    private void auditExport() {
+        System.out.println("Audit trail recorded in SEC compliance store.");
+    }
+}
+
+public final class EquityPortfolioReport extends FinancialReportGenerator {
+    @Override
+    protected void generateBody() {
+        System.out.println("Rendering equity positions, dividends, and unrealized gains.");
+    }
+}</code></pre>
+    </section>
+
+    <hr>
+
+    <!-- ============================================================ -->
+    <!-- 6. CHAIN OF RESPONSIBILITY -->
+    <!-- ============================================================ -->
+    <section id="cor">
+      <h2>6. Chain of Responsibility</h2>
+      
+      <div class="callout callout-info">
+        <div class="callout-title">📖 Ground-Zero Definition</div>
+        <p>The <strong>Chain of Responsibility</strong> avoids coupling the sender of a request to its receiver by giving more than one object a chance to handle the request. It chains the receiving objects and passes the request along the chain until an object handles it or short-circuits.</p>
+        <p><strong>Real-World Analogy:</strong> Corporate expense approvals. An expense of $500 is auto-approved by a team lead. An expense of $5,000 passes up to a department manager. An expense of $50,000 escalates to the VP of Finance.</p>
+      </div>
+
+      <h3>Production-Grade Java 21 Implementation</h3>
+      <span class="code-label">Java 21</span>
+      <pre><code>public abstract class TradeValidationHandler {
+    private TradeValidationHandler next;
+
+    public TradeValidationHandler setNext(TradeValidationHandler next) {
+        this.next = next;
+        return next;
+    }
+
+    public void validate(TradeRequest request) {
+        process(request);
+        if (next != null) {
+            next.validate(request);
+        }
+    }
+
+    protected abstract void process(TradeRequest request);
+}
+
+public final class AccountBalanceCheckHandler extends TradeValidationHandler {
+    @Override
+    protected void process(TradeRequest request) {
+        if (request.amount() &gt; request.accountBalance()) {
+            throw new IllegalArgumentException("Insufficient funds to execute trade!");
+        }
+        System.out.println("Funds verification passed.");
+    }
+}
+
+public final class RegulatoryComplianceHandler extends TradeValidationHandler {
+    @Override
+    protected void process(TradeRequest request) {
+        if (request.isRestrictedStock()) {
+            throw new SecurityException("Trading restricted symbol violates insider trading rules!");
+        }
+        System.out.println("Regulatory compliance passed.");
+    }
+}</code></pre>
+    </section>
+
+    <div class="page-nav">
+      <a href="structural.html" class="prev">
+        <span class="label">Previous</span>
+        <span class="title">← Structural Patterns</span>
+      </a>
+      <a href="../solid.html" class="next">
+        <span class="label">Next</span>
+        <span class="title">SOLID Principles →</span>
+      </a>
+    </div>
+
+  </main>
+</div>
+
+<button class="scroll-top" aria-label="Scroll to top">↑</button>
+<script src="../../js/main.js"></script>
 </body>
 </html>

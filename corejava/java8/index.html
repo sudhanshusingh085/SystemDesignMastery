@@ -1,18 +1,26 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Java 8+ Features — Functional Architecture in Modern Finance</title>
-    <link rel="stylesheet" href="../css/style.css">
+    <link rel="stylesheet" href="../../css/style.css">
     <script type="module" src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs"></script>
     <script>
         import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
         mermaid.initialize({ startOnLoad: true, theme: 'dark' });
     </script>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
 </head>
 <body>
-    <nav class="breadcrumb">
+
+<button class="menu-toggle" aria-label="Toggle menu">☰</button>
+
+<div class="page-wrapper">
+  <aside class="sidebar" id="sidebar"></aside>
+
+  <main class="main-content">
+<nav class="breadcrumb">
         <a href="../index.html">Home</a> &gt; <span>04 &middot; Java 8 Features</span>
     </nav>
 
@@ -21,7 +29,7 @@
         <p class="subtitle">Mastering Lambdas, Streams, and the `java.time` API for High-Frequency Trading Systems</p>
     </header>
 
-    <main>
+    
         <section id="paradigm-shift">
             <h2>1. The Paradigm Shift: Imperative vs Functional Java</h2>
             <p>
@@ -247,7 +255,11 @@ if (settlementDate.getDayOfWeek() == DayOfWeek.SATURDAY) {
                 <p><strong>Answer:</strong> "<code>Optional</code> is not <code>Serializable</code>, which breaks JPA, Hibernate, and distributed caching mechanisms like Hazelcast or Redis. Furthermore, it adds 16 bytes of object header overhead per instance. For a cache holding millions of trades, this causes severe memory bloat. Fields should just be nullable, and getters should return <code>Optional</code> if we want to enforce safety at the API boundary."</p>
             </div>
         </section>
-    </main>
-    <script src="../js/main.js"></script>
+  </main>
+</div>
+
+<button class="scroll-top" aria-label="Scroll to top">↑</button>
+<script src="../../js/main.js"></script>
 </body>
 </html>
+

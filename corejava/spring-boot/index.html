@@ -1,17 +1,22 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Spring Boot Deep Dive — Enterprise Java in Practice</title>
-    <link rel="stylesheet" href="../css/style.css">
-    <script type="module">
-        import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
-        mermaid.initialize({ startOnLoad: true, theme: 'base' });
-    </script>
+    <link rel="stylesheet" href="../../css/style.css">
+    
+  <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
 </head>
 <body>
-    <nav class="breadcrumb">
+
+<button class="menu-toggle" aria-label="Toggle menu">☰</button>
+
+<div class="page-wrapper">
+  <aside class="sidebar" id="sidebar"></aside>
+
+  <main class="main-content">
+<nav class="breadcrumb">
         <a href="../index.html">Home</a> &gt; <span>Spring Boot Deep Dive</span>
     </nav>
 
@@ -20,7 +25,7 @@
         <p class="subtitle">Mastering the heart of modern Java financial architectures</p>
     </header>
 
-    <main>
+    
         <section class="topic-section" id="mvc-flow">
             <h2>1. Spring MVC Request Flow</h2>
             <div class="pillar pillar-1">
@@ -212,8 +217,11 @@ public class OrderService {
                 <p><strong>The Fix:</strong> Either extract <code>saveToDatabase</code> into a separate <code>OrderRepositoryService</code> so it's called through a proxy, or use AspectJ weaving instead of Spring AOP proxies (which operates at byte-code level and doesn't suffer from self-invocation).</p>
             </div>
         </section>
+  </main>
+</div>
 
-    </main>
-    <script src="../js/main.js"></script>
+<button class="scroll-top" aria-label="Scroll to top">↑</button>
+<script src="../../js/main.js"></script>
 </body>
 </html>
+

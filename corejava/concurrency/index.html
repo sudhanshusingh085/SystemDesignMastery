@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -6,16 +6,23 @@
     <link rel="stylesheet" href="../../css/style.css">
     <script src="../../js/main.js" defer></script>
     <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
-    <script>mermaid.initialize({startOnLoad:true});</script>
+    
 </head>
 <body>
-    <nav aria-label="breadcrumb">
+
+<button class="menu-toggle" aria-label="Toggle menu">☰</button>
+
+<div class="page-wrapper">
+  <aside class="sidebar" id="sidebar"></aside>
+
+  <main class="main-content">
+<nav aria-label="breadcrumb">
         <ol class="breadcrumb">
             <li><a href="../../index.html">Home</a></li>
             <li>Advanced Concurrency</li>
         </ol>
     </nav>
-    <main>
+    
         <h1>Advanced Concurrency — Executors, Futures & The Modern Way</h1>
         
         <section id="pillar-1">
@@ -112,6 +119,11 @@ public class SmartRouter {
             <h2>PILLAR 6: Trade-offs & When NOT To Use It</h2>
             <p><strong>Trade-off:</strong> Using heavy concurrency frameworks (like ForkJoinPool) for simple tasks incurs massive overhead. If a task takes less than a few milliseconds, the overhead of dispatching it to a thread pool and synchronizing the result outstrips the benefit of parallelization. Measure before applying concurrency.</p>
         </section>
-    </main>
+  </main>
+</div>
+
+<button class="scroll-top" aria-label="Scroll to top">↑</button>
+<script src="../../js/main.js"></script>
 </body>
 </html>
+

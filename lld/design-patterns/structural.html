@@ -11,10 +11,22 @@
     </script>
 </head>
 <body>
-    <nav class="breadcrumb">
-        <a href="../../index.html">Home</a> &gt; <a href="../index.html">LLD</a> &gt; <a href="index.html">Design Patterns</a> &gt; Structural Patterns
-    </nav>
-    <main>
+
+<button class="menu-toggle" aria-label="Toggle menu">☰</button>
+
+<div class="page-wrapper">
+  <aside class="sidebar" id="sidebar"></aside>
+
+  <main class="main-content">
+    <div class="breadcrumb">
+      <a href="../../index.html">Home</a>
+      <span class="sep">›</span>
+      <a href="../index.html">Low-Level Design</a>
+      <span class="sep">›</span>
+      <a href="index.html">Design Patterns</a>
+      <span class="sep">›</span>
+      <strong>Structural Patterns</strong>
+    </div>
         <h1>Structural Design Patterns: The Definitive Masterclass</h1>
         <p>Welcome to the exhaustive, textbook-grade deep dive into Structural Design Patterns. Structural patterns deal with object composition and typical ways to build large, robust structures while keeping these structures flexible and efficient.</p>
 
@@ -168,7 +180,10 @@ public class VideoConverterFacade {
             <p><strong>Trap:</strong> "Safety vs Transparency?" <strong>Answer:</strong> "Placing child-management methods (`add`, `remove`) in the base Component interface gives client Transparency (treat all nodes exactly identically) but loses Safety (calling `add` on a Leaf throws an exception). Moving them to the Composite class provides Safety at the cost of requiring type casts."</p>
         </section>
 
-    </main>
-    <script src="../../js/main.js"></script>
+  </main>
+</div>
+
+<button class="scroll-top" aria-label="Scroll to top">↑</button>
+<script src="../../js/main.js"></script>
 </body>
 </html>
