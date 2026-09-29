@@ -285,10 +285,73 @@ PIVOT (
     </section>
 
     <!-- ================================================================= -->
-    <!-- PILLAR 5: INTERVIEW SCRIPT & FOLLOW-UP GRILL ROUND -->
+    <!-- PILLAR 5: TEMPORAL TABLES & TEMPDB ALLOCATION CONTENTION -->
     <!-- ================================================================= -->
     <section>
-      <h2>📋 How to Master This in an Interview</h2>
+      <h2>5. System-Versioned Temporal Tables & TempDB Allocation Contention</h2>
+
+      <h3>A. System-Versioned Temporal Tables: Built-In Time-Travel Auditing</h3>
+      <p>In electronic banking and fintech compliance (FINRA, SEC, MiFID II), regulatory audits demand point-in-time reconstruction: <em>"What was Account 1001's exact cash balance and credit rating on March 15, 2024 at 14:22:10 UTC?"</em></p>
+      
+      <p>Before SQL Server 2016, building historical auditing required complex <code>AFTER UPDATE</code> triggers, audit shadow tables, and custom stored procedures. <strong>Temporal Tables</strong> provide ANSI SQL:2011 compliant, automated, engine-level history tracking with zero application code!</p>
+
+      <div class="card" style="border-left: 5px solid var(--purple); background: #faf5ff;">
+        <h4>How Temporal Tables Work Under the Hood:</h4>
+        <ol>
+          <li>The table is defined with two <code>DATETIME2</code> columns marked <code>GENERATED ALWAYS AS ROW START</code> and <code>GENERATED ALWAYS AS ROW END</code>.</li>
+          <li>When an <code>UPDATE</code> or <code>DELETE</code> occurs, the SQL Server storage engine automatically moves the pre-modification version of the row into a dedicated <strong>Historical Table</strong> (e.g. <code>AccountsHistory</code>).</li>
+          <li>The current table always holds the live, active record. The historical table archives every prior version with exact microsecond validity periods.</li>
+        </ol>
+      </div>
+
+<pre><code class="language-sql">-- 1. Create a System-Versioned Temporal Table:
+CREATE TABLE Accounts (
+    AccountID INT PRIMARY KEY,
+    AccountNumber VARCHAR(30) NOT NULL,
+    CashBalance DECIMAL(18,2) NOT NULL,
+    ValidFrom DATETIME2 GENERATED ALWAYS AS ROW START NOT NULL,
+    ValidTo DATETIME2 GENERATED ALWAYS AS ROW END NOT NULL,
+    PERIOD FOR SYSTEM_TIME (ValidFrom, ValidTo)
+)
+WITH (SYSTEM_VERSIONING = ON (HISTORY_TABLE = dbo.AccountsHistory));
+
+-- 2. Time-Travel Query: Look at data as it existed at a past moment in time!
+SELECT AccountNumber, CashBalance 
+FROM Accounts 
+FOR SYSTEM_TIME AS OF '2024-03-15 14:22:10.0000000'
+WHERE AccountID = 1001;
+
+-- 3. Audit Full Life-Cycle Range:
+SELECT AccountNumber, CashBalance, ValidFrom, ValidTo
+FROM Accounts
+FOR SYSTEM_TIME BETWEEN '2024-01-01' AND '2024-03-31'
+WHERE AccountID = 1001;
+</code></pre>
+
+      <!-- TEMPDB CONTENTION -->
+      <hr style="margin: 2rem 0; border: none; border-top: 1px dashed var(--border);">
+      <h3>B. TempDB Allocation Contention: PFS, GAM, and SGAM Internals</h3>
+      <p>When hundreds of concurrent worker threads rapidly create and destroy <code>#Temp</code> tables or table variables, you will notice severe query latency and wait type <code>PAGELATCH_UP</code> on database ID 2 (TempDB).</p>
+
+      <div class="mermaid">
+flowchart TD
+    Threads["100 Concurrent Threads<br/>executing CREATE TABLE #Temp"] --> Bottle["PFS Page (Page Free Space: 2:1:1)<br/>GAM Page (Global Allocation Map: 2:1:2)<br/>SGAM (Shared Global Allocation Map: 2:1:3)"]
+    Bottle --> Contention["PAGELATCH_UP Contention!<br/>Threads wait in queue to lock the single allocation page!"]
+      </div>
+
+      <h4>The 3 Architectural Rules to Eliminate TempDB Contention:</h4>
+      <ul>
+        <li><strong>Rule 1: Multiple TempDB Data Files:</strong> Configure TempDB with <strong>1 data file per logical CPU core</strong> (up to 8 files). Each file gets its own independent PFS, GAM, and SGAM pages, distributing allocation latching across multiple page queues.</li>
+        <li><strong>Rule 2: Equal File Sizing:</strong> Ensure all TempDB data files share the exact same initial size and auto-growth settings to maintain proportional fill algorithm balance.</li>
+        <li><strong>Rule 3: Uniform Extent Allocation (Trace Flag 1118):</strong> Default in SQL Server 2016+, this forces the engine to allocate entire 64 KB extents rather than mixed single pages, bypassing SGAM contention entirely.</li>
+      </ul>
+    </section>
+
+    <!-- ================================================================= -->
+    <!-- PILLAR 6: INTERVIEW SCRIPT & FOLLOW-UP GRILL ROUND -->
+    <!-- ================================================================= -->
+    <section>
+      <h2>6. 📋 How to Master This in an Interview</h2>
       
       <div class="card" style="background: #f8fafc; border-left: 5px solid var(--purple); margin-bottom: 1.5rem;">
         <h4>Interviewer Question: "Explain the difference between a CTE, a #Temp Table, and a @Table Variable. Under what conditions will choosing the wrong one crash server performance?"</h4>

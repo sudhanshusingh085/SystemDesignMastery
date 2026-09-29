@@ -65,6 +65,48 @@ flowchart TD
           </ul>
         </div>
       </div>
+
+      <!-- HEAPS & FORWARDED RECORDS -->
+      <hr style="margin: 2rem 0; border: none; border-top: 1px dashed var(--border);">
+      <h3>Heaps vs Clustered Tables: The Forwarded Records Disaster</h3>
+      <p>A table without a clustered index is called a <strong>Heap</strong>. Rows are stored in no particular physical order, and rows are identified by an internal 8-byte <strong>RID (Row Identifier: FileNumber : PageNumber : SlotNumber)</strong>.</p>
+
+      <div class="card" style="border-left: 5px solid var(--danger); background: #fef2f2;">
+        <h4>☠️ The Forwarded Records Performance Killer</h4>
+        <p>In a Heap, when a row contains variable-length columns (like <code>VARCHAR</code>) and an <code>UPDATE</code> expands the size of that row so it no longer fits on its current 8 KB data page, SQL Server cannot shift rows because the external RIDs would break. Instead, it moves the expanded row to a <strong>completely different page</strong>, leaving a <strong>Forwarding Pointer</strong> at the original slot!</p>
+        <p><strong>The Consequence:</strong> Every subsequent query that reads that row must perform <strong>two separate page I/O reads</strong> (first to the forwarding pointer, then following the pointer to the real page). Over time, a heap accumulates millions of forwarded records, doubling disk I/O and destroying query performance!</p>
+        <p><strong>The Fix:</strong> Convert the heap to a clustered table by creating a Clustered Index, or rebuild the heap using <code>ALTER TABLE TableName REBUILD</code>.</p>
+      </div>
+
+      <!-- CLUSTERED KEY SELECTION -->
+      <hr style="margin: 2rem 0; border: none; border-top: 1px dashed var(--border);">
+      <h3>Clustered Index Key Selection: Ever-Increasing Identity vs Random GUID (NEWID)</h3>
+      <p>Choosing the clustered index key is the single most critical physical design decision in SQL Server. An ideal clustered key must be <strong>Unique, Narrow, Static, and Ever-Increasing</strong>.</p>
+
+      <table border="1" style="width: 100%; border-collapse: collapse; margin: 1.5rem 0;">
+        <thead>
+          <tr style="background: #f1f5f9;">
+            <th>Key Strategy</th>
+            <th>Insert Mechanics</th>
+            <th>Page Split Frequency</th>
+            <th>Index Fragmentation & Buffer Pool Impact</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Ever-Increasing (BIGINT IDENTITY or NEWSEQUENTIALID)</strong></td>
+            <td>New rows are always appended strictly to the <strong>rightmost leaf page</strong> (the end of the B-tree).</td>
+            <td><strong>0% Page Splits!</strong> Once a page fills to 8 KB, a new empty page is allocated at the end.</td>
+            <td><strong>0% Fragmentation:</strong> Pages remain 100% full. Maximum cache density in RAM.</td>
+          </tr>
+          <tr>
+            <td><strong>Random GUID (NEWID())</strong></td>
+            <td>New rows are injected randomly into the <strong>middle</strong> of existing full pages throughout the B-tree.</td>
+            <td><strong>50% Page Splits on every insert!</strong> SQL Server must split the full page, allocate a new page, and move 50% of the rows to make space.</td>
+            <td><strong>Severe Fragmentation:</strong> Pages are half-empty (50% air). Table occupies double the disk and RAM memory buffer cache!</td>
+          </tr>
+        </tbody>
+      </table>
     </section>
 
     <!-- SECTION 2: COVERING INDEXES & THE INCLUDE CLAUSE -->
@@ -128,7 +170,56 @@ INCLUDE (FillPrice, FillQuantity, ExecutedAt);
       </table>
     </section>
 
-    <!-- SECTION 4: EXERCISES -->
+    <!-- SECTION 4: STATISTICS & CARDINALITY ESTIMATION -->
+    <section>
+      <h2>4. Statistics & Cardinality Estimation: The Brain of the Optimizer</h2>
+      
+      <h3>A. How the Optimizer Guesses Row Counts</h3>
+      <p>The Cost-Based Optimizer (CBO) never reads raw table rows during query compilation; doing so would be too slow. Instead, it inspects <strong>Statistics Objects</strong> to predict how many rows will match a query predicate. This predicted row count is the <strong>Cardinality Estimate</strong>.</p>
+      
+      <p>If the estimate is accurate, the optimizer chooses the perfect join algorithm and memory grant. If the estimate is wrong by orders of magnitude (e.g. expects 1 row, but receives 1,000,000), it generates catastrophic execution plans that spill to TempDB!</p>
+
+      <h3>B. The 3 Components of a Statistics Object</h3>
+      <ul>
+        <li><strong>Header:</strong> Metadata including the last time statistics were updated, total rows in the table, and sample rate.</li>
+        <li><strong>Density Vector:</strong> Measures the uniqueness/unpopularity of column values ($Density = \frac{1}{\text{Distinct Values}}$). Used for equality predicates when values are unknown at compile time (like in stored procedures).</li>
+        <li><strong>Histogram:</strong> Samples column data into up to <strong>200 distinct steps (buckets)</strong>, storing range boundary values (<code>RANGE_HI_KEY</code>), exact equal row counts (<code>EQ_ROWS</code>), and rows between steps (<code>RANGE_ROWS</code>).</li>
+      </ul>
+
+      <div class="card" style="border-left: 4px solid var(--accent); background: #fffbeb;">
+        <h4>⚠️ Stale Statistics & Auto-Update Thresholds</h4>
+        <p>Historically, SQL Server automatically updated statistics only after <strong>20% + 500 rows</strong> were modified. On a 100,000,000-row table, that required <strong>20,000,500 modifications</strong> before statistics auto-updated! In modern SQL Server, a dynamic threshold ($\sqrt{1000 \times rows}$) updates statistics much more frequently.</p>
+        <p><strong>DBA Command:</strong> To inspect a table's actual histogram steps live:</p>
+        <pre><code class="language-sql">DBCC SHOW_STATISTICS ('Orders', 'IX_Orders_Account_OrderTime');</code></pre>
+      </div>
+    </section>
+
+    <!-- SECTION 5: QUERY STORE -->
+    <section>
+      <h2>5. Query Store: The "Flight Data Recorder" of SQL Server</h2>
+      
+      <p>Before Query Store (introduced in SQL Server 2016), when a query suddenly ran slow due to an execution plan change (plan regression), diagnosing it required digging through transient DMVs or capturing heavy Profiler traces. Once the server restarted or plan cache was cleared, all diagnostic data was lost.</p>
+
+      <p><strong>Query Store</strong> automatically and continuously captures a historical flight log of all queries, their compiled execution plan XMLs, runtime execution telemetry (CPU, duration, logical reads), and wait statistics, persisting them directly inside the database!</p>
+
+      <div class="mermaid">
+flowchart LR
+    Exec["Query Executes"] --> Capture["Query Store In-Memory Ring Buffer"]
+    Capture --> AsyncFlush["Asynchronous Disk Flush<br/>(Persisted inside user database)"]
+    AsyncFlush --> Analytics["Historical Plan Comparison & Plan Forcing"]
+      </div>
+
+      <h4>The Superpower: Plan Forcing via T-SQL</h4>
+      <p>If a bad execution plan causes an emergency outage, a senior engineer can use Query Store to instantly <strong>force the known-good plan</strong> in 1 second without touching application code or recompiling stored procedures!</p>
+<pre><code class="language-sql">-- Instantly force Plan ID 44 for Query ID 128 to resolve a live production outage:
+EXEC sp_query_store_force_plan @query_id = 128, @plan_id = 44;
+
+-- Unforce plan once index or code fix is permanently deployed:
+EXEC sp_query_store_unforce_plan @query_id = 128, @plan_id = 44;
+</code></pre>
+    </section>
+
+    <!-- SECTION 6: EXERCISES -->
     <section>
       <h2>🏋️ Module 06 Exercises (With Toggleable Solutions)</h2>
 

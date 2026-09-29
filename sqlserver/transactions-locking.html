@@ -143,7 +143,82 @@ sequenceDiagram
       </div>
     </section>
 
-    <!-- SECTION 4: EXERCISES -->
+    <!-- SECTION 4: LATCHES VS LOCKS -->
+    <section>
+      <h2>4. Latches vs Locks: Physical Memory Protection vs Logical Concurrency</h2>
+      
+      <p>One of the most frequent senior performance tuning questions is understanding why a database is waiting on <code>PAGELATCH_*</code> or <code>PAGEIOLATCH_*</code> when no user transactions appear to be blocking each other.</p>
+
+      <table border="1" style="width: 100%; border-collapse: collapse; margin: 1.5rem 0;">
+        <thead>
+          <tr style="background: #f1f5f9;">
+            <th>Architectural Attribute</th>
+            <th>Locks (Logical Concurrency)</th>
+            <th>Latches (Physical In-Memory Synchronization)</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>What They Protect</strong></td>
+            <td><strong>Logical database contents:</strong> Rows, tables, keys, ranges across transaction lifecycles.</td>
+            <td><strong>Physical 8 KB memory pages:</strong> Prevents multiple threads from corrupting memory pointers during page reads/writes in the Buffer Pool.</td>
+          </tr>
+          <tr>
+            <td><strong>Duration</strong></td>
+            <td>Long-lived: Held for the duration of a statement or entire transaction (seconds/minutes).</td>
+            <td><strong>Ultra-short-lived:</strong> Held strictly for microseconds while a thread reads or modifies the in-memory page structure.</td>
+          </tr>
+          <tr>
+            <td><strong>Deadlock Detection</strong></td>
+            <td>Managed by the SQL Server Lock Monitor thread; resolves deadlocks by killing victim transactions.</td>
+            <td>Engine enforces strict latch hierarchy; latches do not participate in transaction deadlocks.</td>
+          </tr>
+          <tr>
+            <td><strong>Wait Types Seen in DMVs</strong></td>
+            <td><code>LCK_M_S</code>, <code>LCK_M_X</code>, <code>LCK_M_U</code></td>
+            <td><code>PAGELATCH_*</code> (In-memory contention) and <code>PAGEIOLATCH_*</code> (Waiting for physical disk to load page into memory!).</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <!-- SECTION 5: TRANSACTION LOG & VLF INTERNALS -->
+    <section>
+      <h2>5. Transaction Log (LDF) Architecture, VLFs & Recovery Models</h2>
+
+      <h3>A. How the Write-Ahead Log (WAL) Works</h3>
+      <p>SQL Server enforces ACID durability through <strong>Write-Ahead Logging</strong>: before any modified data page is written from RAM to the MDF data file on disk, the exact change description must first be flushed synchronously to the LDF Transaction Log disk.</p>
+
+      <h3>B. Virtual Log Files (VLFs) & The Auto-Growth Performance Cliff</h3>
+      <p>Internally, the physical <code>.ldf</code> file is divided into circular segments called <strong>Virtual Log Files (VLFs)</strong>. When the transaction log expands via auto-growth, SQL Server allocates new VLFs.</p>
+
+      <div class="card" style="border-left: 5px solid var(--danger); background: #fef2f2;">
+        <h4>⚠️ The VLF Fragmentation Disaster</h4>
+        <p>If a database is configured with the legacy default auto-growth of <strong>1 MB</strong>, and the log grows to 20 GB, SQL Server creates over <strong>20,000 individual VLFs</strong>! Having thousands of tiny VLFs severely degrades database startup time, slows down transaction log backups, and adds latency to every single <code>INSERT</code>, <code>UPDATE</code>, and <code>COMMIT</code> operation.</p>
+        <p><strong>DBA Best Practice:</strong> Size the transaction log file properly upfront, and configure auto-growth in chunks of <strong>512 MB or 1,024 MB</strong>.</p>
+      </div>
+
+      <h3>C. Recovery Models Compared</h3>
+      <ul>
+        <li><strong>FULL:</strong> Every transaction is logged. The log is <em>only</em> truncated when a Transaction Log Backup is executed! Allows <strong>Point-in-Time Recovery</strong> down to the exact second. (Mandatory for production banking).</li>
+        <li><strong>SIMPLE:</strong> Space in the transaction log is automatically reclaimed on every CHECKPOINT. Zero point-in-time recovery; can only restore to the last full/diff backup. (Ideal for development/testing).</li>
+        <li><strong>BULK_LOGGED:</strong> Minimally logs high-speed bulk inserts (e.g. <code>bcp</code>, <code>BULK INSERT</code>), preventing log bloat during multi-million row staging imports.</li>
+      </ul>
+    </section>
+
+    <!-- SECTION 6: IN-MEMORY OLTP -->
+    <section>
+      <h2>6. In-Memory OLTP (Hekaton): Latch-Free Trading Architecture</h2>
+      <p>In ultra-high-frequency electronic trading systems, traditional locking and latching on 8 KB buffer pages becomes the primary throughput bottleneck. <strong>In-Memory OLTP</strong> completely eliminates latches and locks:</p>
+
+      <ul>
+        <li><strong>Memory-Optimized Tables:</strong> Tables reside entirely in RAM. Data is accessed via <strong>Latch-Free Bw-Tree Indexes</strong> and Hash Indexes that never experience buffer page latching!</li>
+        <li><strong>Multi-Version Concurrency Control (MVCC):</strong> Readers and writers never block each other; updates create new timestamped row versions with lock-free optimistic validation.</li>
+        <li><strong>Natively Compiled Stored Procedures:</strong> T-SQL code is converted directly into <strong>C code and compiled into a native machine-code DLL</strong> by the Windows C compiler! Eliminates T-SQL interpretation overhead, executing trade orders in microseconds.</li>
+      </ul>
+    </section>
+
+    <!-- SECTION 7: EXERCISES -->
     <section>
       <h2>🏋️ Module 07 Exercises (With Toggleable Solutions)</h2>
 

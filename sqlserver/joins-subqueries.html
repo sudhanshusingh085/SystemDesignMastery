@@ -306,10 +306,82 @@ WHERE ClientID NOT IN (SELECT ClientID FROM Deposits);
     </section>
 
     <!-- ================================================================= -->
-    <!-- PILLAR 6: INTERVIEW SCRIPT & FOLLOW-UP GRILL ROUND -->
+    <!-- PILLAR 6: SET OPERATORS & NON-EQUI JOINS -->
     <!-- ================================================================= -->
     <section>
-      <h2>📋 How to Master This in an Interview</h2>
+      <h2>6. Set Operators Masterclass (UNION, INTERSECT, EXCEPT) & Non-Equi Joins</h2>
+
+      <h3>A. Relational Set Operators Compared</h3>
+      <p>While JOINs combine tables <strong>horizontally</strong> (adding columns side-by-side), Set Operators combine query result sets <strong>vertically</strong> (stacking rows on top of each other).</p>
+
+      <table border="1" style="width: 100%; border-collapse: collapse; margin: 1.5rem 0;">
+        <thead>
+          <tr style="background: #f1f5f9;">
+            <th>Set Operator</th>
+            <th>Mathematical Meaning</th>
+            <th>Deduplication & Sorting</th>
+            <th>Engine Performance Impact</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>UNION ALL</code></td>
+            <td>Combines all rows from Query 1 and Query 2.</td>
+            <td><strong>No deduplication!</strong> Preserves duplicates.</td>
+            <td><strong>Fastest ($O(1)$ stream concatenation):</strong> Zero memory grant, zero sorting.</td>
+          </tr>
+          <tr>
+            <td><code>UNION</code></td>
+            <td>Combines rows and removes duplicate rows.</td>
+            <td><strong>Strictly deduplicated.</strong></td>
+            <td><strong>High Memory Grant:</strong> Forces SQL Server to insert an expensive <strong>Distinct Sort</strong> operator into the plan!</td>
+          </tr>
+          <tr>
+            <td><code>INTERSECT</code></td>
+            <td>Returns strictly rows that exist in <strong>both</strong> Query 1 and Query 2.</td>
+            <td>Deduplicated.</td>
+            <td>Compiled into an <strong>Inner Semi Join</strong> with Distinct.</td>
+          </tr>
+          <tr>
+            <td><code>EXCEPT</code></td>
+            <td>Returns rows from Query 1 that do <strong>not</strong> exist in Query 2.</td>
+            <td>Deduplicated.</td>
+            <td>Compiled into a <strong>Left Anti Semi Join</strong> with Distinct.</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="card" style="border-left: 5px solid var(--purple); background: #faf5ff;">
+        <h4>💡 The Mind-Bending NULL Rule in Set Operators!</h4>
+        <p>In standard joins and <code>WHERE</code> clauses, <code>NULL = NULL</code> evaluates to <strong>UNKNOWN</strong>.</p>
+        <p><strong>In Set Operators (UNION, INTERSECT, EXCEPT), SQL Server treats two NULLs as EQUAL!</strong></p>
+        <ul>
+          <li>If Query 1 returns a row with <code>(NULL, 'Cash')</code> and Query 2 returns <code>(NULL, 'Cash')</code>, <code>INTERSECT</code> <strong>matches them and returns the row!</strong></li>
+          <li>In <code>UNION</code>, two rows with identical NULLs are deduplicated into a single row!</li>
+        </ul>
+      </div>
+
+      <!-- NON-EQUI JOINS -->
+      <h3>B. Non-Equi Joins: Joining on Ranges & Inequalities</h3>
+      <p>A join condition does not have to be an exact equals sign (<code>=</code>). In trading risk and tax bracket calculation, tables are joined using inequalities or range boundaries (<code>BETWEEN</code>, <code><</code>, <code>></code>):</p>
+<pre><code class="language-sql">-- Assign commission fee bracket based on trade notional range:
+SELECT 
+    e.ExecutionID,
+    e.FillQuantity * e.FillPrice AS GrossNotional,
+    tier.FeePercentage,
+    (e.FillQuantity * e.FillPrice * tier.FeePercentage) AS ComputedFee
+FROM Executions e
+INNER JOIN BrokerFeeTiers tier 
+        ON (e.FillQuantity * e.FillPrice) >= tier.MinNotional
+       AND (e.FillQuantity * e.FillPrice) < tier.MaxNotional;
+</code></pre>
+    </section>
+
+    <!-- ================================================================= -->
+    <!-- PILLAR 7: INTERVIEW SCRIPT & FOLLOW-UP GRILL ROUND -->
+    <!-- ================================================================= -->
+    <section>
+      <h2>7. 📋 How to Master This in an Interview</h2>
       
       <div class="card" style="background: #f8fafc; border-left: 5px solid var(--purple); margin-bottom: 1.5rem;">
         <h4>Interviewer Question: "Explain the difference between INNER, LEFT, and FULL OUTER joins, and what happens under the hood when SQL Server executes them."</h4>

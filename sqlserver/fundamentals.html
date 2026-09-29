@@ -119,6 +119,169 @@
           </tr>
         </tbody>
       </table>
+
+      <!-- CONSTRAINTS DEEP DIVE -->
+      <hr style="margin: 2rem 0; border: none; border-top: 1px dashed var(--border);">
+      <h3>Integrity Constraints Masterclass: Enforcing Business Rules at the Engine Level</h3>
+      <p>Constraints prevent corrupted, invalid, or orphan data from entering the database. Relying on application code (e.g. Java or Python) for validation is dangerous because ad-hoc updates, migrations, or other services can bypass application validation.</p>
+
+      <table border="1" style="width: 100%; border-collapse: collapse; margin: 1.5rem 0;">
+        <thead>
+          <tr style="background: #f1f5f9;">
+            <th>Constraint Type</th>
+            <th>Engine Implementation</th>
+            <th>Clustered / Index Mechanics</th>
+            <th>Production Example</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>PRIMARY KEY</strong></td>
+            <td>Enforces entity identity and uniqueness. <strong>No NULLs allowed!</strong></td>
+            <td>By default, SQL Server creates a <strong>Unique Clustered Index</strong> on the PK column (unless explicitly declared as <code>NONCLUSTERED</code>).</td>
+            <td><code>AccountID INT PRIMARY KEY</code></td>
+          </tr>
+          <tr>
+            <td><strong>FOREIGN KEY</strong></td>
+            <td>Enforces <strong>Referential Integrity</strong> between parent and child tables. Prevents orphan child rows.</td>
+            <td><strong>Does NOT auto-create an index!</strong> (Senior DBA Rule: <em>Always manually create a non-clustered index on every Foreign Key</em> to avoid full table scans during joins and cascades!).</td>
+            <td><code>ClientID INT FOREIGN KEY REFERENCES Clients(ClientID)</code></td>
+          </tr>
+          <tr>
+            <td><strong>UNIQUE</strong></td>
+            <td>Enforces uniqueness across non-primary columns.</td>
+            <td>Automatically creates a <strong>Unique Non-Clustered Index</strong>. <em>T-SQL Trap:</em> Allows <strong>strictly one single NULL value</strong> in the column!</td>
+            <td><code>AccountNumber VARCHAR(30) UNIQUE</code></td>
+          </tr>
+          <tr>
+            <td><strong>CHECK</strong></td>
+            <td>Validates boolean predicate expressions on every INSERT and UPDATE.</td>
+            <td>Evaluated in-memory during page write. If false, statement is aborted.</td>
+            <td><code>CHECK (Quantity > 0 AND LimitPrice > 0.00)</code></td>
+          </tr>
+          <tr>
+            <td><strong>DEFAULT</strong></td>
+            <td>Supplies a baseline value when omitted in the INSERT statement.</td>
+            <td>Injected during compilation if column is absent from column list.</td>
+            <td><code>CreatedAt DATETIME2 DEFAULT SYSUTCDATETIME()</code></td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h4>Foreign Key Referential Actions: CASCADE vs NO ACTION vs SET NULL</h4>
+      <p>When a parent row is deleted or updated in <code>Clients</code>, what happens to child accounts in <code>Accounts</code>?</p>
+      <ul>
+        <li><code>ON DELETE NO ACTION</code> (Default): Prevents deletion of the client; throws Error 547 if child accounts exist.</li>
+        <li><code>ON DELETE CASCADE</code>: Deleting the client automatically and recursively deletes all their child accounts and orders! (Dangerous in banking!).</li>
+        <li><code>ON DELETE SET NULL</code>: Deleting the client sets <code>ClientID = NULL</code> on child accounts (requires column to be nullable).</li>
+        <li><code>ON DELETE SET DEFAULT</code>: Sets child accounts to a default system holding client ID.</li>
+      </ul>
+
+      <!-- SEQUENCES VS IDENTITY -->
+      <hr style="margin: 2rem 0; border: none; border-top: 1px dashed var(--border);">
+      <h3>Sequences (CREATE SEQUENCE) vs IDENTITY Columns</h3>
+      
+      <table border="1" style="width: 100%; border-collapse: collapse; margin: 1.5rem 0;">
+        <thead>
+          <tr style="background: #f1f5f9;">
+            <th>Feature</th>
+            <th><code>IDENTITY(seed, increment)</code></th>
+            <th><code>CREATE SEQUENCE</code> (ANSI Standard)</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Scope</strong></td>
+            <td>Strictly tied to a <strong>single physical table</strong> and column.</td>
+            <td><strong>Independent database object.</strong> A single sequence can generate coordinated IDs across multiple tables!</td>
+          </tr>
+          <tr>
+            <td><strong>Pre-Allocation (Pre-fetching)</strong></td>
+            <td>Cannot know the assigned ID until the row is physically inserted (via <code>SCOPE_IDENTITY()</code>).</td>
+            <td><strong>Can pre-allocate IDs before insertion</strong> in Java/C# using <code>NEXT VALUE FOR SeqName</code>!</td>
+          </tr>
+          <tr>
+            <td><strong>Performance Caching</strong></td>
+            <td>Internal engine locks.</td>
+            <td>Supports <code>CACHE 100</code>: Pre-allocates blocks of 100 IDs in memory, minimizing disk I/O on high-speed inserts.</td>
+          </tr>
+          <tr>
+            <td><strong>Cycling</strong></td>
+            <td>Cannot cycle; throws overflow on maximum integer.</td>
+            <td>Supports <code>CYCLE</code>: Automatically wraps back to 1 upon reaching max value (ideal for sequence numbers in FIX tags).</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <!-- STRING FUNCTIONS MASTERCLASS -->
+      <hr style="margin: 2rem 0; border: none; border-top: 1px dashed var(--border);">
+      <h3>String Functions Masterclass: LEN vs DATALENGTH & Manipulation</h3>
+
+      <div class="card" style="border-left: 4px solid var(--danger); background: #fef2f2;">
+        <h4>⚠️ The Classic Trap: LEN() Ignores Trailing Spaces!</h4>
+        <p>In T-SQL, <code>LEN('AAPL   ')</code> returns <strong>4</strong>, not 7! <code>LEN()</code> excludes trailing whitespace characters.</p>
+        <p>To measure the true physical storage byte size, you must use <code>DATALENGTH()</code>:
+        <br><code>DATALENGTH('AAPL   ')</code> = <strong>7 bytes</strong> for VARCHAR.
+        <br><code>DATALENGTH(N'AAPL')</code> = <strong>8 bytes</strong> (NVARCHAR uses 2 bytes per character for UTF-16!).</p>
+      </div>
+
+      <table border="1" style="width: 100%; border-collapse: collapse; margin: 1rem 0;">
+        <thead>
+          <tr style="background: #f1f5f9;">
+            <th>Function</th>
+            <th>Description & Syntax</th>
+            <th>Production Example</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>SUBSTRING()</code></td>
+            <td><code>SUBSTRING(str, start, length)</code> (1-indexed!)</td>
+            <td><code>SUBSTRING('ORD-NYC-1001', 5, 3)</code> &rarr; <code>'NYC'</code></td>
+          </tr>
+          <tr>
+            <td><code>CHARINDEX()</code></td>
+            <td>Finds first occurrence position of substring.</td>
+            <td><code>CHARINDEX('-', 'ACC-882')</code> &rarr; <code>4</code></td>
+          </tr>
+          <tr>
+            <td><code>CONCAT_WS()</code></td>
+            <td>Concatenates strings with a delimiter, <strong>automatically skipping NULLs</strong>!</td>
+            <td><code>CONCAT_WS(' | ', 'Citadel', NULL, 'US')</code> &rarr; <code>'Citadel | US'</code></td>
+          </tr>
+          <tr>
+            <td><code>REPLACE()</code></td>
+            <td>Replaces all occurrences of a search string.</td>
+            <td><code>REPLACE('USD/EUR', '/', '-')</code> &rarr; <code>'USD-EUR'</code></td>
+          </tr>
+          <tr>
+            <td><code>TRIM()</code></td>
+            <td>Removes leading and trailing spaces (SQL 2017+).</td>
+            <td><code>TRIM('  Trading  ')</code> &rarr; <code>'Trading'</code></td>
+          </tr>
+        </tbody>
+      </table>
+
+      <!-- THE T-SQL MERGE DEEP DIVE -->
+      <hr style="margin: 2rem 0; border: none; border-top: 1px dashed var(--border);">
+      <h3>The Atomic Upsert: T-SQL MERGE Statement Deep Dive</h3>
+      <p>The <code>MERGE</code> statement synchronizes a target table with a source table in a single atomic pass, handling <code>INSERT</code>, <code>UPDATE</code>, and <code>DELETE</code> simultaneously.</p>
+
+      <div class="card" style="border-left: 5px solid var(--purple); background: #faf5ff;">
+        <h4>🛡️ The Mandatory Concurrency Rule: WITH (HOLDLOCK)</h4>
+        <p>A famous concurrency bug in SQL Server occurs when multiple concurrent threads execute <code>MERGE</code> on the same target table without locking hints. Two threads can check the table simultaneously, both see that the key is missing, and both execute an <code>INSERT</code>, causing a fatal <strong>Primary Key / Unique Constraint Violation!</strong></p>
+        <p><strong>The Fix:</strong> Always declare <code>WITH (HOLDLOCK)</code> on the target table to force serializable key-range locking:</p>
+<pre><code class="language-sql">MERGE PortfolioPositions WITH (HOLDLOCK) AS target
+USING (SELECT @AccountID AS AccountID, @SecurityID AS SecurityID) AS source
+   ON target.AccountID = source.AccountID AND target.SecurityID = source.SecurityID
+WHEN MATCHED THEN
+    UPDATE SET target.PositionUnits = target.PositionUnits + @NewUnits
+WHEN NOT MATCHED BY TARGET THEN
+    INSERT (AccountID, SecurityID, PositionUnits, AverageEntryPrice)
+    VALUES (source.AccountID, source.SecurityID, @NewUnits, @NewPrice)
+OUTPUT $action AS ActionTaken, inserted.PositionUnits;
+</code></pre>
+      </div>
     </section>
 
     <!-- ================================================================= -->
