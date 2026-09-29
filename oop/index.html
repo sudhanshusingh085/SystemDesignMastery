@@ -230,8 +230,39 @@ public class Rectangle extends Shape {
         <li><strong>Single:</strong> Class B extends Class A.</li>
         <li><strong>Multilevel:</strong> Class C extends Class B, which extends Class A.</li>
         <li><strong>Hierarchical:</strong> Class B and Class C both extend Class A.</li>
-        <li><em>Note: Java does not support Multiple Class Inheritance (where a class extends multiple classes) to avoid the Diamond Problem, though a class can implement multiple interfaces.</em></li>
       </ul>
+
+      <h3>The Classic Diamond Problem Deep Dive</h3>
+      <p>Why did Java explicitly ban multiple class inheritance (<code>class D extends B, C</code>)?</p>
+      
+      <div class="diagram-container">
+        <div class="mermaid">
+          flowchart TD
+            A["Class A (defines int x = 10, foo())"] --> B["Class B (overrides foo())"]
+            A --> C["Class C (overrides foo())"]
+            B --> D["Class D (extends B, C — ILLEGAL IN JAVA)"]
+            C --> D
+        </div>
+        <p class="caption">Figure 4b: The Classic Diamond Problem</p>
+      </div>
+
+      <p>The Diamond Problem causes two fatal dilemmas:</p>
+      <ol>
+        <li><strong>State Ambiguity (The Two-Copy Dilemma):</strong> If Class A has an instance field <code>int x</code>, does Class D inherit <em>one</em> copy of <code>x</code> or <em>two separate copies</em>? If two copies, modifying <code>x</code> via Class B's methods leaves Class C's copy out of sync. C++ solves this with virtual base classes, which introduces pointer indirection and complicated initialization order.</li>
+        <li><strong>Behavior Ambiguity:</strong> If both B and C override <code>foo()</code>, and someone calls <code>d.foo()</code>, which implementation runs?</li>
+      </ol>
+
+      <div class="callout callout-warning">
+        <div class="callout-title">⚠️ The Interviewer Trap: Can the Diamond Problem happen in modern Java?</div>
+        <p><strong>YES! Since Java 8 introduced default methods in interfaces, the Diamond Problem exists in Java!</strong></p>
+        <p>If interface <code>B</code> and interface <code>C</code> both provide a <code>default void route()</code> method, and class <code>D implements B, C</code>, the compiler halts with an error: <em>"class D inherits unrelated defaults for route() from types B and C"</em>.</p>
+        <p><strong>How Java Resolves Interface Diamond Conflicts:</strong></p>
+        <ul>
+          <li><strong>1. Class Wins Rule:</strong> Any method declared in a class/superclass always beats an interface default method.</li>
+          <li><strong>2. Sub-interface Wins Rule:</strong> If B extends A, B's default method wins over A's.</li>
+          <li><strong>3. Explicit Disambiguation:</strong> The implementing class MUST override the method and explicitly invoke <code>B.super.route()</code> or <code>C.super.route()</code>.</li>
+        </ul>
+      </div>
 
       <span class="code-label">Java</span>
       <pre>
@@ -312,6 +343,71 @@ public class Main {
     }
 }
       </pre>
+
+      <h3>⚠️ The Classic Method Overriding Interview Traps</h3>
+      
+      <h4>Trap 1: Field Hiding (Variables Are NEVER Polymorphic!)</h4>
+      <p>Instance fields are resolved at <strong>compile time based on the reference type</strong>, not the runtime object!</p>
+      <span class="code-label">Java 21</span>
+      <pre>
+class Parent { public int val = 10; }
+class Child extends Parent { public int val = 20; }
+
+Parent p = new Child();
+System.out.println(p.val); // PRINTS 10! NOT 20!
+      </pre>
+
+      <h4>Trap 2: Static Method Hiding (Static Methods Cannot Be Overridden!)</h4>
+      <p>Static methods bind at compile time using <code>invokestatic</code>. A static method in a subclass simply <em>hides</em> the parent's method.</p>
+      <span class="code-label">Java 21</span>
+      <pre>
+class Parent { public static void show() { System.out.println("Parent"); } }
+class Child extends Parent { public static void show() { System.out.println("Child"); } }
+
+Parent p = new Child();
+p.show(); // PRINTS "Parent"!
+      </pre>
+
+      <h4>Trap 3: Constructor Calling Overridden Method (The Uninitialized Field Trap)</h4>
+      <p>When a parent constructor invokes a virtual method that the child overrides, the child's method runs <strong>before the child's instance field initializers execute</strong>!</p>
+      <span class="code-label">Java 21</span>
+      <pre>
+class Base {
+    public Base() { validate(); }
+    public void validate() { System.out.println("Base validate"); }
+}
+class Derived extends Base {
+    private String code = "SECURE";
+    @Override
+    public void validate() {
+        // At this moment, 'code' is still null because Derived constructor hasn't run!
+        System.out.println(code.length()); // THROWS NullPointerException!
+    }
+}
+      </pre>
+
+      <h4>Trap 4: Covariant Return Types (True Type-Safety Without Downcasting)</h4>
+      <p>Introduced in Java 5, a subclass method is permitted to return a <strong>subtype</strong> of the parent method's return type.</p>
+      <span class="code-label">Java 21</span>
+      <pre>
+class Food {}
+class DogFood extends Food {}
+
+class Animal {
+    public Food getMeal() { return new Food(); }
+}
+
+class Dog extends Animal {
+    // Covariant Return Type: DogFood is a subtype of Food
+    @Override
+    public DogFood getMeal() { return new DogFood(); }
+}
+
+// Client Call Site: NO DOWNCASTING NEEDED!
+Dog dog = new Dog();
+DogFood meal = dog.getMeal(); // Completely type-safe without (DogFood) cast!
+      </pre>
+      <p><strong>Under the hood:</strong> The compiler generates a synthetic <code>Bridge Method</code> in bytecode (<code>public synthetic bridge Food getMeal() { return this.getMeal(); }</code>) to ensure binary compatibility with polymorphic calls via <code>Animal a = new Dog(); a.getMeal();</code>.</p>
     </div>
 
     <div class="card">

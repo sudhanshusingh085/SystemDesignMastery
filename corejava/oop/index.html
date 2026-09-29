@@ -1,12 +1,10 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>OOP Deep Dive — Object-Oriented Architecture for Financial Systems</title>
-    <link rel="stylesheet" href="../../css/style.css">
-    
-    
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>OOP Deep Dive — Object-Oriented Architecture for Financial Systems</title>
+  <link rel="stylesheet" href="../css/style.css">
   <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
 </head>
 <body>
@@ -17,25 +15,37 @@
   <aside class="sidebar" id="sidebar"></aside>
 
   <main class="main-content">
-<nav class="breadcrumb">
-        <a href="../index.html">Home</a> &gt; <span>02 &middot; OOP Mastery</span>
-    </nav>
+    <div class="breadcrumb">
+      <a href="../index.html">Home</a>
+      <span class="sep">›</span>
+      <strong>02 · OOP Mastery</strong>
+    </div>
 
     <header>
-        <h1>OOP Deep Dive — Object-Oriented Architecture for Financial Systems</h1>
-        <p>An exhaustive, textbook-grade masterclass on Object-Oriented Programming principles tailored specifically for tier-1 investment bank and hedge fund engineering interviews.</p>
+      <h1>OOP Deep Dive — Object-Oriented Architecture for Financial Systems</h1>
+      <p style="font-size:1.1rem; color:var(--text-muted); margin-bottom:2rem;">
+        An exhaustive, textbook-grade masterclass on Object-Oriented Programming principles tailored specifically for tier-1 investment bank, hedge fund, and electronic trading interviews.
+      </p>
     </header>
 
+    <!-- ============================================================ -->
+    <!-- 1. THE 4 PILLARS OF OOP IN ELECTRONIC TRADING -->
+    <!-- ============================================================ -->
     <section id="pillars-of-oop">
-        <h2>1. The 4 Pillars of OOP in Electronic Trading</h2>
-        
-        <p>Object-Oriented Programming (OOP) is not merely a syntactic construct; it is a fundamental architectural paradigm designed to manage complexity. In high-frequency trading (HFT) and order management systems (OMS), representing reality accurately and securely is paramount. The 4 Pillars of OOP serve as the guardrails for robust financial systems.</p>
+      <h2>1. The 4 Pillars of OOP in Electronic Trading</h2>
+      
+      <p>Object-Oriented Programming (OOP) is not merely a syntactic construct; it is a fundamental architectural paradigm designed to manage complexity. In high-frequency trading (HFT) and order management systems (OMS), representing reality accurately and securely is paramount. The 4 Pillars of OOP serve as the guardrails for robust financial systems.</p>
 
-        <h3>1.1 Encapsulation: Guarding The Vault</h3>
-        <p><strong>The Conceptual Theory:</strong> Encapsulation is the bundling of data (state) and the methods that operate on that data into a single unit, restricting direct access to some of the object's components. It is the core mechanism for maintaining class invariants.</p>
-        <p><strong>The Real-World Finance Pain Point:</strong> Imagine an <code>Account</code> class where the <code>balance</code> or <code>marginUtilization</code> is a <code>public double</code>. Any external service—a buggy reporting job or an erratic risk checker—could arbitrarily mutate the balance. Such public fields lead directly to multi-million dollar accounting discrepancies and regulatory fines. Encapsulation ensures state mutations strictly adhere to domain rules.</p>
-        
-<pre><code class="language-java">public class MarginAccount {
+      <!-- 1.1 ENCAPSULATION -->
+      <h3>1.1 Encapsulation: Guarding The Vault</h3>
+      <p><strong>The Conceptual Theory:</strong> Encapsulation is the bundling of data (state) and the methods that operate on that data into a single unit, restricting direct access to some of the object's components. It is the core mechanism for maintaining class invariants.</p>
+      <p><strong>The Real-World Finance Pain Point:</strong> Imagine an <code>Account</code> class where the <code>balance</code> or <code>marginUtilization</code> is a <code>public double</code>. Any external service—a buggy reporting job or an erratic risk checker—could arbitrarily mutate the balance. Such public fields lead directly to multi-million dollar accounting discrepancies and regulatory fines. Encapsulation ensures state mutations strictly adhere to domain rules.</p>
+      
+      <span class="code-label">Java 21</span>
+      <pre><code>import java.math.BigDecimal;
+import java.util.concurrent.locks.ReentrantLock;
+
+public class MarginAccount {
     // 1. Data Hiding: Private state
     private final String accountId;
     private BigDecimal availableMargin; // NEVER use double for currency
@@ -54,7 +64,7 @@
                 throw new IllegalArgumentException("Margin required must be positive");
             }
             if (availableMargin.compareTo(marginRequired) &lt; 0) {
-                throw new InsufficientMarginException("Trade rejected: Margin limit breached");
+                throw new InsufficientMarginException("Trade rejected: Margin limit breached for account: " + accountId);
             }
             this.availableMargin = this.availableMargin.subtract(marginRequired);
         } finally {
@@ -66,122 +76,532 @@
     public BigDecimal getAvailableMargin() {
         return this.availableMargin; 
     }
-}
-</code></pre>
+}</code></pre>
 
-        <div class="interview-box">
-            <h4>📋 How to Answer This in an Interview</h4>
-            <p>"Encapsulation in our trading systems isn't just about getters and setters; it's about enforcing domain invariants. By keeping state private and exposing only behavior that validates inputs, we guarantee that a Trade object can never be pushed into an inconsistent state. For example, you shouldn't be able to bypass the risk engine and manually decrement an account balance. We also employ immutable objects (like Java 16 Records for MarketData) wherever possible to completely eliminate state mutation anomalies."</p>
-        </div>
+      <div class="callout callout-info">
+        <div class="callout-title">📋 How to Answer This in an Interview</div>
+        <p><em>"Encapsulation in our trading systems isn't just about getters and setters; it's about enforcing domain invariants. By keeping state private and exposing only behavior that validates inputs, we guarantee that a Trade or Account object can never be pushed into an inconsistent state. We also employ immutable objects (like Java Records for MarketData) wherever possible to completely eliminate state mutation anomalies across threads."</em></p>
+      </div>
 
-        <h3>1.2 Abstraction: The Universal Interface</h3>
-        <p><strong>The Conceptual Theory:</strong> Abstraction involves hiding complex implementation details and exposing only the essential features of an object. It defines a contract of <em>what</em> an object can do, divorcing it from <em>how</em> it does it.</p>
-        <p><strong>The Real-World Finance Pain Point:</strong> An OMS must route thousands of orders for various instruments. If the OMS has to contain explicit <code>if/else</code> logic for every new asset class (e.g., <code>if (instrument == Bond) { ... } else if (instrument == Option) { ... }</code>), the system becomes unmaintainable. Abstraction allows the OMS to interact with a generalized <code>FinancialInstrument</code>.</p>
+      <hr>
 
-<pre><code class="language-java">public abstract class FinancialInstrument {
-    protected final String cusip;
-    protected final Currency currency;
+      <!-- 1.2 ABSTRACTION (DEEP DIVE WITH VENUE GATEWAY) -->
+      <h3>1.2 Abstraction: The Universal Execution Gateway</h3>
+      <p><strong>The Conceptual Theory:</strong> Abstraction involves hiding complex, low-level implementation details and exposing only the essential, high-level features of a component. It defines a strict contract of <em>what</em> an object can do, completely divorcing it from <em>how</em> it executes under the hood.</p>
+      
+      <p><strong>The Real-World Electronic Trading Pain Point:</strong> An institutional Order Management System (OMS) must route trades to dozens of external execution venues:
+        <ul>
+          <li><strong>Nasdaq / BATS:</strong> High-speed binary protocol (OUCH / ITCH over UDP/TCP).</li>
+          <li><strong>CME / London Stock Exchange:</strong> FIX 4.4 tag-value ASCII protocol over TCP sockets.</li>
+          <li><strong>Crypto Exchanges (Binance / Coinbase):</strong> REST and WebSocket APIs using JSON payloads.</li>
+        </ul>
+        If the core OMS order routing engine had to know about byte buffers, FIX tags, JSON serializers, and socket reconnections, the codebase would become an unmaintainable disaster. Any change to a venue's wire protocol would risk breaking the core trade matching logic.
+      </p>
 
-    protected FinancialInstrument(String cusip, Currency currency) {
-        this.cusip = cusip;
-        this.currency = currency;
+      <p><strong>The Architectural Solution:</strong> We create an abstract base class <code>TradingVenueGateway</code>. It provides concrete infrastructure (session sequence numbering, heartbeat watchdog, pre-trade risk checks, latency metrics via <strong>Template Method Pattern</strong>) while forcing subclasses to implement abstract methods for protocol-specific wire serialization.</p>
+
+      <div class="mermaid">
+      classDiagram
+        class TradingVenueGateway {
+          &lt;&lt;abstract&gt;&gt;
+          -String venueId
+          -AtomicLong sequenceNumber
+          -boolean isConnected
+          +submitOrder(Order order) ExecutionReport
+          #encodeAndTransmit(Order order)* byte[]
+          #parseExecutionReport(byte[] raw)* ExecutionReport
+          -runPreTradeRisk(Order order) void
+        }
+        class FixVenueGateway {
+          +encodeAndTransmit(Order order) byte[]
+          +parseExecutionReport(byte[] raw) ExecutionReport
+        }
+        class NasdaqOuchGateway {
+          +encodeAndTransmit(Order order) byte[]
+          +parseExecutionReport(byte[] raw) ExecutionReport
+        }
+        class CryptoWebSocketGateway {
+          +encodeAndTransmit(Order order) byte[]
+          +parseExecutionReport(byte[] raw) ExecutionReport
+        }
+        TradingVenueGateway &lt;|-- FixVenueGateway
+        TradingVenueGateway &lt;|-- NasdaqOuchGateway
+        TradingVenueGateway &lt;|-- CryptoWebSocketGateway
+      </div>
+
+      <span class="code-label">Java 21</span>
+      <pre><code>import java.math.BigDecimal;
+import java.time.Instant;
+import java.util.concurrent.atomic.AtomicLong;
+
+// The Domain Models
+public record Order(String orderId, String ticker, BigDecimal price, long quantity, String side) {}
+public record ExecutionReport(String execId, String orderId, String status, BigDecimal fillPrice, Instant timestamp) {}
+
+// Production Abstraction: Abstract Gateway with Template Method
+public abstract class TradingVenueGateway {
+    protected final String venueId;
+    protected final AtomicLong sequenceNumber = new AtomicLong(1);
+    protected volatile boolean isConnected = false;
+
+    protected TradingVenueGateway(String venueId) {
+        this.venueId = venueId;
     }
 
-    // Abstract method: Every instrument calculates value differently
-    public abstract BigDecimal calculateMarketValue(MarketData quote);
+    // Concrete Template Method: Dictates the mandatory execution workflow
+    public final ExecutionReport submitOrder(Order order) {
+        if (!isConnected) {
+            throw new IllegalStateException("Cannot route trade: Venue " + venueId + " is disconnected");
+        }
+        
+        // 1. Common Pre-Trade Latency Timestamping
+        long startNanos = System.nanoTime();
 
-    // Concrete method: Common settlement logic shared by all subclasses
-    public void initiateSettlement(Account account) {
-        System.out.println("Initiating standard T+2 settlement for " + cusip);
-        // Common settlement orchestration...
+        // 2. Common Pre-Trade Risk Invariant Checks
+        validateOrder(order);
+
+        // 3. Delegate to Venue-Specific Abstract Wire Encoding
+        byte[] wirePayload = encodeAndTransmit(order);
+        System.out.println("Dispatched " + wirePayload.length + " bytes to " + venueId + " [Seq: " + sequenceNumber.getAndIncrement() + "]");
+
+        // 4. Simulate reading venue response and parse via abstract method
+        byte[] simulatedAck = receiveRawAck();
+        ExecutionReport report = parseExecutionReport(simulatedAck);
+
+        long latencyMicros = (System.nanoTime() - startNanos) / 1000;
+        System.out.println("Order " + order.orderId() + " acknowledged by " + venueId + " in " + latencyMicros + " µs");
+        return report;
+    }
+
+    private void validateOrder(Order order) {
+        if (order.quantity() &lt;= 0 || order.price().compareTo(BigDecimal.ZERO) &lt;= 0) {
+            throw new IllegalArgumentException("Invalid order parameters for venue: " + venueId);
+        }
+    }
+
+    private byte[] receiveRawAck() {
+        return new byte[]{0x01, 0x02, 0x03}; // Simulated raw network packet
+    }
+
+    // --- Abstract Hooks: Concrete Subclasses MUST implement wire specifics ---
+    protected abstract byte[] encodeAndTransmit(Order order);
+    protected abstract ExecutionReport parseExecutionReport(byte[] rawPayload);
+}
+
+// 1. Concrete FIX Protocol Implementation (ASCII Tag=Value)
+public final class FixTradingGateway extends TradingVenueGateway {
+    public FixTradingGateway() { super("CME-FIX-4.4"); this.isConnected = true; }
+
+    @Override
+    protected byte[] encodeAndTransmit(Order order) {
+        // Serializes into FIX wire format: 35=D|11=ORD123|55=AAPL|...
+        String fixMsg = "35=D|11=" + order.orderId() + "|55=" + order.ticker() + "|38=" + order.quantity() + "|44=" + order.price() + "|";
+        return fixMsg.getBytes();
+    }
+
+    @Override
+    protected ExecutionReport parseExecutionReport(byte[] rawPayload) {
+        return new ExecutionReport("FIX-EXEC-101", "ORD-1", "FILLED", BigDecimal.valueOf(185.50), Instant.now());
     }
 }
-</code></pre>
 
-        <h3>1.3 Inheritance: Taxonomies of Trading</h3>
-        <p><strong>The Conceptual Theory:</strong> Inheritance enables a class to acquire the properties and behavior of a parent class. It models an "IS-A" relationship, promoting code reuse.</p>
-        <p><strong>The Diamond Problem:</strong> Java prohibits multiple class inheritance to avoid ambiguity. If <code>CorporateBond</code> inherited from both <code>Bond</code> and <code>Equity</code> (assuming hybrid securities), and both defined a <code>calculateYield()</code> method, the JVM wouldn't know which to invoke. Java mitigates this via multiple interface implementation.</p>
+// 2. Concrete Nasdaq Binary Protocol Implementation (Ultra-Low Latency OUCH)
+public final class NasdaqOuchGateway extends TradingVenueGateway {
+    public NasdaqOuchGateway() { super("NASDAQ-OUCH"); this.isConnected = true; }
 
-        <div class="mermaid">
-        classDiagram
-            FinancialInstrument <|-- Equity
-            FinancialInstrument <|-- FixedIncome
-            FinancialInstrument <|-- Derivative
-            FixedIncome <|-- CorporateBond
-            FixedIncome <|-- TreasuryBond
-            Derivative <|-- Option
-            Derivative <|-- Swap
-        </div>
+    @Override
+    protected byte[] encodeAndTransmit(Order order) {
+        // Packs raw binary struct: 1-byte type, 8-byte price, 4-byte qty directly into ByteBuffer
+        byte[] binaryBuffer = new byte[32];
+        binaryBuffer[0] = 'O'; // OUCH Enter Order message type
+        return binaryBuffer;
+    }
 
-        <h3>1.4 Polymorphism: The Execution Engine</h3>
-        <p><strong>Compile-Time Polymorphism (Method Overloading):</strong> Same method name, different parameters within the same class. Resolved by the compiler.</p>
-<pre><code class="language-java">public class OrderExecutionEngine {
-    // Standard execution
-    public void execute(Order order) { ... }
+    @Override
+    protected ExecutionReport parseExecutionReport(byte[] rawPayload) {
+        return new ExecutionReport("OUCH-ACK-909", "ORD-1", "NEW", BigDecimal.valueOf(185.50), Instant.now());
+    }
+}</code></pre>
+
+      <div class="callout callout-warning">
+        <div class="callout-title">📋 Why Abstract Class vs. Interface Here? (Interview Question)</div>
+        <p><strong>Interviewer:</strong> <em>"Why did you use an <code>abstract class</code> instead of an <code>interface</code> for <code>TradingVenueGateway</code>?"</em></p>
+        <p><strong>Senior Answer:</strong> <em>"We use an abstract class when subclasses share common mutable or immutable state (like <code>sequenceNumber</code>, <code>venueId</code>, socket handles) and shared foundational behavior (like latency benchmarking and pre-trade risk validation). Interfaces cannot hold instance state (non-static fields). Furthermore, the <strong>Template Method Pattern</strong> relies on non-overridable <code>final</code> methods to enforce execution order, which cannot be implemented in interfaces prior to Java 8, and even with Java 8 default methods, interface methods cannot be declared <code>final</code>."</em></p>
+      </div>
+
+      <hr>
+
+      <!-- 1.3 THE CLASSIC DIAMOND PROBLEM DEEP DIVE -->
+      <h3>1.3 Inheritance &amp; The Classic Diamond Problem Deep Dive</h3>
+      <p><strong>The Conceptual Theory:</strong> Inheritance models an "IS-A" relationship, allowing a class to inherit fields and methods from a parent class. While powerful for reuse, inheritance creates the tightest form of coupling in object-oriented programming.</p>
+
+      <h4>Part A: Why Java Banned Multiple Class Inheritance (`extends A, B`)</h4>
+      <p>Many languages like C++ permit a class to inherit from multiple classes. Java's designers deliberately banned multiple class inheritance to avoid the fatal <strong>Diamond Problem</strong>.</p>
+      
+      <div class="mermaid">
+      flowchart TD
+        A["Class Asset (defines balance)"] --> B["Class EquityAsset (overrides calculateRisk)"]
+        A --> C["Class CryptoAsset (overrides calculateRisk)"]
+        B --> D["Class HybridToken (extends EquityAsset, CryptoAsset - ILLEGAL IN JAVA)"]
+        C --> D
+      </div>
+
+      <p>The Diamond Problem introduces two fatal architectural dilemmas:</p>
+      <ol>
+        <li><strong>State Ambiguity (The Two-Copy Dilemma):</strong> If <code>Asset</code> has an instance variable <code>double balance</code>, does <code>HybridToken</code> inherit <em>one</em> copy of <code>balance</code> or <em>two separate copies</em>? If it has two copies, updating the balance via an <code>EquityAsset</code> method leaves the <code>CryptoAsset</code> balance out of sync, leading to catastrophic financial balance corruption. C++ solves this using "virtual base classes", which adds complex pointer indirection and messy constructor initialization order.</li>
+        <li><strong>Behavior Ambiguity:</strong> If both <code>EquityAsset</code> and <code>CryptoAsset</code> provide their own implementations of <code>calculateRisk()</code>, when someone calls <code>hybridToken.calculateRisk()</code>, which method should execute? There is no clean, unambiguous compiler choice.</li>
+      </ol>
+
+      <h4>Part B: The Java 8 Default Methods Diamond Problem (The Killer Interview Question)</h4>
+      <div class="callout callout-danger">
+        <div class="callout-title">⚠️ The Trap Question</div>
+        <p><strong>Interviewer:</strong> <em>"Java prohibits multiple inheritance, so the Diamond Problem can never happen in modern Java. True or False?"</em></p>
+        <p><strong>Correct Answer:</strong> <strong>FALSE!</strong> Since Java 8 introduced <strong>default methods</strong> in interfaces, the behavioral Diamond Problem has returned to Java.</p>
+      </div>
+
+      <p>Consider this real-world algorithmic trading scenario where an order router implements two distinct routing strategies:</p>
+
+      <span class="code-label">Java 21 — The Conflict</span>
+      <pre><code>// Top of the Diamond
+interface OrderRouter {
+    default void route(Order order) {
+        System.out.println("Default OrderRouter: Routing to primary lit market.");
+    }
+}
+
+// Left branch overrides default
+interface SmartOrderRouter extends OrderRouter {
+    @Override
+    default void route(Order order) {
+        System.out.println("SmartOrderRouter: Splitting order across lit pools based on depth.");
+    }
+}
+
+// Right branch overrides default
+interface DarkPoolRouter extends OrderRouter {
+    @Override
+    default void route(Order order) {
+        System.out.println("DarkPoolRouter: Routing stealth order to institutional dark pools.");
+    }
+}
+
+// Bottom of the Diamond — COMPILATION ERROR!
+public class HybridTradingEngine implements SmartOrderRouter, DarkPoolRouter {
+    // COMPILER ERROR:
+    // class HybridTradingEngine inherits unrelated defaults for route(Order) 
+    // from types SmartOrderRouter and DarkPoolRouter
+}</code></pre>
+
+      <h4>How Java Resolves Interface Diamond Conflicts (The 3 Rules):</h4>
+      <p>When interface default methods collide, the Java compiler enforces three strict rules:</p>
+      <ol>
+        <li><strong>Rule 1: Class Wins Rule (Superclass Overrides Interface):</strong> Any method declared in a class or superclass always takes absolute precedence over any default method declared in any interface.</li>
+        <li><strong>Rule 2: Sub-interface Wins Rule (Most Specific Default Wins):</strong> If interface B extends interface A, and both provide a default method, the method in the more specific sub-interface (B) is automatically chosen.</li>
+        <li><strong>Rule 3: Explicit Disambiguation:</strong> If two completely unrelated interfaces provide the same default method signature, the compiler rejects the class. The developer <strong>MUST explicitly override the method</strong> and choose which interface to delegate to using <code>InterfaceName.super.methodName()</code>.</li>
+      </ol>
+
+      <span class="code-label">Java 21 — The Working Solution</span>
+      <pre><code>public class HybridTradingEngine implements SmartOrderRouter, DarkPoolRouter {
+
+    // Resolving the Diamond Conflict explicitly
+    @Override
+    public void route(Order order) {
+        if (order.quantity() > 100_000) {
+            // For block trades, delegate to DarkPoolRouter default logic
+            DarkPoolRouter.super.route(order);
+        } else {
+            // For standard orders, delegate to SmartOrderRouter default logic
+            SmartOrderRouter.super.route(order);
+        }
+    }
+}</code></pre>
+
+      <hr>
+
+      <!-- 1.4 METHOD OVERRIDING TRAPS -->
+      <h3>1.4 Method Overriding &amp; Dynamic Dispatch (The Object Creation vs. Invocation Traps)</h3>
+      <p>Candidates routinely fail technical interviews not because they don't know what overriding is, but because they get tricked by <strong>Reference Type vs. Runtime Object Type</strong> binding rules.</p>
+
+      <div class="callout callout-info">
+        <div class="callout-title">📖 The Golden Rule of Polymorphism</div>
+        <p><strong>Methods are Virtual by Default in Java:</strong> Method execution is determined at <strong>RUNTIME</strong> by the actual object instantiated on the heap (Dynamic Method Dispatch via vtable).<br>
+        <strong>Variables and Static Methods are NOT Virtual:</strong> Variable access and static method invocations are determined at <strong>COMPILE TIME</strong> by the declared reference type on the stack!</p>
+      </div>
+
+      <h4>Trap 1: Field Hiding (Variables Are NEVER Polymorphic!)</h4>
+      <p>What does this code print?</p>
+      <span class="code-label">Java 21</span>
+      <pre><code>class Order {
+    public double executionFee = 10.0; // Base fee
     
-    // Execution with specific algorithmic strategy and discount rules
-    public void execute(Order order, AlgoStrategy strategy, DiscountRule rule) { ... }
-}
-</code></pre>
-
-        <p><strong>Run-Time Polymorphism (Method Overriding):</strong> A subclass provides a specific implementation of a method declared in its parent. Resolved by the JVM at runtime via dynamic method dispatch (vtable).</p>
-<pre><code class="language-java">public interface Order {
-    ExecutionReport execute(Exchange exchange);
+    public double getFee() { return executionFee; }
 }
 
-public class MarketOrder implements Order {
+class InstitutionalOrder extends Order {
+    public double executionFee = 2.0;  // Discounted fee for hedge funds
+    
     @Override
-    public ExecutionReport execute(Exchange exchange) {
-        return exchange.fillAtBestAvailable();
+    public double getFee() { return executionFee; }
+}
+
+public class InterviewTrapTest {
+    public static void main(String[] args) {
+        Order order = new InstitutionalOrder(); // Reference: Order, Object: InstitutionalOrder
+
+        // TRAP 1: Accessing variable directly vs method
+        System.out.println("order.executionFee = " + order.executionFee); // PRINTS: 10.0! NOT 2.0!
+        System.out.println("order.getFee()      = " + order.getFee());      // PRINTS: 2.0!
+    }
+}</code></pre>
+      <p><strong>Explanation:</strong> Field access does not use dynamic dispatch. Because the reference type is <code>Order</code>, <code>order.executionFee</code> binds directly to <code>Order.executionFee</code> at compile time. However, <code>order.getFee()</code> uses dynamic dispatch and executes <code>InstitutionalOrder.getFee()</code>.</p>
+
+      <h4>Trap 2: Static Method Hiding (Static Methods Are NEVER Overridden!)</h4>
+      <span class="code-label">Java 21</span>
+      <pre><code>class TradeEngine {
+    public static void printEngineType() {
+        System.out.println("Standard Matching Engine");
     }
 }
 
-public class LimitOrder implements Order {
-    @Override
-    public ExecutionReport execute(Exchange exchange) {
-        return exchange.fillAtPriceOrBetter(this.limitPrice);
+class FastTradeEngine extends TradeEngine {
+    // This is METHOD HIDING, NOT Method Overriding!
+    public static void printEngineType() {
+        System.out.println("Ultra-Low Latency Kernel Bypass Engine");
     }
 }
-</code></pre>
 
-        <div class="grill-box">
-            <h4>🎯 Interviewer Follow-Up Questions (The Grill Round)</h4>
-            <p><strong>Q: What is a covariant return type, and why is it useful in our factory patterns?</strong></p>
-            <p><strong>Senior Answer:</strong> "A covariant return type allows an overridden method in a subclass to return a more specific type than the method in the parent class. In our OMS, if we have a <code>TradeFactory</code> returning a generic <code>Trade</code>, an <code>OptionTradeFactory</code> overriding that method can specify its return type strictly as <code>OptionTrade</code>. This eliminates the need for unsafe downcasting at the call site, providing stronger compile-time type safety for our execution downstream."</p>
-        </div>
+public class StaticTrap {
+    public static void main(String[] args) {
+        TradeEngine engine = new FastTradeEngine();
+        engine.printEngineType(); // PRINTS: "Standard Matching Engine"!
+        // Compiler converts this to: TradeEngine.printEngineType();
+    }
+}</code></pre>
 
+      <h4>Trap 3: Overloading with Inheritance (Overloading is Compile-Time, Overriding is Runtime)</h4>
+      <span class="code-label">Java 21</span>
+      <pre><code>class RiskManager {
+    public void evaluateRisk(Order order) {
+        System.out.println("Generic Order Risk Evaluation");
+    }
+
+    public void evaluateRisk(InstitutionalOrder order) {
+        System.out.println("Institutional Large-Trader Risk Evaluation");
+    }
+}
+
+public class OverloadTrap {
+    public static void main(String[] args) {
+        Order order = new InstitutionalOrder(); // Reference is Order
+        RiskManager risk = new RiskManager();
+        
+        risk.evaluateRisk(order); // PRINTS: "Generic Order Risk Evaluation"! NOT Institutional!
+    }
+}</code></pre>
+      <p><strong>Explanation:</strong> Which overloaded method to call is decided at <strong>COMPILE TIME</strong> based on the reference type of the argument (<code>Order</code>), not the runtime type (<code>InstitutionalOrder</code>)!</p>
+
+      <h4>Trap 4: The Deadly "Constructor Calling Overridden Method" Trap</h4>
+      <p>This is a classic senior interview trap that causes silent <code>NullPointerException</code> or corrupted state during object initialization:</p>
+      <span class="code-label">Java 21</span>
+      <pre><code>class BaseOrder {
+    public BaseOrder() {
+        System.out.println("BaseOrder constructor start");
+        validate(); // DEADLY TRAP: Calling virtual method in constructor!
+        System.out.println("BaseOrder constructor complete");
+    }
+
+    public void validate() {
+        System.out.println("Base validation passed");
+    }
+}
+
+class CryptoOrder extends BaseOrder {
+    // Instance field initializer runs AFTER super() constructor finishes!
+    private String walletAddress = "0x71C...B29";
+
+    @Override
+    public void validate() {
+        System.out.println("Validating crypto wallet: " + walletAddress.toUpperCase());
+    }
+}
+
+public class ConstructorTrap {
+    public static void main(String[] args) {
+        // What happens here?
+        new CryptoOrder();
+    }
+}</code></pre>
+      <div class="callout callout-danger">
+        <div class="callout-title">💥 Output &amp; Crash Analysis</div>
+        <pre><code>BaseOrder constructor start
+Exception in thread "main" java.lang.NullPointerException: Cannot invoke "String.toUpperCase()" because "this.walletAddress" is null
+    at CryptoOrder.validate(ConstructorTrap.java:18)
+    at BaseOrder.&lt;init&gt;(ConstructorTrap.java:4)
+    at CryptoOrder.&lt;init&gt;(ConstructorTrap.java:12)</code></pre>
+        <p><strong>The Execution Sequence:</strong>
+          <ol>
+            <li>Memory is allocated for <code>CryptoOrder</code> on the heap. All instance fields default to zero/null (<code>walletAddress = null</code>).</li>
+            <li><code>CryptoOrder()</code> constructor invokes <code>super()</code> (i.e. <code>BaseOrder()</code>).</li>
+            <li>Inside <code>BaseOrder()</code>, it calls <code>validate()</code>.</li>
+            <li>Because methods in Java are virtual, dynamic dispatch routes the call to <code>CryptoOrder.validate()</code>!</li>
+            <li>In <code>CryptoOrder</code>, the field initializer <code>walletAddress = "0x71C...B29"</code> <strong>has not executed yet</strong>!</li>
+            <li><code>walletAddress</code> is <code>null</code>, and calling <code>.toUpperCase()</code> throws a fatal <code>NullPointerException</code> inside the constructor.</li>
+          </ol>
+          <strong>Rule:</strong> Never call overridable (non-final, non-private) methods inside constructors!
+        </p>
+      </div>
+
+      <h4>Trap 5: Exception Rules in Method Overriding</h4>
+      <p>When overriding a method, the subclass <strong>CANNOT throw broader or new checked exceptions</strong> (enforcing the Liskov Substitution Principle). It can, however, throw fewer checked exceptions, narrower (subclass) checked exceptions, or any unchecked <code>RuntimeException</code>.</p>
+      <span class="code-label">Java 21</span>
+      <pre><code>import java.io.IOException;
+import java.io.FileNotFoundException;
+
+class OrderPersister {
+    public void persist(Order order) throws IOException { ... }
+}
+
+class FastOrderPersister extends OrderPersister {
+    // VALID: Narrower checked exception (FileNotFoundException is a subclass of IOException)
+    @Override
+    public void persist(Order order) throws FileNotFoundException { ... }
+
+    // VALID: Throwing NO checked exceptions at all
+    // @Override
+    // public void persist(Order order) { ... }
+
+    // ILLEGAL: Cannot throw broader checked exception (Exception is broader than IOException)!
+    // @Override
+    // public void persist(Order order) throws Exception { ... } // COMPILATION ERROR!
+
+    // VALID: Can throw any unchecked RuntimeException
+    // @Override
+    // public void persist(Order order) throws NullPointerException, IllegalStateException { ... }
+}</code></pre>
+
+      <hr>
+
+      <!-- 1.5 COVARIANT RETURN TYPES DEEP DIVE -->
+      <h3>1.5 Covariant Return Types: True Type-Safety Without Downcasting</h3>
+      <p><strong>The Conceptual Theory:</strong> Introduced in Java 5, a <strong>Covariant Return Type</strong> allows an overriding method in a subclass to return a <strong>subtype (narrower type)</strong> of the return type declared in the parent method.</p>
+      
+      <p><strong>The Historical Pain Point (Java 1.4 and earlier):</strong> Prior to Java 5, overriding methods had to return the <em>exact same return type</em> as the parent method. In enterprise factory patterns, this forced callers into unsafe, ugly downcasting:</p>
+      <pre><code>// JAVA 1.4 ERA (WITHOUT COVARIANT RETURNS)
+OrderFactory factory = new EquityOrderFactory();
+EquityOrder order = (EquityOrder) factory.createOrder(); // Required manual, dangerous downcasting!</code></pre>
+
+      <h4>Modern Production Trading Example with Covariant Return Types</h4>
+      <span class="code-label">Java 21</span>
+      <pre><code>// Base Financial Order
+public class Order {
+    private final String orderId;
+    public Order(String orderId) { this.orderId = orderId; }
+    public String getOrderId() { return orderId; }
+}
+
+// Subclass Order with asset-specific fields
+public class EquityOrder extends Order {
+    private final String ticker;
+    private final int shares;
+
+    public EquityOrder(String orderId, String ticker, int shares) {
+        super(orderId);
+        this.ticker = ticker;
+        this.shares = shares;
+    }
+
+    public String getTicker() { return ticker; }
+    public int getShares() { return shares; }
+}
+
+// Base Factory
+public class OrderFactory {
+    public Order createOrder(String id) {
+        System.out.println("Creating generic base order");
+        return new Order(id);
+    }
+}
+
+// Subclass Factory leveraging Covariant Return Type!
+public class EquityOrderFactory extends OrderFactory {
+    
+    // COVARIANT RETURN TYPE: Returns EquityOrder instead of Order!
+    // Since EquityOrder IS-A Order, this is 100% legal and type-safe.
+    @Override
+    public EquityOrder createOrder(String id) {
+        System.out.println("Creating specialized EquityOrder for stock exchange routing");
+        return new EquityOrder(id, "NVDA", 500);
+    }
+}
+
+// Client Usage Showing Zero Downcasting
+public class ClientTradeRunner {
+    public static void main(String[] args) {
+        EquityOrderFactory factory = new EquityOrderFactory();
+
+        // 1. Direct type-safe assignment: NO CAST NEEDED!
+        EquityOrder equityOrder = factory.createOrder("ORD-9988");
+
+        // 2. Direct access to subclass-specific methods without cast
+        System.out.println("Routed Ticker: " + equityOrder.getTicker());
+        System.out.println("Share Volume:  " + equityOrder.getShares());
+    }
+}</code></pre>
+
+      <h4>Under The Hood: Synthetic Bridge Methods in Bytecode</h4>
+      <div class="callout callout-warning">
+        <div class="callout-title">🔬 How the JVM Handles Covariant Returns Under the Hood</div>
+        <p>In Java bytecode, a method signature includes both its name <em>and its return type descriptor</em>. Therefore, in bytecode:
+        <ul>
+          <li><code>Order createOrder(String id)</code> has descriptor: <code>(Ljava/lang/String;)LOrder;</code></li>
+          <li><code>EquityOrder createOrder(String id)</code> has descriptor: <code>(Ljava/lang/String;)LEquityOrder;</code></li>
+        </ul>
+        Because their return types differ in the class file, how does dynamic method dispatch still work when calling through a base reference <code>OrderFactory f = new EquityOrderFactory(); f.createOrder("1");</code>?</p>
+        <p><strong>The Compiler's Secret: Synthetic Bridge Methods!</strong><br>
+        To maintain binary backward compatibility with polymorphism, the Java compiler automatically synthesizes an invisible <strong>Bridge Method</strong> inside <code>EquityOrderFactory.class</code>:</p>
+        <pre><code>// Bytecode representation of compiler-generated Bridge Method
+public synthetic bridge Order createOrder(String id) {
+    // Delegates directly to the covariant method!
+    return this.createOrder(id); 
+}</code></pre>
+        <p>This allows legacy callers expecting an <code>Order</code> to invoke the bridge method, which seamlessly forwards the call to the covariant <code>EquityOrder</code> method.</p>
+      </div>
     </section>
 
+    <!-- ============================================================ -->
+    <!-- 2. FUNCTIONAL VS MARKER INTERFACE -->
+    <!-- ============================================================ -->
     <section id="interfaces">
-        <h2>2. Functional Interface vs Marker Interface (Core Interview Question)</h2>
-        
-        <p>Understanding interface taxonomy is a classic litmus test for Java proficiency.</p>
+      <h2>2. Functional Interface vs Marker Interface (Core Interview Question)</h2>
+      
+      <p>Understanding interface taxonomy is a classic litmus test for Java proficiency.</p>
 
-        <table>
-            <tr>
-                <th>Feature</th>
-                <th>Functional Interface</th>
-                <th>Marker Interface</th>
-            </tr>
-            <tr>
-                <td><strong>Definition</strong></td>
-                <td>An interface with exactly ONE abstract method (SAM - Single Abstract Method).</td>
-                <td>An interface with ZERO methods or constants.</td>
-            </tr>
-            <tr>
-                <td><strong>Purpose</strong></td>
-                <td>Provides target types for lambda expressions and method references. Facilitates functional programming in Java.</td>
-                <td>Tags a class to convey metadata to the JVM or a framework at runtime.</td>
-            </tr>
-            <tr>
-                <td><strong>Examples</strong></td>
-                <td><code>Runnable</code>, <code>Callable</code>, <code>Comparator</code>, <code>TradeValidator</code></td>
-                <td><code>Serializable</code>, <code>Cloneable</code>, <code>Remote</code></td>
-            </tr>
-        </table>
+      <table>
+        <tr>
+          <th>Feature</th>
+          <th>Functional Interface</th>
+          <th>Marker Interface</th>
+        </tr>
+        <tr>
+          <td><strong>Definition</strong></td>
+          <td>An interface with exactly ONE abstract method (SAM - Single Abstract Method).</td>
+          <td>An interface with ZERO methods or constants.</td>
+        </tr>
+        <tr>
+          <td><strong>Purpose</strong></td>
+          <td>Provides target types for lambda expressions and method references. Facilitates functional programming in Java.</td>
+          <td>Tags a class to convey metadata to the JVM or a framework at runtime.</td>
+        </tr>
+        <tr>
+          <td><strong>Examples</strong></td>
+          <td><code>Runnable</code>, <code>Callable</code>, <code>Comparator</code>, <code>TradeValidator</code></td>
+          <td><code>Serializable</code>, <code>Cloneable</code>, <code>Remote</code></td>
+        </tr>
+      </table>
 
-        <h3>The Code Perspective</h3>
-<pre><code class="language-java">// FUNCTIONAL INTERFACE
+      <h3>The Code Perspective</h3>
+      <span class="code-label">Java 21</span>
+      <pre><code>// FUNCTIONAL INTERFACE
 @FunctionalInterface
 public interface TradeValidator {
     // Exactly one abstract method
@@ -189,130 +609,157 @@ public interface TradeValidator {
     
     // Can have multiple default/static methods
     default void logFailure(Trade trade) {
-        System.err.println("Validation failed for: " + trade.getId());
+        System.err.println("Validation failed for trade: " + trade.tradeId());
     }
 }
 
 // Usage via Lambda in a Pricing Engine
-TradeValidator notionalValidator = (trade) -> trade.getNotional().compareTo(MAX_LIMIT) &lt; 0;
-</code></pre>
+TradeValidator notionalValidator = (trade) -> trade.notional().compareTo(MAX_LIMIT) &lt; 0;</code></pre>
 
-        <h3>The Modern Replacement for Marker Interfaces</h3>
-        <p>Marker interfaces are largely considered legacy. The modern, type-safe, and flexible replacement is <strong>Custom Annotations</strong> with <code>@Retention(RetentionPolicy.RUNTIME)</code>.</p>
-        <p>Why annotations? A Marker interface pollutes the type hierarchy (if a parent implements it, all children are irreversibly marked). Annotations are declarative metadata that don't force an "IS-A" relationship.</p>
+      <h3>The Modern Replacement for Marker Interfaces</h3>
+      <p>Marker interfaces are largely considered legacy. The modern, type-safe, and flexible replacement is <strong>Custom Annotations</strong> with <code>@Retention(RetentionPolicy.RUNTIME)</code>.</p>
+      <p>Why annotations? A Marker interface pollutes the type hierarchy (if a parent implements it, all children are irreversibly marked). Annotations are declarative metadata that don't force an "IS-A" relationship.</p>
 
-        <div class="interview-box">
-            <h4>📋 How to Answer This in an Interview</h4>
-            <p>"A Functional interface, annotated with <code>@FunctionalInterface</code>, contains exactly one abstract method and is the backbone of Java's lambda expressions, allowing us to pass behaviors like <code>TradeRoutingStrategy</code> elegantly. A Marker interface, like <code>Serializable</code>, has zero methods and is historically used to signal the JVM. However, in modern Spring/Java development, we replace marker interfaces with custom Runtime Annotations. Annotations provide richer metadata (you can add parameters) and don't permanently tie a class to a type hierarchy, avoiding the fragility of forced inheritance."</p>
-        </div>
+      <div class="callout callout-info">
+        <div class="callout-title">📋 How to Answer This in an Interview</div>
+        <p><em>"A Functional interface, annotated with <code>@FunctionalInterface</code>, contains exactly one abstract method and is the backbone of Java's lambda expressions, allowing us to pass behaviors like <code>TradeRoutingStrategy</code> elegantly. A Marker interface, like <code>Serializable</code>, has zero methods and is historically used to signal the JVM. However, in modern Spring/Java development, we replace marker interfaces with custom Runtime Annotations. Annotations provide richer metadata (you can add parameters) and don't permanently tie a class to a type hierarchy, avoiding the fragility of forced inheritance."</em></p>
+      </div>
     </section>
 
+    <!-- ============================================================ -->
+    <!-- 3. SHALLOW COPY VS DEEP COPY -->
+    <!-- ============================================================ -->
     <section id="copying">
-        <h2>3. Shallow Copy vs Deep Copy in Financial Portfolios</h2>
+      <h2>3. Shallow Copy vs Deep Copy in Financial Portfolios</h2>
 
-        <p>Copying objects incorrectly is a leading cause of subtle, catastrophic data corruption in shared memory spaces.</p>
+      <p>Copying objects incorrectly is a leading cause of subtle, catastrophic data corruption in shared memory spaces.</p>
 
-        <p><strong>Catastrophic Bug Scenario:</strong> A risk engine needs to simulate a 10% market crash on a client's <code>Portfolio</code>. The developer performs a <em>shallow copy</em> of the portfolio. When the risk engine mutates the prices of the trades in the copied portfolio, the <em>original</em> client portfolio is updated as well because the list of trades points to the exact same objects in the heap. The client's live dashboard suddenly shows massive losses.</p>
+      <p><strong>Catastrophic Bug Scenario:</strong> A risk engine needs to simulate a 10% market crash on a client's <code>Portfolio</code>. The developer performs a <em>shallow copy</em> of the portfolio. When the risk engine mutates the prices of the trades in the copied portfolio, the <em>original</em> client portfolio is updated as well because the list of trades points to the exact same objects in the heap. The client's live dashboard suddenly shows massive losses.</p>
 
-        <div class="mermaid">
-        flowchart LR
-            subgraph Shallow Copy
-                P1[Portfolio A] --> T1[Trade 1]
-                P1 --> T2[Trade 2]
-                P2[Copied Portfolio B] --> T1
-                P2 --> T2
-            end
-            
-            subgraph Deep Copy
-                P3[Portfolio A] --> T3[Trade 1]
-                P3 --> T4[Trade 2]
-                P4[Copied Portfolio B] --> T5[Cloned Trade 1]
-                P4 --> T6[Cloned Trade 2]
-            end
-        </div>
+      <div class="mermaid">
+      flowchart LR
+        subgraph Shallow Copy
+          P1[Portfolio A] --> T1[Trade 1]
+          P1 --> T2[Trade 2]
+          P2[Copied Portfolio B] --> T1
+          P2 --> T2
+        end
+        
+        subgraph Deep Copy
+          P3[Portfolio A] --> T3[Trade 1]
+          P3 --> T4[Trade 2]
+          P4[Copied Portfolio B] --> T5[Cloned Trade 1]
+          P4 --> T6[Cloned Trade 2]
+        end
+      </div>
 
-        <h3>Implementation: Copy Constructor over Cloneable</h3>
-        <p>Java's built-in <code>Cloneable</code> interface and <code>clone()</code> method are notoriously flawed (they bypass standard object construction, handle finals poorly, and default to shallow copying). The industry standard for Deep Copying is the <strong>Copy Constructor</strong> or a dedicated copy factory.</p>
+      <h3>Implementation: Copy Constructor over Cloneable</h3>
+      <p>Java's built-in <code>Cloneable</code> interface and <code>clone()</code> method are notoriously flawed (they bypass standard object construction, handle finals poorly, and default to shallow copying). The industry standard for Deep Copying is the <strong>Copy Constructor</strong> or a dedicated copy factory.</p>
 
-<pre><code class="language-java">public class Trade {
+      <span class="code-label">Java 21</span>
+      <pre><code>import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.List;
+
+public class Trade {
     private String tradeId;
     private BigDecimal price;
 
-    // Standard constructor
-    public Trade(String tradeId, BigDecimal price) { ... }
+    public Trade(String tradeId, BigDecimal price) {
+        this.tradeId = tradeId;
+        this.price = price;
+    }
 
     // Copy Constructor for Deep Copying
     public Trade(Trade original) {
         this.tradeId = original.tradeId; // String is immutable, safe to copy ref
         this.price = original.price;     // BigDecimal is immutable, safe to copy ref
     }
+
+    public void setPrice(BigDecimal price) { this.price = price; }
+    public BigDecimal getPrice() { return price; }
 }
 
 public class Portfolio {
     private List&lt;Trade&gt; trades;
 
+    public Portfolio() { this.trades = new ArrayList&lt;&gt;(); }
+
     // Deep Copy Constructor
     public Portfolio(Portfolio original) {
         this.trades = new ArrayList&lt;&gt;();
         for (Trade t : original.trades) {
-            this.trades.add(new Trade(t)); // Allocating NEW Trade objects
+            this.trades.add(new Trade(t)); // Allocating NEW Trade objects on the heap!
         }
     }
-}
-</code></pre>
+
+    public void addTrade(Trade t) { trades.add(t); }
+    public List&lt;Trade&gt; getTrades() { return trades; }
+}</code></pre>
     </section>
 
+    <!-- ============================================================ -->
+    <!-- 4. OBJECT RELATIONSHIPS -->
+    <!-- ============================================================ -->
     <section id="relationships">
-        <h2>4. Object Relationships: Association, Aggregation, Composition</h2>
+      <h2>4. Object Relationships: Association, Aggregation, Composition</h2>
 
-        <p>Understanding the strength of relationships determines how you manage object lifecycles and garbage collection.</p>
+      <p>Understanding the strength of relationships determines how you manage object lifecycles and garbage collection.</p>
 
-        <div class="mermaid">
-        classDiagram
-            Trader "uses" --> "1..*" Exchange : Association
-            Portfolio "has" o-- "0..*" Trade : Aggregation
-            Order "owns" *-- "1..*" OrderLeg : Composition
-        </div>
+      <div class="mermaid">
+      classDiagram
+        Trader "uses" --> "1..*" Exchange : Association
+        Portfolio "has" o-- "0..*" Trade : Aggregation
+        Order "owns" *-- "1..*" OrderLeg : Composition
+      </div>
 
-        <table>
-            <tr>
-                <th>Relationship</th>
-                <th>Type</th>
-                <th>Lifecycle Dependency</th>
-                <th>Finance Domain Example</th>
-            </tr>
-            <tr>
-                <td><strong>Association</strong></td>
-                <td>"Uses-a"</td>
-                <td>Independent. Both objects can exist without each other.</td>
-                <td><code>Trader</code> and <code>Exchange</code>. A Trader sends orders to an Exchange, but if the Trader is deleted from the system, the Exchange continues to exist.</td>
-            </tr>
-            <tr>
-                <td><strong>Aggregation</strong></td>
-                <td>Weak "Has-a"</td>
-                <td>Independent. The child can outlive the parent.</td>
-                <td><code>Portfolio</code> and <code>Trade</code>. A Portfolio contains Trades. If a Portfolio is closed/liquidated, the historical Trade records must still exist for regulatory auditing.</td>
-            </tr>
-            <tr>
-                <td><strong>Composition</strong></td>
-                <td>Strong "Has-a"</td>
-                <td>Dependent. If parent is destroyed, child is destroyed.</td>
-                <td><code>Order</code> and <code>OrderLeg</code> (Multi-leg options). An OrderLeg fundamentally cannot exist without its parent Order. If the Order is deleted, the Legs are strictly garbage collected.</td>
-            </tr>
-        </table>
+      <table>
+        <tr>
+          <th>Relationship</th>
+          <th>Type</th>
+          <th>Lifecycle Dependency</th>
+          <th>Finance Domain Example</th>
+        </tr>
+        <tr>
+          <td><strong>Association</strong></td>
+          <td>"Uses-a"</td>
+          <td>Independent. Both objects can exist without each other.</td>
+          <td><code>Trader</code> and <code>Exchange</code>. A Trader sends orders to an Exchange, but if the Trader is deleted from the system, the Exchange continues to exist.</td>
+        </tr>
+        <tr>
+          <td><strong>Aggregation</strong></td>
+          <td>Weak "Has-a"</td>
+          <td>Independent. The child can outlive the parent.</td>
+          <td><code>Portfolio</code> and <code>Trade</code>. A Portfolio contains Trades. If a Portfolio is closed/liquidated, the historical Trade records must still exist for regulatory auditing.</td>
+        </tr>
+        <tr>
+          <td><strong>Composition</strong></td>
+          <td>Strong "Has-a"</td>
+          <td>Dependent. If parent is destroyed, child is destroyed.</td>
+          <td><code>Order</code> and <code>OrderLeg</code> (Multi-leg options). An OrderLeg fundamentally cannot exist without its parent Order. If the Order is deleted, the Legs are strictly garbage collected.</td>
+        </tr>
+      </table>
     </section>
 
+    <!-- ============================================================ -->
+    <!-- 5. COUPLING VS COHESION -->
+    <!-- ============================================================ -->
     <section id="coupling-cohesion">
-        <h2>5. Coupling vs Cohesion</h2>
+      <h2>5. Coupling vs Cohesion</h2>
 
-        <p>The golden rule of enterprise architecture is: <strong>High Cohesion, Loose Coupling.</strong></p>
+      <p>The golden rule of enterprise architecture is: <strong>High Cohesion, Loose Coupling.</strong></p>
 
-        <ul>
-            <li><strong>Cohesion (Intra-class):</strong> How closely related and focused the responsibilities of a single class are. A <code>TradeExecutionService</code> should only handle execution (High Cohesion). If it also handles parsing FIX protocols, writing to a database, and sending emails, it has Low Cohesion (God Class anti-pattern).</li>
-            <li><strong>Coupling (Inter-class):</strong> The degree of direct dependency between different classes. Tight coupling means changing one class forces changes in another. Loose coupling is achieved by depending on Abstractions (Interfaces) rather than concretions.</li>
-        </ul>
+      <ul>
+        <li><strong>Cohesion (Intra-class):</strong> How closely related and focused the responsibilities of a single class are. A <code>TradeExecutionService</code> should only handle execution (High Cohesion). If it also handles parsing FIX protocols, writing to a database, and sending emails, it has Low Cohesion (God Class anti-pattern).</li>
+        <li><strong>Coupling (Inter-class):</strong> The degree of direct dependency between different classes. Tight coupling means changing one class forces changes in another. Loose coupling is achieved by depending on Abstractions (Interfaces) rather than concretions.</li>
+      </ul>
 
-<pre><code class="language-java">// LOOSE COUPLING EXAMPLE
+      <span class="code-label">Java 21</span>
+      <pre><code>// LOOSE COUPLING EXAMPLE
+public interface AuditLogger {
+    void logEvent(String entityId, String eventType);
+}
+
 public class TradeEngine {
     // Depends on abstraction, not concrete FIXLogger or DBLogger
     private final AuditLogger logger; 
@@ -324,36 +771,45 @@ public class TradeEngine {
 
     public void execute(Order order) {
         // execute logic
-        logger.logEvent(order.getId(), "Executed");
+        logger.logEvent(order.orderId(), "EXECUTED_AT_EXCHANGE");
     }
-}
-</code></pre>
+}</code></pre>
     </section>
 
+    <!-- ============================================================ -->
+    <!-- 6. INTERVIEW GRILL ROUND -->
+    <!-- ============================================================ -->
     <section id="interview-grill">
-        <h2>6. Interviewer Trap Questions &amp; Model Answers</h2>
+      <h2>6. Interviewer Trap Questions &amp; Model Answers</h2>
 
-        <div class="grill-box">
-            <h4>🎯 Q1: "Why do senior architects favor Composition over Inheritance?"</h4>
-            <p><strong>The Trap:</strong> Juniors think inheritance is the ultimate OOP tool. It is not.</p>
-            <p><strong>Senior Answer:</strong> "Inheritance breaks encapsulation because the subclass becomes tightly coupled to the implementation details of the parent class—this is known as the Fragile Base Class problem. If you change a method in the parent, you risk breaking all descendants. Composition ('has-a') provides extreme flexibility. Instead of an <code>AlgorithmicTrade</code> inheriting from a massive <code>Trade</code> hierarchy, a <code>Trade</code> is composed of an <code>ExecutionStrategy</code> interface. This allows us to swap behaviors at runtime via Strategy pattern, rather than being locked in at compile time."</p>
-        </div>
+      <div class="callout callout-danger">
+        <div class="callout-title">🎯 Q1: "Why do senior architects favor Composition over Inheritance?"</div>
+        <p><strong>The Trap:</strong> Juniors think inheritance is the primary OOP tool. It is not.</p>
+        <p><strong>Senior Answer:</strong> <em>"Inheritance breaks encapsulation because the subclass becomes tightly coupled to the implementation details of the parent class—this is known as the Fragile Base Class problem. If you change a method in the parent, you risk breaking all descendants. Composition ('has-a') provides extreme flexibility. Instead of an <code>AlgorithmicTrade</code> inheriting from a massive <code>Trade</code> hierarchy, a <code>Trade</code> is composed of an <code>ExecutionStrategy</code> interface. This allows us to swap behaviors at runtime via Strategy pattern, rather than being locked in at compile time."</em></p>
+      </div>
 
-        <div class="grill-box">
-            <h4>🎯 Q2: "Can an abstract class have constructors? If it cannot be instantiated, what is the purpose of its constructor?"</h4>
-            <p><strong>The Trap:</strong> Testing your understanding of object instantiation hierarchies.</p>
-            <p><strong>Senior Answer:</strong> "Yes, abstract classes absolutely have constructors. Even though you cannot instantiate an abstract class directly via the <code>new</code> keyword, its constructor is always invoked when a concrete subclass is instantiated (via <code>super()</code>). The purpose of the abstract class constructor is to initialize the inherited state—especially <code>final</code> fields—that the abstract class encapsulates, ensuring the foundational state is valid before the subclass constructor executes."</p>
-        </div>
+      <div class="callout callout-danger">
+        <div class="callout-title">🎯 Q2: "Can an abstract class have constructors? If it cannot be instantiated, what is the purpose of its constructor?"</div>
+        <p><strong>The Trap:</strong> Testing your understanding of object instantiation hierarchies.</p>
+        <p><strong>Senior Answer:</strong> <em>"Yes, abstract classes absolutely have constructors. Even though you cannot instantiate an abstract class directly via the <code>new</code> keyword, its constructor is always invoked when a concrete subclass is instantiated (via <code>super()</code>). The purpose of the abstract class constructor is to initialize the inherited state—especially <code>final</code> fields—that the abstract class encapsulates, ensuring the foundational state is valid before the subclass constructor executes."</em></p>
+      </div>
     </section>
 
-    <footer>
-        <p>&copy; 2026 Core Java Enterprise Architect Series. All rights reserved.</p>
-    </footer>
+    <div class="page-nav">
+      <a href="../strings/index.html" class="prev">
+        <span class="label">Previous</span>
+        <span class="title">← Strings Deep Dive</span>
+      </a>
+      <a href="../collections/index.html" class="next">
+        <span class="label">Next</span>
+        <span class="title">Collections Internals →</span>
+      </a>
+    </div>
+
   </main>
 </div>
 
 <button class="scroll-top" aria-label="Scroll to top">↑</button>
-<script src="../../js/main.js"></script>
+<script src="../js/main.js"></script>
 </body>
 </html>
-
