@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JPA & Hibernate — Persistence for Financial Data</title>
+    <link rel="stylesheet" href="../css/style.css">
+    <script type="module">
+        import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+        mermaid.initialize({ startOnLoad: true, theme: 'base' });
+    </script>
+</head>
+<body>
+    <nav class="breadcrumb">
+        <a href="../index.html">Home</a> &gt; <span>JPA & Hibernate</span>
+    </nav>
+
+    <header>
+        <h1>JPA & Hibernate — Persistence for Financial Data</h1>
+        <p class="subtitle">Entity states, optimizations, and avoiding production disasters</p>
+    </header>
+
+    <main>
+        <!-- Topic 1: Entity Lifecycle -->
+        <section class="topic-section" id="entity-lifecycle">
+            <h2>1. Entity Lifecycle</h2>
+            <div class="pillar pillar-3">
+                <h3>Pillar 3: Step-by-Step Evolution</h3>
+                <pre class="mermaid">
+                stateDiagram-v2
+                    [*] --> Transient : new Trade()
+                    Transient --> Managed : em.persist()
+                    Managed --> Detached : em.clear() / em.close()
+                    Detached --> Managed : em.merge()
+                    Managed --> Removed : em.remove()
+                    Removed --> [*] : commit
+                    Managed --> Database : flush / commit
+                </pre>
+            </div>
+        </section>
+
+        <!-- Topic 2: N+1 Problem -->
+        <section class="topic-section" id="n-plus-1">
+            <h2>2. The N+1 Problem (The Silent Killer)</h2>
+            <div class="pillar pillar-1">
+                <h3>Pillar 1: Ground-Zero Theory & The Pain Point</h3>
+                <p>The N+1 problem occurs when an ORM framework executes one query to retrieve a parent entity, and then executes N additional queries to fetch the lazy-loaded children for each of the N parents. In a financial app, querying 100 Portfolios might trigger 100 separate queries to fetch the Trades for each portfolio. This floods the database with thousands of sub-millisecond queries, utterly destroying application throughput.</p>
+            </div>
+
+            <div class="pillar pillar-5">
+                <div class="interview-box">
+                    <h4>📋 How to Answer This in an Interview</h4>
+                    <p><strong>Q: "What is the N+1 problem in Hibernate/JPA and how would you solve it?"</strong></p>
+                    <p><em>Candidate:</em> "The N+1 problem is a massive performance flaw where JPA issues 1 query to fetch a list of parent entities, and then N queries to initialize their lazily-loaded associations. My primary solution is to use <code>JOIN FETCH</code> in JPQL to eagerly load the association in a single SQL join query. If the entity has multiple associations and Cartesian products become a concern, I use <code>@EntityGraph</code> for dynamic fetching, or <code>@BatchSize(size = 50)</code> at the entity level to fetch children in chunks using an IN clause, reducing N queries to N/50 queries."</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Topic 3: LazyInitializationException -->
+        <section class="topic-section" id="lazy-init">
+            <h2>3. LazyInitializationException & OSIV</h2>
+            <div class="pillar pillar-5">
+                <div class="interview-box">
+                    <h4>🎯 Interviewer Follow-Up Questions</h4>
+                    <p><strong>Q: "A LazyInitializationException occurs in production but not in development. Why?"</strong></p>
+                    <p><em>A:</em> "Because of <code>Open Session In View (OSIV)</code>. Spring Boot enables OSIV by default. In development, this keeps the Hibernate Session open during the entire HTTP request rendering phase, so lazy loading works in the Controller/View. However, in production, senior engineers rightfully disable OSIV (`spring.jpa.open-in-view=false`) because keeping DB connections open during HTTP transport exhausts connection pools. When disabled, the Session closes immediately after the <code>@Transactional</code> Service method completes. When the Controller tries to access a lazy collection, there's no Session left, resulting in the Exception."</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Topic 4: Locks -->
+        <section class="topic-section" id="locking">
+            <h2>4. Optimistic vs Pessimistic Locking</h2>
+            <div class="pillar pillar-4">
+                <h3>Pillar 4: Production-Grade Java 21 Code</h3>
+                <pre><code class="language-java">
+@Entity
+public class TradeAccount {
+    @Id
+    private Long id;
+    
+    private BigDecimal balance;
+
+    // OPTIMISTIC LOCKING
+    // Hibernate automatically increments this. If another thread
+    // updates the row, the version changes. Upon commit, Hibernate checks version.
+    // If mismatch -> StaleObjectStateException!
+    @Version
+    private Integer version;
+}
+                </code></pre>
+            </div>
+        </section>
+
+    </main>
+    <script src="../js/main.js"></script>
+</body>
+</html>

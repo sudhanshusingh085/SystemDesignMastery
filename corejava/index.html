@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Core Java Mastery — From Zero to Interview Ready</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<button class="menu-toggle" aria-label="Toggle menu">☰</button>
+
+<div class="page-wrapper">
+  <aside class="sidebar" id="sidebar"></aside>
+
+  <main class="main-content">
+
+    <h1>☕ Core Java Mastery</h1>
+    <p style="font-size:1.15rem; color: var(--text-muted); margin-bottom: 2rem;">
+      A complete, <strong>textbook-grade</strong> guide — <strong>21 sections</strong>, from absolute zero to interview-ready.<br>
+      All code in <strong>Java 21</strong>. All examples from the <strong>Finance / Trading domain</strong>.<br>
+      Every concept includes <strong>Interviewer Follow-Up Questions</strong> and <strong>Production Debugging Scenarios</strong>.<br>
+      <em>Based on real interview questions from Deloitte, Goldman Sachs, Morgan Stanley, JPMorgan & more.</em>
+    </p>
+
+    <div class="callout callout-info">
+      <div class="callout-title">📌 How this guide works</div>
+      <p>Every section follows the <strong>6-Pillar Framework</strong>: Ground-Zero Theory → Pain Point → Thinking Process → Production-Grade Code → Interviewer's Trap Questions → Trade-offs. All code examples use <strong>financial domain entities</strong> (Trades, Orders, Portfolios, FIX messages, Currency Pairs).</p>
+    </div>
+
+    <!-- 00 -->
+    <h2>00 · Java Fundamentals</h2>
+    <p>The bedrock. JDK/JRE/JVM, data types, autoboxing traps, pass-by-value, and the <code>main()</code> method mystery.</p>
+    <div class="card-grid">
+      <a href="fundamentals/index.html" class="topic-card">
+        <span class="card-emoji">🧱</span>
+        <h3>Java Foundations</h3>
+        <p>JDK/JRE/JVM, data types, wrapper classes, autoboxing pitfalls, static, this vs super, main() overloading.</p>
+      </a>
+    </div>
+
+    <!-- 01 -->
+    <h2>01 · Strings Deep Dive</h2>
+    <div class="card-grid">
+      <a href="strings/index.html" class="topic-card">
+        <span class="card-emoji">🔤</span>
+        <h3>Strings & String Pool</h3>
+        <p>String Pool vs Heap, immutability internals, == vs .equals(), StringBuilder vs StringBuffer, intern().</p>
+      </a>
+    </div>
+
+    <!-- 02 -->
+    <h2>02 · OOP Mastery</h2>
+    <div class="card-grid">
+      <a href="oop/index.html" class="topic-card">
+        <span class="card-emoji">🧬</span>
+        <h3>OOP Deep Dive</h3>
+        <p>Encapsulation, Abstraction, Inheritance, Polymorphism, Functional vs Marker Interface, Shallow vs Deep Copy.</p>
+      </a>
+    </div>
+
+    <!-- 03 -->
+    <h2>03 · Collections Internals</h2>
+    <div class="card-grid">
+      <a href="collections/index.html" class="topic-card">
+        <span class="card-emoji">📦</span>
+        <h3>Collections Framework</h3>
+        <p>HashMap internals (treeification), ConcurrentHashMap, IdentityHashMap, ArrayList vs LinkedList, Fail-Fast vs Fail-Safe.</p>
+      </a>
+    </div>
+
+    <!-- 04 -->
+    <h2>04 · Java 8 Features</h2>
+    <div class="card-grid">
+      <a href="java8/index.html" class="topic-card">
+        <span class="card-emoji">⚡</span>
+        <h3>Lambdas, Streams & More</h3>
+        <p>Lambda expressions, Functional interfaces, Stream API, map() vs flatMap(), Optional, method references.</p>
+      </a>
+    </div>
+
+    <!-- 05 -->
+    <h2>05 · Java 11-21 Modern Features</h2>
+    <div class="card-grid">
+      <a href="modern-java/index.html" class="topic-card">
+        <span class="card-emoji">🚀</span>
+        <h3>Records, Sealed, Virtual Threads</h3>
+        <p>var, text blocks, records, sealed classes, pattern matching, virtual threads, structured concurrency.</p>
+      </a>
+    </div>
+
+    <!-- 06 -->
+    <h2>06 · Exception Handling</h2>
+    <div class="card-grid">
+      <a href="exceptions/index.html" class="topic-card">
+        <span class="card-emoji">⚠️</span>
+        <h3>Exceptions Deep Dive</h3>
+        <p>Checked vs Unchecked, custom exception hierarchies, try-with-resources, best practices.</p>
+      </a>
+    </div>
+
+    <!-- 07 -->
+    <h2>07 · Multithreading</h2>
+    <div class="card-grid">
+      <a href="multithreading/index.html" class="topic-card">
+        <span class="card-emoji">🔄</span>
+        <h3>Threads, Locks & Synchronization</h3>
+        <p>Thread vs Runnable vs Callable, synchronized, volatile, transient, deadlock, race conditions, ThreadLocal traps.</p>
+      </a>
+    </div>
+
+    <!-- 08 -->
+    <h2>08 · Advanced Concurrency</h2>
+    <div class="card-grid">
+      <a href="concurrency/index.html" class="topic-card">
+        <span class="card-emoji">🧵</span>
+        <h3>Executors, Futures & Atomics</h3>
+        <p>ExecutorService, CompletableFuture, Fork/Join, CountDownLatch, Semaphore, Atomics, CAS, Virtual Threads.</p>
+      </a>
+    </div>
+
+    <!-- 09 -->
+    <h2>09 · JVM & Memory</h2>
+    <div class="card-grid">
+      <a href="jvm-memory/index.html" class="topic-card">
+        <span class="card-emoji">🧠</span>
+        <h3>JVM Architecture & GC</h3>
+        <p>Heap/Stack/Method Area/PC Register, GC algorithms (G1GC, ZGC), OOM diagnosis, JVM tuning, finalize().</p>
+      </a>
+    </div>
+
+    <!-- 10 -->
+    <h2>10 · Java Internals</h2>
+    <div class="card-grid">
+      <a href="internals/index.html" class="topic-card">
+        <span class="card-emoji">🔬</span>
+        <h3>ClassLoader, Reflection, Serialization</h3>
+        <p>ClassLoader hierarchy, Reflection API, Serialization pitfalls, equals/hashCode contract, immutable class design.</p>
+      </a>
+    </div>
+
+    <!-- 11 -->
+    <h2>11 · Generics & Type System</h2>
+    <div class="card-grid">
+      <a href="generics/index.html" class="topic-card">
+        <span class="card-emoji">🔷</span>
+        <h3>Generics, Wildcards, Erasure</h3>
+        <p>Generic classes/methods, bounded types, PECS rule, type erasure, generic factory patterns.</p>
+      </a>
+    </div>
+
+    <!-- 12 -->
+    <h2>12 · Spring Boot Deep Dive</h2>
+    <div class="card-grid">
+      <a href="spring-boot/index.html" class="topic-card">
+        <span class="card-emoji">🍃</span>
+        <h3>Spring Boot Masterclass</h3>
+        <p>MVC flow, Bean lifecycle, @Transactional traps, @Async, Profiles, Filter vs Interceptor, startup optimization.</p>
+      </a>
+    </div>
+
+    <!-- 13 -->
+    <h2>13 · Spring Security</h2>
+    <div class="card-grid">
+      <a href="spring-security/index.html" class="topic-card">
+        <span class="card-emoji">🔒</span>
+        <h3>Security, JWT, OAuth</h3>
+        <p>SecurityFilterChain, Basic Auth, OAuth 2.0, JWT validation, Authentication vs Authorization.</p>
+      </a>
+    </div>
+
+    <!-- 14 -->
+    <h2>14 · JPA & Hibernate</h2>
+    <div class="card-grid">
+      <a href="jpa/index.html" class="topic-card">
+        <span class="card-emoji">🗄️</span>
+        <h3>JPA, N+1, Locking</h3>
+        <p>Entity lifecycle, N+1 problem, LazyInitializationException, optimistic vs pessimistic locking, query optimization.</p>
+      </a>
+    </div>
+
+    <!-- 15 -->
+    <h2>15 · Kafka & Messaging</h2>
+    <div class="card-grid">
+      <a href="kafka/index.html" class="topic-card">
+        <span class="card-emoji">📨</span>
+        <h3>Kafka Architecture & Deep Dive</h3>
+        <p>Partitions, Consumer Groups, Schema Registry, exactly-once semantics, DLQ, 1 lakh msgs/sec throughput.</p>
+      </a>
+    </div>
+
+    <!-- 16 -->
+    <h2>16 · Microservices</h2>
+    <div class="card-grid">
+      <a href="microservices/index.html" class="topic-card">
+        <span class="card-emoji">🧩</span>
+        <h3>Patterns & Architecture</h3>
+        <p>Saga, OpenFeign, Database-per-service, Circuit Breaker, Resilience4j, Rate Limiting, Service Discovery.</p>
+      </a>
+    </div>
+
+    <!-- 17 -->
+    <h2>17 · SQL & Database</h2>
+    <div class="card-grid">
+      <a href="sql/index.html" class="topic-card">
+        <span class="card-emoji">🗃️</span>
+        <h3>SQL, Indexing, Optimization</h3>
+        <p>RANK/DENSE_RANK/ROW_NUMBER, execution order, joins, window functions, indexing strategies.</p>
+      </a>
+    </div>
+
+    <!-- 18 -->
+    <h2>18 · Coding & Implementation</h2>
+    <div class="card-grid">
+      <a href="coding/index.html" class="topic-card">
+        <span class="card-emoji">⌨️</span>
+        <h3>Live Coding Problems</h3>
+        <p>String reversal, frequency counting, minimum subarray sum, fund transfer design, custom HashMap, LRU Cache.</p>
+      </a>
+    </div>
+
+    <!-- 19 -->
+    <h2>19 · Production Debugging</h2>
+    <p>Real-world production failures — including <strong>Java FIX protocol</strong> issues in trading systems.</p>
+    <div class="card-grid">
+      <a href="production/index.html" class="topic-card">
+        <span class="card-emoji">🔥</span>
+        <h3>Production Issues & Debugging</h3>
+        <p>HashMap 1M entries, synchronized bottleneck, ThreadLocal leak, OOM after 30 days, GC pauses, Redis + DB 100%.</p>
+      </a>
+      <a href="production/fix-protocol.html" class="topic-card">
+        <span class="card-emoji">📡</span>
+        <h3>Java FIX Protocol Issues</h3>
+        <p>FIX session management, message sequence gaps, heartbeat failures, order rejection handling, QuickFIX/J deep dive.</p>
+      </a>
+    </div>
+
+    <!-- 20 -->
+    <h2>20 · AWS & Deployment</h2>
+    <div class="card-grid">
+      <a href="aws/index.html" class="topic-card">
+        <span class="card-emoji">☁️</span>
+        <h3>EC2, ECS, Lambda, CI/CD</h3>
+        <p>AWS services comparison, monitoring, deployment flow for microservices, CloudWatch, X-Ray.</p>
+      </a>
+    </div>
+
+    <!-- Reference -->
+    <h2>📖 Reference</h2>
+    <div class="card-grid">
+      <a href="glossary.html" class="topic-card">
+        <span class="card-emoji">📖</span>
+        <h3>Glossary (200+ Terms)</h3>
+        <p>Every technical term from Core Java to Kafka, explained for beginners with finance domain context.</p>
+      </a>
+    </div>
+
+    <div style="margin-top: 4rem; padding-top: 2rem; border-top: 1px solid var(--border); text-align: center; color: var(--text-muted); font-size: 0.85rem;">
+      <p>☕ <strong>Core Java Mastery</strong> — 21 Sections · Zero → Interview Ready</p>
+      <p>All code in <strong>Java 21</strong> · Finance domain examples · Interviewer follow-ups · Production debugging</p>
+    </div>
+
+  </main>
+</div>
+
+<button class="scroll-top" aria-label="Scroll to top">↑</button>
+<script src="js/main.js"></script>
+</body>
+</html>

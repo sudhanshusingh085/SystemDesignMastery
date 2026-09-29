@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Exception Handling & Fault Tolerance — Designing Bulletproof Financial Systems</title>
+    <link rel="stylesheet" href="../css/style.css">
+    <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+    <script>mermaid.initialize({startOnLoad:true, theme: 'dark'});</script>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; line-height: 1.6; color: #333; max-width: 1200px; margin: 0 auto; padding: 2rem; background-color: #f9f9fb; }
+        h1, h2, h3 { color: #1a1a2e; }
+        .breadcrumb { font-size: 0.9rem; color: #555; margin-bottom: 2rem; }
+        .breadcrumb a { color: #0070f3; text-decoration: none; }
+        pre { background: #1e1e1e; color: #d4d4d4; padding: 1rem; border-radius: 8px; overflow-x: auto; font-family: 'Courier New', Courier, monospace; }
+        .callout { background: #ffffff; border-left: 5px solid #0070f3; padding: 1.5rem; margin: 2rem 0; box-shadow: 0 4px 6px rgba(0,0,0,0.05); border-radius: 4px; }
+        .callout h4 { margin-top: 0; color: #0070f3; font-size: 1.2rem; }
+        .callout-grill { border-left-color: #e53e3e; }
+        .callout-grill h4 { color: #e53e3e; }
+        code { background: #e2e8f0; padding: 0.2rem 0.4rem; border-radius: 4px; font-family: 'Courier New', Courier, monospace; font-size: 0.9em; color: #c53030; }
+        .concept-box { background: #ebf8ff; border: 1px solid #90cdf4; padding: 1.5rem; border-radius: 8px; margin: 2rem 0; }
+    </style>
+</head>
+<body>
+    <nav class="breadcrumb">
+        <a href="../index.html">Home</a> &gt; <span>06 &middot; Exception Handling</span>
+    </nav>
+
+    <header>
+        <h1>Exception Handling & Fault Tolerance — Designing Bulletproof Financial Systems</h1>
+        <p class="lead">Building resilient Order Management Systems (OMS) and execution pipelines that degrade gracefully under market volatility and infrastructure failure.</p>
+    </header>
+
+    <section id="introduction">
+        <h2>1. Ground-Zero: The Real-World Finance Pain Point</h2>
+        <p>In electronic trading, failures are guaranteed. A network switch will drop packets during the Non-Farm Payrolls (NFP) release. A database will experience a transient deadlock when updating millions of ledger entries. An upstream counterparty FIX engine will send malformed XML.</p>
+        <p>Without rigorous exception handling, these inevitable technical hiccups mutate into financial disasters. An unhandled exception during an order routing loop might kill the consumer thread, leaving millions of dollars of client orders unexecuted. Swallowing an exception without logging the root cause destroys the audit trail required by regulators (like FINRA or the SEC), leading to massive fines.</p>
+        <p>Exception handling in finance is not just about syntax; it is about <strong>fault tolerance, transaction boundaries, and state consistency</strong>. When a failure occurs during an atomic operation (e.g., debiting Account A and crediting Account B), the exception dictates how the system rolls back, alerts the trading desk, and prevents phantom funds from materializing.</p>
+    </section>
+
+    <section id="hierarchy">
+        <h2>2. The Java Exception Hierarchy</h2>
+        <p>The Java Exception Hierarchy is split across two major fault-lines: Recoverability and Expectations.</p>
+
+        <div class="mermaid">
+            flowchart TD
+                T[Throwable] --> E[Error]
+                T --> EX[Exception]
+                
+                E --> VME[VirtualMachineError]
+                E --> OOM[OutOfMemoryError]
+                E --> SO[StackOverflowError]
+                
+                EX --> RE[RuntimeException\nUnchecked]
+                EX --> CE[Checked Exceptions\nIOException, SQLException]
+                
+                RE --> IAE[IllegalArgumentException]
+                RE --> NPE[NullPointerException]
+                RE --> ISE[IllegalStateException]
+        </div>
+
+        <h3>The Architectural Dichotomy</h3>
+        <ul>
+            <li><strong><code>Error</code></strong>: Catastrophic JVM-level failures. In a matching engine, an <code>OutOfMemoryError</code> (OOME) means the heap is exhausted. <em>Never attempt to catch these to continue trading.</em> Let the JVM crash, rely on Kubernetes to spin up a new pod, and let a secondary replica take over leader election.</li>
+            <li><strong>Checked <code>Exception</code></strong>: Anticipated, recoverable conditions. The compiler <em>forces</em> the caller to handle these.</li>
+            <li><strong><code>RuntimeException</code> (Unchecked)</strong>: Programming bugs (e.g., `NullPointerException`) or unrecoverable technical failures.</li>
+        </ul>
+    </section>
+
+    <section id="checked-vs-unchecked">
+        <h2>3. Checked vs Unchecked Exceptions in Financial Architecture</h2>
+        
+        <p>The debate between Checked and Unchecked exceptions has evolved. In modern frameworks (like Spring) and high-performance systems, Unchecked exceptions are preferred for infrastructural failures, while Checked exceptions (if used at all) are reserved strictly for <strong>business-level alternative flows</strong>.</p>
+
+        <h3>When to use Checked Exceptions</h3>
+        <p>Use checked exceptions for scenarios where the caller can—and <em>must</em>—take corrective action, and where the condition is a natural, expected part of the business workflow.</p>
+        <ul>
+            <li><code>InsufficientFundsException</code>: A client attempts to buy AAPL shares but lacks margin. The OMS catches this and routes a specific rejection message back to the client UI.</li>
+            <li><code>BreachOfLimitException</code>: A trader exceeds their Daily Risk Limit. The exception forces the calling code to route the order to a manual Risk Officer queue.</li>
+        </ul>
+
+        <h3>When to use Unchecked (Runtime) Exceptions</h3>
+        <p>Use unchecked exceptions for fatal infrastructure failures or contract violations (bugs).</p>
+        <ul>
+            <li><code>InvalidISINException</code>: If an internal service passes a null or malformed ISIN (International Securities Identification Number), it's a bug. Catching it won't fix the bug.</li>
+            <li><code>DatabaseConnectionException</code>: The ledger database is down. The business code cannot recover from this. Fail fast, let the global exception handler return an HTTP 500 or a FIX Reject (OrdStatus=8), and wake up the SRE on call.</li>
+        </ul>
+
+        <div class="callout">
+            <h4>📋 How to Answer This in an Interview</h4>
+            <p><strong>Question:</strong> "How do you decide between Checked and Unchecked Exceptions when designing a new service?"</p>
+            <p><strong>The Script:</strong> "My philosophy centers on <em>recoverability</em> and <em>API clarity</em>. I use Checked Exceptions exclusively for expected business contingencies where I want to force the caller to make a semantic choice—like handling an <code>InsufficientMarginException</code> by notifying the trader. However, for infrastructural failures, like a <code>DatabaseTimeoutException</code>, or programming errors like passing an invalid order state, I use Unchecked Exceptions. Wrapping unrecoverable technical faults in checked exceptions pollutes the codebase with meaningless boilerplate <code>try-catch</code> blocks or endless <code>throws</code> signatures that bubble up to the entry point anyway, obfuscating the actual business logic."</p>
+        </div>
+    </section>
+
+    <section id="sealed-hierarchies">
+        <h2>4. Designing a Production-Grade Financial Exception Hierarchy (Java 21)</h2>
+        <p>In high-stakes systems, we need structured, predictable error types. Java 21's <strong>Sealed Classes</strong> are a game-changer for exception hierarchies, allowing us to define a closed, exhaustive set of errors. When combined with Pattern Matching in <code>catch</code> blocks or switch expressions, it ensures that every specific failure mode is accounted for by the compiler.</p>
+
+        <h3>Architectural Rationale</h3>
+        <p>We create a base abstract class, <code>TradingSystemException</code>, which carries context: error codes, a correlation ID (crucial for distributed tracing across microservices like Zipkin/Jaeger), and timestamps.</p>
+
+        <pre><code>package com.tier1bank.oms.exceptions;
+
+import java.time.Instant;
+import java.util.UUID;
+
+/**
+ * Base exception for all OMS domain failures. 
+ * Declared as sealed to strictly control the domain error taxonomy.
+ */
+public sealed abstract class TradingSystemException extends RuntimeException 
+    permits OrderValidationException, RiskCheckFailedException, SettlementException {
+
+    private final String errorCode;
+    private final UUID correlationId;
+    private final Instant timestamp;
+
+    public TradingSystemException(String message, String errorCode, Throwable cause) {
+        super(message, cause);
+        this.errorCode = errorCode;
+        this.correlationId = UUID.randomUUID(); // In reality, fetch from ThreadLocal tracing context
+        this.timestamp = Instant.now();
+    }
+
+    public String getErrorCode() { return errorCode; }
+    public UUID getCorrelationId() { return correlationId; }
+}
+
+// ---------------------------------------------------------
+// Subclasses defining specific failure domains
+// ---------------------------------------------------------
+
+public final class OrderValidationException extends TradingSystemException {
+    private final String invalidField;
+
+    public OrderValidationException(String message, String invalidField) {
+        super(message, "OMS-VAL-001", null);
+        this.invalidField = invalidField;
+    }
+}
+
+public final class RiskCheckFailedException extends TradingSystemException {
+    private final double limitExceededBy;
+
+    public RiskCheckFailedException(String message, double limitExceededBy) {
+        super(message, "OMS-RSK-042", null);
+        this.limitExceededBy = limitExceededBy;
+    }
+}
+
+public final class SettlementException extends TradingSystemException {
+    public SettlementException(String message, Throwable cause) {
+        super(message, "STL-ERR-999", cause);
+    }
+}
+</code></pre>
+
+        <h3>Pattern Matching for Exhaustive Error Handling</h3>
+        <p>When catching the base type at the edge of the system (e.g., before returning a response to the FIX gateway), Java 21 pattern matching allows clean extraction of domain-specific data.</p>
+
+        <pre><code>
+public void handleFailedOrder(TradingSystemException exception, Order order) {
+    // Java 21 Pattern Matching with Switch
+    String responseMessage = switch (exception) {
+        case OrderValidationException valEx -> 
+            String.format("Rejecting order: Invalid field %s. Ref: %s", 
+                          valEx.getInvalidField(), valEx.getCorrelationId());
+                          
+        case RiskCheckFailedException riskEx -> 
+            String.format("Risk Limit Breached by $%.2f. Ref: %s", 
+                          riskEx.getLimitExceededBy(), riskEx.getCorrelationId());
+                          
+        case SettlementException stlEx -> 
+            String.format("Settlement subsystem failure. Manual intervention required. Ref: %s", 
+                          stlEx.getCorrelationId());
+    };
+
+    fixGateway.sendReject(order, responseMessage);
+}
+</code></pre>
+    </section>
+
+    <section id="try-with-resources">
+        <h2>5. <code>try-with-resources</code> & <code>AutoCloseable</code></h2>
+        <p>Resource leaks in finance are fatal. If a thread reading market data opens a socket, encounters an exception, and fails to close the socket, the OS will eventually run out of file descriptors (<code>Too many open files</code>). The process crashes, blinding the trading algorithms to price updates.</p>
+        <p>Before Java 7, resources were closed in <code>finally</code> blocks, which was verbose and error-prone (closing the resource could throw an exception, masking the original error!). <code>try-with-resources</code> automates this via the <code>AutoCloseable</code> interface.</p>
+
+        <h3>Code Example: Custom FIX Session</h3>
+        <pre><code>
+import java.io.Closeable;
+
+public class FixSessionConnection implements AutoCloseable {
+    private final String targetCompId;
+
+    public FixSessionConnection(String targetCompId) {
+        this.targetCompId = targetCompId;
+        System.out.println("FIX Session established with: " + targetCompId);
+    }
+
+    public void sendExecutionReport(String execId) {
+        System.out.println("Sending ExecReport: " + execId);
+        // Simulate a network failure during transmission
+        throw new RuntimeException("TCP Connection Reset by peer");
+    }
+
+    @Override
+    public void close() throws Exception {
+        System.out.println("Tearing down FIX Session with " + targetCompId + " gracefully.");
+        // If close() throws an exception, it is added as a "Suppressed" exception 
+        // to the primary exception thrown by sendExecutionReport().
+    }
+}
+
+// Usage in Trading Engine
+public void processExecution() {
+    try (FixSessionConnection session = new FixSessionConnection("CITADEL_EMS")) {
+        session.sendExecutionReport("EXEC_99381");
+    } catch (Exception e) {
+        log.error("Failed to send execution report. Root cause: {}", e.getMessage());
+        // e.getSuppressed() will contain any exceptions thrown by session.close()
+    }
+}
+</code></pre>
+    </section>
+
+    <section id="chaining">
+        <h2>6. Exception Chaining & Translation</h2>
+        <p>Never lose the root cause. When catching a low-level framework exception (like <code>SQLException</code>) and throwing a domain-specific exception (like <code>TradePersistenceException</code>), you <em>must</em> pass the original exception to the constructor of the new exception.</p>
+
+        <pre><code>
+public void persistTrade(Trade trade) {
+    try {
+        database.insert(trade);
+    } catch (SQLException e) {
+        // ANTI-PATTERN: throw new TradePersistenceException("Failed to save trade"); 
+        // We lost the SQL state, the vendor code, and the underlying cause!
+
+        // CORRECT: Exception Chaining
+        throw new TradePersistenceException("Failed to persist Trade ID " + trade.getId(), e);
+    }
+}
+</code></pre>
+        <p>Exception Translation shields the upper layers of your architecture (like the REST controllers or gRPC endpoints) from knowing about the underlying database technology (Postgres vs Oracle), preserving encapsulation while retaining debuggability.</p>
+    </section>
+
+    <section id="best-practices">
+        <h2>7. Exception Best Practices & Anti-Patterns</h2>
+
+        <h3>Anti-Pattern 1: Catching <code>Throwable</code> or <code>Exception</code> indiscriminately</h3>
+        <p>Catching <code>Throwable</code> catches <code>OutOfMemoryError</code>. If you catch OOM and try to log it, logging allocates objects, which triggers another OOM, leading to cascading failure. Only catch specific exceptions you can handle.</p>
+
+        <h3>Anti-Pattern 2: Log and Rethrow</h3>
+        <p>If you log an exception and then throw it, the caller will likely log it too. The same stack trace gets printed 5 times across the call stack, polluting splunk/ELK and making debugging a nightmare.</p>
+        <pre><code>
+// TERRIBLE
+catch (Exception e) {
+    log.error("Error occurred", e); // Duplicate logging
+    throw new RuntimeException(e);
+}
+// CORRECT
+catch (Exception e) {
+    throw new CustomDomainException("Contextual message", e); // Let the top-level handler log it once
+}
+</code></pre>
+
+        <h3>Anti-Pattern 3: Exceptions for Control Flow (The HFT Approach)</h3>
+        <p>In High-Frequency Trading (HFT), generating an exception is extremely slow because the JVM has to walk the execution stack to build the stack trace (<code>fillInStackTrace()</code>). If a trade is rejected due to limit checks, that is a standard business flow, not a JVM anomaly.</p>
+        <p>Instead of throwing exceptions for fast-path validations, top-tier architectures use a <code>Result</code> type or <code>Either</code> monad (similar to Rust or functional programming).</p>
+
+        <pre><code>
+// Using Java 21 Sealed Interfaces for non-exceptional flow control
+public sealed interface ValidationResult<T> {
+    record Success<T>(T payload) implements ValidationResult<T> {}
+    record Failure<T>(String reasonCode, String description) implements ValidationResult<T> {}
+}
+
+public ValidationResult<Order> validateOrderPath(Order order) {
+    if (order.getQty() <= 0) {
+        // NO EXCEPTION THROWN. Zero allocation (if we cache standard failures), 
+        // zero stack trace generation, nanosecond latency.
+        return new ValidationResult.Failure<>("VAL_01", "Qty must be > 0");
+    }
+    return new ValidationResult.Success<>(order);
+}
+</code></pre>
+    </section>
+
+    <section id="interview-trap-questions">
+        <div class="callout callout-grill">
+            <h4>🎯 Interviewer Follow-Up Questions (The Grill Round)</h4>
+            
+            <p><strong>Trap 1: "Does a <code>finally</code> block always execute? Name scenarios where it does not."</strong></p>
+            <p><em>The Answer:</em> No, it does not. The <code>finally</code> block will not execute if:
+            1. <code>System.exit(status)</code> is called within the <code>try</code> or <code>catch</code> block.
+            2. The JVM crashes entirely (e.g., a native C++ JNI segmentation fault, or external `kill -9`).
+            3. The thread executing the `try` block is an infinite loop or gets deadlocked before reaching `finally`.
+            4. Power failure.</p>
+
+            <p><strong>Trap 2: "What happens if both the <code>try</code> block and the <code>finally</code> block contain a <code>return</code> statement?"</strong></p>
+            <p><em>The Answer:</em> The <code>return</code> statement in the <code>finally</code> block completely overshadows and swallows the <code>return</code> statement (or even an unhandled Exception!) from the <code>try</code> block. This is a severe anti-pattern that can hide application crashes. A <code>finally</code> block should only be used for cleanup, never for altering control flow.</p>
+
+            <p><strong>Trap 3: "If building an ultra-low latency matching engine (microsecond scale), how do you use exceptions?"</strong></p>
+            <p><em>The Answer:</em> You don't. In the critical path, Exceptions violate performance constraints due to <code>fillInStackTrace</code>. If an exception must be thrown, we override <code>Throwable.fillInStackTrace()</code> to return <code>this</code> without walking the stack, creating a 'stackless exception' that acts purely as a signal flag. However, returning sealed <code>Result</code> interfaces or primitive integer status codes is standard practice for zero-allocation fast-paths.</p>
+        </div>
+    </section>
+
+    <footer>
+        <p>&copy; 2026 Core Java for Financial Engineers. All rights reserved.</p>
+    </footer>
+    <script src="../js/main.js"></script>
+</body>
+</html>

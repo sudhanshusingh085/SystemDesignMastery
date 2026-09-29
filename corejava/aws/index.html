@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AWS & Deployment — Cloud Infrastructure for Trading Systems</title>
+    <link rel="stylesheet" href="../css/style.css">
+    <script type="module" src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs"></script>
+</head>
+<body>
+    <nav class="breadcrumbs">
+        <a href="../index.html">Home</a> &gt; AWS & Deployment
+    </nav>
+    <header>
+        <h1>AWS & Deployment — Cloud Infrastructure for Trading Systems</h1>
+        <p>Architecting low-latency, highly available financial systems on the Cloud.</p>
+    </header>
+
+    <main>
+        <!-- TOPIC 1: EC2 vs ECS vs Lambda -->
+        <section id="compute">
+            <h2>1. Compute: EC2 vs ECS vs Lambda</h2>
+            
+            <div class="pillar">
+                <h3>PILLAR 1: Ground-Zero Theory & The Pain Point</h3>
+                <p>In a trading system, you have diverse computational needs. A FIX (Financial Information eXchange) engine requires persistent, long-lived TCP connections. A trade processing engine requires scalable microservices. A daily reconciliation report runs once a day. If you use a single server for all three, you either pay for idle capacity or face starvation during market open. AWS provides three main compute paradigms:</p>
+                <ul>
+                    <li><strong>EC2 (Elastic Compute Cloud):</strong> Full Virtual Machines. You control the OS, networking, and patching.</li>
+                    <li><strong>ECS (Elastic Container Service):</strong> Container orchestration (often via AWS Fargate). You deploy Docker containers without managing the underlying VMs.</li>
+                    <li><strong>Lambda:</strong> Serverless compute. You deploy code, and AWS runs it in response to events, billing by the millisecond.</li>
+                </ul>
+                <p class="jargon"><strong>Pain Point:</strong> Choosing the wrong compute primitive leads to either bloated AWS bills (running EC2s for batch jobs) or disconnected clients (using Lambda for long-lived FIX sessions).</p>
+            </div>
+
+            <div class="pillar">
+                <h3>PILLAR 2: Architectural Decision Rationales</h3>
+                <table>
+                    <tr>
+                        <th>Compute Primitive</th>
+                        <th>Control & Scaling</th>
+                        <th>Startup Time</th>
+                        <th>Finance Use Case</th>
+                    </tr>
+                    <tr>
+                        <td><strong>EC2</strong></td>
+                        <td>Total control, slow manual/ASG scaling</td>
+                        <td>Minutes</td>
+                        <td>FIX engines needing kernel tuning, persistent IP, and long-lived TCP sockets.</td>
+                    </tr>
+                    <tr>
+                        <td><strong>ECS (Fargate)</strong></td>
+                        <td>High control, auto-scaling containers</td>
+                        <td>Seconds</td>
+                        <td>Order Management System (OMS) Microservices, Pricing engines.</td>
+                    </tr>
+                    <tr>
+                        <td><strong>AWS Lambda</strong></td>
+                        <td>Low control, hyper-scaling (event-driven)</td>
+                        <td>Milliseconds (Cold starts vary)</td>
+                        <td>Trade reconciliation batch jobs, EOD (End-of-Day) report generation, S3 trigger parsing.</td>
+                    </tr>
+                </table>
+            </div>
+
+            <div class="pillar">
+                <h3>PILLAR 3: Step-by-Step Evolution</h3>
+                <p><strong>Naive Approach:</strong> Deploy everything on giant EC2 instances ("Lift and Shift"). Result: Wasted money during non-market hours and slow deployments.<br>
+                <strong>Evolution 1:</strong> Move microservices to ECS. Dockerizes the OMS, allowing seamless Blue-Green deployments and faster scaling during market volatility.<br>
+                <strong>Evolution 2:</strong> Offload event-driven tasks to Lambda. When a generic end-of-day trade file lands in S3, a Lambda wakes up, parses it, updates the DB, and dies.</p>
+            </div>
+
+            <div class="pillar">
+                <h3>PILLAR 4: Production-Grade Java 21 Code</h3>
+                <p>An AWS Lambda Handler written in Java 21 for Trade Reconciliation, utilizing records and pattern matching.</p>
+                <pre><code class="language-java">
+package com.finance.aws.lambda;
+
+import com.amazonaws.services.lambda.runtime.Context;
+import com.amazonaws.services.lambda.runtime.RequestHandler;
+import com.amazonaws.services.lambda.runtime.events.S3Event;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+// Using Java 21 records for DTOs
+public record TradeRecord(String tradeId, String isin, double quantity, double price) {}
+
+/**
+ * Triggered by an S3 event when a new daily trade file is uploaded.
+ */
+public class TradeReconciliationHandler implements RequestHandler&lt;S3Event, String&gt; {
+    private static final Logger log = LoggerFactory.getLogger(TradeReconciliationHandler.class);
+
+    @Override
+    public String handleRequest(S3Event s3event, Context context) {
+        log.info("Starting reconciliation for event: {}", s3event.toJson());
+        
+        // Java 21 pattern matching and functional approach
+        s3event.getRecords().forEach(record -> {
+            var bucketName = record.getS3().getBucket().getName();
+            var objectKey = record.getS3().getObject().getKey();
+            
+            log.info("Processing file: {}/{}", bucketName, objectKey);
+            // In a real scenario, stream the S3 object and parse CSV/JSON into TradeRecords
+            processFile(bucketName, objectKey);
+        });
+        
+        return "SUCCESS";
+    }
+    
+    private void processFile(String bucket, String key) {
+        // Business logic for reconciliation...
+    }
+}
+                </code></pre>
+            </div>
+
+            <div class="pillar">
+                <h3>PILLAR 5: The Interviewer's Deep Follow-Up Questions</h3>
+                <div class="interview-box">
+                    <h4>📋 How to Answer This in an Interview</h4>
+                    <p><strong>Q: Difference between EC2, ECS and Lambda in your trading architecture?</strong><br>
+                    <strong>A:</strong> "I map compute to workload characteristics. For our FIX engine, we use EC2 because FIX relies on long-lived TCP sockets and sequence numbers, which Lambda and standard HTTP-based load balancers on ECS struggle with. For our core Order Routing microservices, we use ECS with Fargate because it provides scalable container orchestration without managing VMs. For End-of-Day reconciliation or processing files dropped in S3, we use Lambda because it's purely event-driven, scaling to zero when not in use."</p>
+                </div>
+                <h4>🎯 Interviewer Follow-Up Questions</h4>
+                <ul>
+                    <li><em>"What is a Lambda Cold Start and how do you mitigate it in Java?"</em> -> SnapStart, GraalVM native images, or Provisioned Concurrency.</li>
+                    <li><em>"Can a Lambda run for an hour?"</em> -> No, Lambda has a hard 15-minute timeout. For long batch jobs, use AWS Batch or ECS tasks.</li>
+                </ul>
+            </div>
+
+            <div class="pillar">
+                <h3>PILLAR 6: Trade-offs & When NOT To Use It</h3>
+                <ul>
+                    <li><strong>Lambda:</strong> Do not use for low-latency market data processing. Cold starts and unpredictable JVM pauses will violate SLA.</li>
+                    <li><strong>EC2:</strong> Do not use for simple web APIs; the operational overhead of OS patching and AMIs is too high compared to ECS/EKS.</li>
+                </ul>
+            </div>
+        </section>
+
+        <hr>
+
+        <!-- TOPIC 2: Deployment Flow -->
+        <section id="deployment">
+            <h2>2. Deployment Flow — CI/CD for Microservices</h2>
+            
+            <div class="pillar">
+                <h3>PILLAR 1: Ground-Zero Theory & The Pain Point</h3>
+                <p>A trading floor cannot endure downtime. Deploying new code by manually SSHing into servers is a recipe for disaster. CI/CD (Continuous Integration / Continuous Deployment) automates the pipeline from Git commit to production release.</p>
+            </div>
+
+            <div class="pillar">
+                <h3>PILLAR 3: Step-by-Step Evolution & Visual Flow</h3>
+                <p>Modern deployment on AWS typically follows this flow:</p>
+                <div class="mermaid">
+                flowchart TD
+                    A[Developer Push Git] --> B[AWS CodePipeline]
+                    B --> C[AWS CodeBuild: Maven Test/Build]
+                    C --> D[Docker Build & Tag]
+                    D --> E[AWS ECR: Container Registry]
+                    E --> F[ECS Blue/Green Deployment]
+                    F --> G{Health Checks Pass?}
+                    G -- Yes --> H[Traffic shifts to Green]
+                    G -- No --> I[Rollback to Blue]
+                </div>
+                <p><strong>Blue-Green Deployment:</strong> 'Blue' is the current live version. 'Green' is the new version. Both run simultaneously. Traffic is switched at the load balancer level only when Green passes health checks. Zero downtime.</p>
+                <p><strong>Canary Deployment:</strong> Release the new version to a small percentage of users (e.g., 5% of internal traders) before rolling out to everyone.</p>
+            </div>
+
+            <div class="pillar">
+                <h3>PILLAR 5: The Interviewer's Deep Follow-Up Questions</h3>
+                <div class="interview-box">
+                    <h4>📋 How to Answer This in an Interview</h4>
+                    <p><strong>Q: Have you deployed microservices on AWS? Explain the deployment flow.</strong><br>
+                    <strong>A:</strong> "Yes, we use a fully automated CI/CD pipeline via GitHub Actions and AWS CodePipeline. Code is built using Maven, and tests are run. Upon success, a Docker image is built and pushed to Amazon ECR. We use ECS with Fargate for execution, and AWS CodeDeploy manages a Blue-Green deployment. CodeDeploy spins up the new 'Green' task set, runs health checks against the /actuator/health endpoint, and if successful, shifts ALB traffic from Blue to Green. If a health check fails, it instantly rolls back without customer impact."</p>
+                </div>
+            </div>
+        </section>
+
+        <hr>
+
+        <!-- TOPIC 3: Messaging - SQS vs SNS vs Kafka -->
+        <section id="messaging">
+            <h2>3. Messaging: SQS vs SNS vs Kafka</h2>
+            
+            <div class="pillar">
+                <h3>PILLAR 1 & 2: Theory & Architectural Decisions</h3>
+                <ul>
+                    <li><strong>SQS (Simple Queue Service):</strong> Point-to-point message queuing. Great for decoupling components (e.g., Decoupling the Trade Capture system from the Settlement system). Consumer pulls messages.</li>
+                    <li><strong>SNS (Simple Notification Service):</strong> Pub/Sub messaging. Great for fan-out. Push-based. E.g., A trade is executed -> SNS pushes to Email alert system, SMS alert, and an SQS queue for downstream processing.</li>
+                    <li><strong>Kafka (MSK on AWS):</strong> Distributed commit log. High throughput, low latency, replayable. Best for massive market data firehoses or event-sourcing ledgers where order and replayability are paramount.</li>
+                </ul>
+            </div>
+            <div class="pillar">
+                <h3>PILLAR 5: Interviewer Questions</h3>
+                <div class="interview-box">
+                    <p><strong>Q: When would you use Kafka over SQS in a financial system?</strong><br>
+                    <strong>A:</strong> "I use SQS for simple, asynchronous task queues like sending trade confirmation emails, where order isn't strictly critical and once it's processed, it can be deleted. I use Kafka for the core Order Routing fabric or Market Data feeds, because Kafka guarantees strict ordering within a partition, allows multiple distinct consumer groups to read the same stream without deleting the message, and supports replaying historical events to rebuild state—critical for financial auditing and event-sourcing architectures."</p>
+                </div>
+            </div>
+        </section>
+        
+        <hr>
+
+        <section id="other-aws">
+            <h2>4. Essential AWS Services for Finance</h2>
+            <ul>
+                <li><strong>Monitoring (CloudWatch & X-Ray):</strong> CloudWatch handles metrics and logs. X-Ray provides distributed tracing (adding trace IDs to HTTP headers) so you can track a trade lifecycle across 15 different microservices.</li>
+                <li><strong>S3 (Simple Storage Service):</strong> Immutable object storage. Perfect for storing immutable trade archives, regulatory reports, and daily market data dumps. Using Glacier lifecycle policies saves costs for 7-year regulatory retention.</li>
+                <li><strong>RDS vs DynamoDB:</strong> 
+                    <ul>
+                        <li><em>RDS (Relational - PostgreSQL/Aurora):</em> ACID compliance is mandatory for financial ledger balances and core transactional data.</li>
+                        <li><em>DynamoDB (NoSQL):</em> Millisecond latency at any scale. Used for user session state, high-frequency tick data caching, or configurations where strict relational joins are not required.</li>
+                    </ul>
+                </li>
+                <li><strong>VPC & Security Groups:</strong> Network isolation. The Database tier (RDS) resides in a Private Subnet with no internet route. Only the Application tier (ECS in another private subnet) can reach it via Security Group rules. The ALB sits in the Public Subnet.</li>
+                <li><strong>IAM:</strong> Identity and Access Management. Never use hardcoded AWS credentials in Java code. Use IAM Task Roles for ECS so the container inherently has permission to read from a specific S3 bucket (Least Privilege).</li>
+            </ul>
+        </section>
+
+    </main>
+    <script>
+        mermaid.initialize({ startOnLoad: true });
+    </script>
+</body>
+</html>

@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Glossary — 200+ Terms Explained</title>
+    <link rel="stylesheet" href="css/style.css">
+    <style>
+        .search-container {
+            margin: 20px 0;
+            text-align: center;
+        }
+        #glossarySearch {
+            width: 80%;
+            padding: 15px;
+            font-size: 1.2rem;
+            border: 2px solid #333;
+            border-radius: 8px;
+        }
+        .glossary-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 20px;
+        }
+        .jargon {
+            background: #f9f9f9;
+            border-left: 4px solid #0056b3;
+            padding: 15px;
+            border-radius: 4px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .jargon h3 {
+            margin-top: 0;
+            color: #0056b3;
+        }
+        .term-category {
+            font-size: 0.8rem;
+            color: #666;
+            text-transform: uppercase;
+            font-weight: bold;
+            margin-bottom: 5px;
+            display: block;
+        }
+        .hidden {
+            display: none !important;
+        }
+    </style>
+</head>
+<body>
+    <nav class="breadcrumbs">
+        <a href="index.html">Home</a> &gt; Glossary
+    </nav>
+    <header>
+        <h1>Glossary — Financial Tech Terms</h1>
+        <p>A comprehensive dictionary of Java, Architecture, and Finance domain terminology.</p>
+    </header>
+
+    <main>
+        <div class="search-container">
+            <input type="text" id="glossarySearch" placeholder="Search terms (e.g., CAS, FIX, Lambda, JVM)...">
+        </div>
+
+        <div class="glossary-grid" id="glossaryGrid">
+            <!-- Core Java & OOP -->
+            <div class="jargon"><span class="term-category">Core Java</span><h3>Autoboxing</h3><p>The automatic conversion the Java compiler makes between the primitive types and their corresponding object wrapper classes (e.g., int to Integer).</p></div>
+            <div class="jargon"><span class="term-category">Core Java</span><h3>Type Erasure</h3><p>The process where the Java compiler removes all generic type information at compile-time to maintain backward compatibility.</p></div>
+            <div class="jargon"><span class="term-category">Core Java</span><h3>Record</h3><p>A restricted identifier in Java 14+ used to declare an immutable data-carrying class with concise syntax (often used for DTOs like Trade details).</p></div>
+            <div class="jargon"><span class="term-category">Core Java</span><h3>Sealed Class</h3><p>A class/interface that restricts which other classes may extend/implement it, heavily used in domain-driven design for finite states (e.g., TradeStatus).</p></div>
+            <div class="jargon"><span class="term-category">OOP</span><h3>Polymorphism</h3><p>The ability of an object to take on many forms; overriding and overloading methods allowing abstractions (like generic 'Asset') to be treated uniformly.</p></div>
+            
+            <!-- JVM & Concurrency -->
+            <div class="jargon"><span class="term-category">JVM</span><h3>Metaspace</h3><p>Native memory region in JVM (replacing PermGen) that stores class metadata.</p></div>
+            <div class="jargon"><span class="term-category">JVM</span><h3>Heap</h3><p>The runtime data area from which memory for all class instances and arrays is allocated.</p></div>
+            <div class="jargon"><span class="term-category">JVM</span><h3>Garbage Collection (GC)</h3><p>The process of automatically freeing memory on the heap by deleting objects that are no longer reachable (vital to tune in low-latency trading).</p></div>
+            <div class="jargon"><span class="term-category">Concurrency</span><h3>Volatile</h3><p>A keyword ensuring that changes to a variable are always read from main memory, preventing thread-caching issues (crucial in lock-free algorithmic trading variables).</p></div>
+            <div class="jargon"><span class="term-category">Concurrency</span><h3>CAS (Compare-And-Swap)</h3><p>An atomic CPU instruction used in lock-free programming (like AtomicInteger) to update a value only if it hasn't been changed by another thread.</p></div>
+            <div class="jargon"><span class="term-category">Concurrency</span><h3>Deadlock</h3><p>A situation where two or more threads are blocked forever, waiting for each other to release locks.</p></div>
+            <div class="jargon"><span class="term-category">Concurrency</span><h3>Virtual Threads</h3><p>Lightweight threads introduced in Java 21 (Project Loom) mapped dynamically to OS threads, massively scaling blocking I/O without native thread overhead.</p></div>
+
+            <!-- Collections -->
+            <div class="jargon"><span class="term-category">Collections</span><h3>Treeification</h3><p>The process in Java 8+ HashMaps where bins with too many collisions convert from linked lists (O(n)) to Red-Black trees (O(log n)) to prevent DOS attacks.</p></div>
+            <div class="jargon"><span class="term-category">Collections</span><h3>ConcurrentHashMap</h3><p>A thread-safe hash map implementation that achieves high throughput by using lock striping (or CAS operations in newer Java versions).</p></div>
+
+            <!-- Spring & JPA -->
+            <div class="jargon"><span class="term-category">Spring</span><h3>@Transactional</h3><p>An annotation that wraps a method in a database transaction, rolling back automatically on RuntimeExceptions (essential for money transfers).</p></div>
+            <div class="jargon"><span class="term-category">Spring</span><h3>@Qualifier</h3><p>Used alongside @Autowired to specify exactly which bean to inject when multiple beans of the same type exist.</p></div>
+            <div class="jargon"><span class="term-category">JPA</span><h3>N+1 Problem</h3><p>A severe ORM performance anti-pattern where a query fetches 1 parent entity, and subsequent N queries are fired to fetch its lazy-loaded children.</p></div>
+            <div class="jargon"><span class="term-category">JPA</span><h3>Optimistic Locking</h3><p>A concurrency control strategy using a `@Version` field to prevent lost updates without holding physical database locks.</p></div>
+            <div class="jargon"><span class="term-category">JPA</span><h3>Lazy Loading</h3><p>A design pattern deferring the initialization of an object until it's needed (e.g., fetching a Portfolio's trades only when getTrades() is called).</p></div>
+
+            <!-- Kafka & Microservices -->
+            <div class="jargon"><span class="term-category">Kafka</span><h3>Partition</h3><p>The base unit of parallelism in Kafka; an ordered, immutable sequence of records within a topic.</p></div>
+            <div class="jargon"><span class="term-category">Kafka</span><h3>Consumer Group</h3><p>A group of consumers cooperating to consume messages from a topic, where each partition is assigned to exactly one consumer in the group.</p></div>
+            <div class="jargon"><span class="term-category">Kafka</span><h3>DLQ (Dead Letter Queue)</h3><p>A specialized queue/topic where unprocessable messages are sent for manual inspection so they don't block the main flow.</p></div>
+            <div class="jargon"><span class="term-category">Microservices</span><h3>Saga Pattern</h3><p>A distributed transaction pattern involving a sequence of local transactions; if one fails, compensating transactions run to undo the previous steps.</p></div>
+            <div class="jargon"><span class="term-category">Microservices</span><h3>Circuit Breaker</h3><p>A pattern (e.g., Resilience4j) that stops network calls to a failing downstream service, returning a fallback response instantly to prevent cascading failures.</p></div>
+
+            <!-- SQL -->
+            <div class="jargon"><span class="term-category">SQL</span><h3>Window Function</h3><p>Functions like RANK() or ROW_NUMBER() that perform calculations across a set of table rows related to the current row without collapsing them (GROUP BY).</p></div>
+            <div class="jargon"><span class="term-category">SQL</span><h3>Isolation Level</h3><p>Defines the degree to which a transaction must be isolated from the data modifications made by other transactions (Read Committed, Serializable, etc.).</p></div>
+
+            <!-- AWS -->
+            <div class="jargon"><span class="term-category">AWS</span><h3>EC2 (Elastic Compute Cloud)</h3><p>Raw virtual machines in AWS providing full OS-level control.</p></div>
+            <div class="jargon"><span class="term-category">AWS</span><h3>ECS (Elastic Container Service)</h3><p>AWS's proprietary container orchestration service, often run serverless via AWS Fargate.</p></div>
+            <div class="jargon"><span class="term-category">AWS</span><h3>Lambda</h3><p>Serverless, event-driven compute service that runs code in response to triggers without managing infrastructure.</p></div>
+            <div class="jargon"><span class="term-category">AWS</span><h3>VPC (Virtual Private Cloud)</h3><p>A logically isolated section of the AWS cloud where you launch resources in a virtual network you define.</p></div>
+
+            <!-- Finance / FIX Protocol -->
+            <div class="jargon"><span class="term-category">Finance</span><h3>FIX Protocol</h3><p>Financial Information eXchange. The standard electronic communications protocol for real-time exchange of securities transactions.</p></div>
+            <div class="jargon"><span class="term-category">FIX</span><h3>Tag 35 (MsgType)</h3><p>The FIX field defining the type of message (e.g., D = New Order Single, 8 = Execution Report).</p></div>
+            <div class="jargon"><span class="term-category">FIX</span><h3>Sequence Number (Tag 34)</h3><p>An incremental number attached to every FIX message to guarantee message ordering and detect missing packets.</p></div>
+            <div class="jargon"><span class="term-category">Finance</span><h3>T+2 Settlement</h3><p>Trade Date plus 2 business days; the timeframe within which a security transaction must be settled and paid for.</p></div>
+            <div class="jargon"><span class="term-category">Finance</span><h3>OMS (Order Management System)</h3><p>Software used by institutional traders to execute securities orders and track order status.</p></div>
+            <div class="jargon"><span class="term-category">Finance</span><h3>ISIN</h3><p>International Securities Identification Number; a 12-character alphanumeric code that uniquely identifies a specific security.</p></div>
+            <div class="jargon"><span class="term-category">Finance</span><h3>Limit Order</h3><p>An order to buy or sell a stock at a specific price or better, contrary to a Market Order which executes immediately at the current price.</p></div>
+            <div class="jargon"><span class="term-category">Finance</span><h3>Reconciliation</h3><p>The accounting process of ensuring two sets of records (e.g., the broker's ledger and the bank's account) are in agreement.</p></div>
+            <div class="jargon"><span class="term-category">Finance</span><h3>Dark Pool</h3><p>A private financial forum or exchange for trading securities, allowing investors to trade without public exposure until execution.</p></div>
+
+        </div>
+    </main>
+
+    <script src="js/main.js"></script>
+    <script>
+        document.getElementById('glossarySearch').addEventListener('keyup', function(e) {
+            const term = e.target.value.toLowerCase();
+            const items = document.querySelectorAll('.jargon');
+            
+            items.forEach(item => {
+                const text = item.innerText.toLowerCase();
+                if(text.includes(term)) {
+                    item.classList.remove('hidden');
+                } else {
+                    item.classList.add('hidden');
+                }
+            });
+        });
+    </script>
+</body>
+</html>

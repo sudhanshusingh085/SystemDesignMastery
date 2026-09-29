@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Advanced Concurrency — Executors, Futures & The Modern Way</title>
+    <link rel="stylesheet" href="../../css/style.css">
+    <script src="../../js/main.js" defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+    <script>mermaid.initialize({startOnLoad:true});</script>
+</head>
+<body>
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li><a href="../../index.html">Home</a></li>
+            <li>Advanced Concurrency</li>
+        </ol>
+    </nav>
+    <main>
+        <h1>Advanced Concurrency — Executors, Futures & The Modern Way</h1>
+        
+        <section id="pillar-1">
+            <h2>PILLAR 1: Ground-Zero Theory & The Pain Point</h2>
+            <p>Manually creating and managing <code>Thread</code> objects is inefficient and dangerous. Threads are expensive OS resources. The modern concurrency API (<code>java.util.concurrent</code>) abstracts away thread lifecycle management using Executors, allowing developers to focus on <em>tasks</em> rather than <em>threads</em>. <code>CompletableFuture</code> provides a monadic, non-blocking way to chain asynchronous operations, avoiding "callback hell."</p>
+        </section>
+
+        <section id="pillar-2">
+            <h2>PILLAR 2: Architectural Decision Rationales</h2>
+            <h3>ExecutorService Selection</h3>
+            <ul>
+                <li><strong>FixedThreadPool:</strong> Constant number of threads. Use for CPU-bound tasks (e.g., risk simulation). Pool size = CPU Cores.</li>
+                <li><strong>CachedThreadPool:</strong> Unbounded thread creation. Use for many short-lived I/O tasks. Danger: Can cause OutOfMemoryError if flooded.</li>
+                <li><strong>ScheduledThreadPool:</strong> Replaces <code>Timer</code> for recurring tasks (e.g., daily settlement batch).</li>
+            </ul>
+
+            <h3>Virtual Threads (Java 21) vs Platform Threads</h3>
+            <p>Virtual threads (Project Loom) are lightweight, user-mode threads managed by the JVM, not the OS. They are cheap to create (bytes, not megabytes) and automatically yield the underlying carrier OS thread during blocking I/O (like network calls to exchanges). They fundamentally change how we write I/O-bound concurrent apps.</p>
+        </section>
+
+        <section id="pillar-3">
+            <h2>PILLAR 3: Step-by-Step Evolution & Thought Process</h2>
+            <p>Legacy: <code>Future&lt;T&gt;</code> required calling <code>.get()</code>, which blocked the thread.<br>
+            Modern: <code>CompletableFuture&lt;T&gt;</code> allows registering non-blocking callbacks (<code>thenApply</code>, <code>thenAccept</code>).<br>
+            State of the Art (Java 21): Virtual threads allow writing simple, synchronous-looking blocking code that performs like complex asynchronous code under the hood.</p>
+        </section>
+
+        <section id="pillar-4">
+            <h2>PILLAR 4: Production-Grade Java 21 Code</h2>
+            <pre><code>
+package com.finance.trading.modern;
+
+import java.util.concurrent.*;
+import java.util.List;
+
+public class SmartRouter {
+    // 1. CompletableFuture - fetching best price concurrently
+    public CompletableFuture&lt;Double&gt; getBestPriceAsync(String ticker) {
+        CompletableFuture&lt;Double&gt; nysePrice = CompletableFuture.supplyAsync(() -> fetchNYSE(ticker));
+        CompletableFuture&lt;Double&gt; nasdaqPrice = CompletableFuture.supplyAsync(() -> fetchNASDAQ(ticker));
+        
+        // Combine results without blocking
+        return nysePrice.thenCombine(nasdaqPrice, Math::min)
+            .exceptionally(ex -> {
+                System.err.println("Pricing feed down: " + ex.getMessage());
+                return -1.0;
+            });
+    }
+
+    private double fetchNYSE(String ticker) { /* network call */ return 100.5; }
+    private double fetchNASDAQ(String ticker) { /* network call */ return 100.4; }
+
+    // 2. CountDownLatch - Waiting for initialization
+    public void startTradingEngine() throws InterruptedException {
+        CountDownLatch latch = new CountDownLatch(3);
+        
+        new Thread(() -> { initializeRiskRules(); latch.countDown(); }).start();
+        new Thread(() -> { connectToFIX(); latch.countDown(); }).start();
+        new Thread(() -> { loadMarketData(); latch.countDown(); }).start();
+        
+        latch.await(); // Main thread blocks until countdown reaches 0
+        System.out.println("All subsystems go. Engine accepting orders.");
+    }
+
+    // 3. Java 21 Virtual Threads for 100,000 I/O connections
+    public void handleConnections(List&lt;String&gt; clientSockets) {
+        try (var executor = Executors.newVirtualThreadPerTaskExecutor()) {
+            for (String socket : clientSockets) {
+                executor.submit(() -> processClientData(socket));
+            }
+        } // Auto-closes and waits for all virtual threads to finish
+    }
+}
+            </code></pre>
+        </section>
+
+        <section id="pillar-5">
+            <h2>PILLAR 5: The Interviewer's Deep Follow-Up Questions</h2>
+            <div class="interview-box">
+                <h3>📋 How to Answer This in an Interview</h3>
+                <p>Show deep knowledge of <code>java.util.concurrent</code>. Never mention raw <code>Thread</code> unless asked about legacy code. Speak fluently about thread pool sizing (Amdahl's Law, Little's Law), CAS algorithms, and non-blocking I/O.</p>
+            </div>
+            <div class="follow-up-box">
+                <h3>🎯 Interviewer Follow-Up Questions</h3>
+                <p><strong>Trap Question:</strong> "Does CompletableFuture create its own thread pool? Which pool does it use by default?"</p>
+                <p><strong>Answer:</strong> By default, if you don't pass an explicit Executor, <code>CompletableFuture.supplyAsync()</code> uses <code>ForkJoinPool.commonPool()</code>. This can be disastrous in production if tasks perform blocking I/O, as the common pool is sized to the number of CPU cores. A few blocking tasks will stall the entire application. Always pass a custom I/O-optimized executor.</p>
+
+                <p><strong>Trap Question:</strong> "shutdown() vs shutdownNow() on an ExecutorService?"</p>
+                <p><strong>Answer:</strong> <code>shutdown()</code> rejects new tasks but allows currently executing and queued tasks to finish gracefully. <code>shutdownNow()</code> attempts to cancel running tasks (via thread interrupts) and returns a list of tasks that were queued but never started.</p>
+            </div>
+        </section>
+
+        <section id="pillar-6">
+            <h2>PILLAR 6: Trade-offs & When NOT To Use It</h2>
+            <p><strong>Trade-off:</strong> Using heavy concurrency frameworks (like ForkJoinPool) for simple tasks incurs massive overhead. If a task takes less than a few milliseconds, the overhead of dispatching it to a thread pool and synchronizing the result outstrips the benefit of parallelization. Measure before applying concurrency.</p>
+        </section>
+    </main>
+</body>
+</html>

@@ -356,365 +356,6 @@ Trade copy = original.deepCopy();
 This is the exact style of OOP reasoning interviewers expect in trading and risk coding rounds.
 
 ---
-````markdown
-# Java Interview Prep Runbook
-
-**Level:** 1-3 yrs experience | **Format:** Interviewer-driven, question-first
-
-**Status legend:** ✅ Done | ⏳ In progress | ⬜ Not started
-
----
-
-## Roadmap
-
-| Module | Status |
-|---|---|
-| 1. Core Language Basics (access modifiers, var/final, classes, interfaces, constructors) | ✅ Done |
-| 1b. Core Language Extras (wrapper classes/autoboxing pitfalls, StringBuilder vs StringBuffer, enums, varargs, try-with-resources/AutoCloseable, custom exceptions, serialVersionUID/transient) | ✅ Done |
-| 1c. Precision & I/O Extras (BigDecimal vs double/float for financial calcs — String constructor, equals() vs compareTo() scale gotcha; Java I/O basics — File, BufferedReader/Writer, NIO vs classic IO) | ⏳ Partial (BigDecimal fully done; Java I/O still open) |
-| 2. OOP Fundamentals (polymorphism compile-time vs runtime, overloading vs overriding, static vs dynamic binding, super, composition vs inheritance, cloning shallow/deep) | ✅ Done |
-| 3. Object Contracts (equals/hashCode/Comparable/Comparator) | ✅ Done |
-| 4. Collections Framework (+ HashMap internals: buckets/load factor/resizing/treeification, TreeMap/TreeSet, Iterator vs ListIterator, fail-fast vs fail-safe, ConcurrentModificationException) | ⏳ Partial (ArrayList vs LinkedList, HashMap internals, fail-fast/fail-safe, hierarchy done) |
-| 5. Generics | ✅ Done |
-| 6. Streams & Functional Programming (+ Optional, method references x4 types, Collectors: groupingBy/partitioningBy/joining) | ✅ Done |
-| 7. Exception Handling | ✅ Done |
-| 8. Multithreading & Concurrency (+ wait/notify/notifyAll, thread lifecycle states, ConcurrentHashMap internals, producer-consumer, brief CompletableFuture) | ✅ Done (minor gaps flagged) |
-| 9. Memory & JVM (+ heap structure young/old gen, GC algorithms overview, class loading process, JVM vs JRE vs JDK) | ✅ Done |
-| 10. Coding Rounds | ⏳ Ongoing (interleaved) |
-| 11. Modern Java Features (var, switch expressions, text blocks, records, sealed classes, java.time — LocalDate/LocalDateTime/Duration/Period vs old Date/Calendar) | ⬜ Not started |
-| 12. Common Design Patterns (Singleton incl. thread-safe variants, Factory, Builder, Observer) | ⬜ Not started |
-| 13. Build Tools (Maven vs Gradle basics — requested as a lightweight future addition, not core Java but comes up in interviews) | ⬜ Not started |
-| 14. SOLID Principles (with Java examples — commonly asked design-theory question, not language syntax) | ⬜ Not started |
-
-**Noted but deliberately NOT added as roadmap modules — large enough to be their own separate future prep track (like the React prep track), once core Java is solid:** JUnit/Mockito (testing), JDBC basics (raw DB connectivity, connection pooling), Spring/Spring Boot (DI, @Autowired, bean lifecycle, REST controllers — directly relevant to his target backend/full-stack roles), Hibernate/JPA (ORM, @Entity, lazy vs eager loading — connects to equals/hashCode-with-proxies issues covered in Module 3). Flagged in the same spirit as Maven/Gradle: adjacent to Java interviews but not core language.
-
----
-
-## Module 2 — OOP Fundamentals (In Progress)
-
-
-**Note:** interface vs abstract class was covered in an earlier session and logged inside Module 3's notes below (see "Interface vs Abstract Class" discussion referenced there) — not duplicated here.
-
-### Q1. Method overloading vs overriding
-
-**My answer:** "Method Overloading is the java feature that allows programmer to create or write functions with same name but with different parameters, and is resolved at compile time. Method Overriding occurs in java when child class defines java method which are already implemented in the parent class using the @Override annotations, and is resolved at runtime" — both correct.
-
-**Added precision:**
-- Overloading requires different parameter **count or type** (or order) — changing ONLY the return type is not enough to overload (compile error: "same signature, only return type differs").
-- Overriding requires the exact same signature (name + params) and same/covariant return type. `@Override` is optional but strongly recommended — catches accidental typos that would otherwise silently create a new unrelated method instead of overriding.
-- Overloading resolved at compile time (based on arguments at the call site); overriding resolved at runtime via dynamic method dispatch (based on the actual object type, not the reference type).
-
-**Quick interface vs abstract class revision table (requested):**
-
-| | Interface | Abstract class |
-|---|---|---|
-| Methods | public abstract by default (+default/static since Java 8) | Mix of abstract + concrete |
-| Fields | Only public static final constants | Any instance fields |
-| Constructors | Never | Yes (runs via subclass super()) |
-| Inheritance | Class can implement multiple | Class can extend only one |
-| Method access modifiers | Always public | Any (private/protected/public) |
-| Use when | Defining a capability/contract | Sharing common state + strong is-a relationship |
-
----
-
-### Trap Questions — "Looks Like Overriding But Isn't" (self-requested MCQ-style practice)
-
-**Q2. Static methods and "method hiding"**
-
-**Scenario:** `Animal` and `Dog` both declare `static void makeSound()`. Called via `Animal a = new Dog(); a.makeSound();`.
-
-**My first answer:** "Dog bark... animal object reference is pointing to Dog object" — incorrect, applied instance-method (dynamic dispatch) logic to a static method.
-
-**Correction:** Prints **"Animal sound"**. Static methods are NOT polymorphic — resolved by the **declared/reference type** (`Animal`), not the actual object type (`Dog`). This is called **method hiding**, not overriding. Static methods have no dynamic dispatch since they're not truly "called on an object."
-
-**Follow-up — same code but `Dog a = new Dog(); a.makeSound();`?**
-
-**My answer:** "Dog bark" — correct. Confirms understanding: reference type alone decides for static methods, actual object type is irrelevant.
-
----
-
-**Q3. Overriding + checked exceptions**
-
-**Scenario:** `Animal.makeSound() throws IOException`; can `Dog`'s override declare `throws FileNotFoundException` (subclass of IOException)? What about `throws SQLException` (unrelated)?
-
-**My answer:** "it must need[s] to be compiled as we are just providing another concrete implementation... can throw different exceptions" — incorrect; assumed overriding permits any exception freely.
-
-**Correction — actual rule:** an overriding method's checked exceptions must be the SAME, a SUBCLASS (narrower), or NONE compared to the parent's declared exceptions — never a new/unrelated or broader checked exception.
-- `throws FileNotFoundException` (subclass of IOException) → ✅ compiles.
-- `throws SQLException` (unrelated) → ❌ compile error.
-- **Why:** preserves the caller's contract — code catching `IOException` (per Animal's declared contract) must be guaranteed to catch whatever the actual object (even if it's a Dog) throws. Only applies to CHECKED exceptions — overrides can throw any unchecked exception freely regardless of the parent's declaration.
-
-**Follow-up — if `Animal.makeSound()` declares NO throws clause, can Dog's override declare `throws IOException`?**
-
-**My answer:** "No" — correct on the strictest edge case of the same rule (zero declared exceptions = narrowest possible contract, override can't add any).
-
----
-
-**Q4. Private methods — no inheritance, no overriding**
-
-**Scenario:** `Animal.makeSound()` is `private`, called internally by `Animal.callSound()`. `Dog` declares its own private `makeSound()` (same name). Called via `Animal a = new Dog(); a.callSound();` — what prints?
-
-**My answer:** correctly traced that `callSound()` itself isn't overridden by Dog so Animal's version runs, but didn't initially address what happens to the `makeSound()` call inside it.
-
-**Correction/explanation:** Prints **"Animal sound"**. `Dog.makeSound()` is NOT overriding `Animal.makeSound()` at all — `private` methods are never inherited, so `Dog`'s version is a completely independent, unrelated method that just happens to share a name. Inside `Animal.callSound()`, the call to `makeSound()` is resolved at compile time directly to `Animal`'s own private method — no dynamic dispatch occurs, because private methods don't participate in polymorphism at all (different mechanism than static-method hiding, same "no dynamic dispatch" outcome).
-
-**Follow-up — would `@Override` on Dog's private makeSound() even compile?**
-
-**My answer:** "no" — correct. `@Override` forces the compiler to verify a real override relationship exists; since the private parent method isn't inherited, there's nothing to override, so this is a compile error. Practical value: `@Override` would catch this exact trap immediately.
-
-**Status: 4 trap questions asked, 4 correctly resolved after initial correction (static hiding, exception widening, exception on zero-throws parent, private method non-inheritance).** Strong grasp of "true polymorphism" boundaries.
-
----
-
-### Q5. Composition vs inheritance ("has-a" vs "is-a")
-
-**Scenario:** `Car extends Engine` vs `Car { private Engine engine; }` — which fits?
-
-**My answer:** "Inheritance lets you get in all the methods and fields inside the base class... reusing. Composition lets you make a new class... using some methods for fields from that class not providing extra implementation" — described the mechanics correctly but didn't identify which one is actually correct for the scenario, or why.
-
-**Correction:** **Composition is correct here** — `Car extends Engine` is a design mistake ("inheritance abuse") since a Car is NOT a type of Engine; it HAS one. **The test:** does "X is a type of Y" hold logically? → inheritance. Does "X has a Y" fit better? → composition.
-
-**Practical downsides of forcing inheritance where composition belongs:**
-1. Tight coupling — inherits everything, including irrelevant behavior.
-2. Single inheritance limit — Java allows extending only one class; composition has no such limit (can hold refs to many objects).
-3. Fragile base class problem — parent implementation changes can silently break subclasses.
-
-**Design principle cited:** "favor composition over inheritance" (Gang of Four).
-
-**Re-done with finance domain examples (per request, no animal/car analogies):**
-- **Inheritance (genuine is-a):** `FixedCouponNote extends Security`, `DualRangeAccrual extends Security` — both genuinely ARE types of Security, sharing core identity (ISIN, face value) and behavior contract (accrued interest).
-- **Composition (has-a, wrongly tempting as inheritance):** `Trade` holds references to `Security`, `Counterparty`, `SettlementInstruction` — a Trade is NOT a type of Security, it references one alongside other components. Also solves the multi-reuse problem inheritance can't (needing 3 unrelated "parent" types simultaneously).
-
-**Follow-up check — Manager vs Employee, is-a or has-a?**
-
-**My answer:** "Inheritance" — correct. Manager genuinely is-a specialized Employee (shares core attributes, adds behavior like approveLeave()).
-
----
-
-### Q6. Shallow vs deep copy
-
-**Scenario:** `Trade` has-a `Security` reference (composition). Shallow copy `Trade` — what happens to the `Security` reference? What would deep copy do differently?
-
-**My answer:** "shallow creates a[n] object but the reference is still pointed to the original object... only the reference variable is changed, the address it stores is still of the original one... Trade has a relationship with Security so if we create a shallow copy of trade[,] still trade points to the existing security object" — fully correct, no corrections needed.
-
-**Confirmed + expanded:**
-```java
-Trade shallowCopy = original.clone(); // new Trade object, but underlyingSecurity is the SAME reference
-shallowCopy.getUnderlyingSecurity().faceValue = 5000000; // mutates original's Security too!
-```
-**Deep copy:** recursively creates new copies of every mutable referenced object:
-```java
-copy.underlyingSecurity = new Security(this.underlyingSecurity); // independent object
-```
-**When each is appropriate:** shallow is fine/cheaper when referenced objects are immutable (no mutation risk). Deep copy needed when referenced objects are mutable and true independence is required.
-
-**Applied check — trade simulation feature where an analyst adjusts terms without affecting the live trade — shallow or deep?**
-
-**My answer:** "deep" — correct, with the right reasoning implied: mutation during simulation must never leak back into the live trade.
-
----
-
-### Q7. The `super` keyword — accessing shadowed fields and explicit parent method calls
-
-**Scenario:** `Security.faceValue = 1000`; `FixedCouponNote extends Security` with its own `faceValue = 2000` (field shadowing, not overriding). Inside FCN's `printDetails()`: how to access parent's faceValue, and what does `super.printDetails()` call?
-
-**My answer:** "we need to have the super.faceValue... super.printDetails() will call the Security one's" — both correct on first attempt.
-
-**Confirmed:**
-```java
-System.out.println(super.faceValue);  // 1000 — parent's shadowed field
-super.printDetails();                 // explicitly calls Security's printDetails(), bypassing override
-```
-Key nuance: inside `Security.printDetails()` (even when invoked via super from an FCN instance), `faceValue` refers to `Security`'s OWN field — fields are resolved by which class's code is executing, not by the actual object type.
-
-**Follow-up — 3 self-posed queries on field/method resolution across reference types (excellent, high-value trap):**
-
-1. `FixedCouponNote note = new FixedCouponNote(); note.faceValue` → **2000** (reference type = object type, no ambiguity).
-2. `Security s = new FixedCouponNote(); s.faceValue` vs `s.printDetails()` → **THE TRAP:** `s.faceValue` → **1000** (fields resolved by REFERENCE type, just like static methods — fields are NEVER polymorphic in Java, "hidden" not "overridden"). `s.printDetails()` → **"FCN face value: 2000"** (methods ARE resolved by ACTUAL OBJECT type — true dynamic dispatch). This is one of Java's most commonly tested gotchas: fields hide, only overridden instance methods get true runtime polymorphism.
-3. `Security s = new Security(); s.faceValue` → **1000**, no ambiguity (reference type = object type).
-
-**Core rule locked in:** fields and static methods → resolved by declared/reference type. Only overridden instance methods → resolved by actual runtime object type.
-
-**Module 2 status: ✅ COMPLETE** — overloading vs overriding, 4 overriding-trap questions (static hiding, checked exception widening, private method non-inheritance), composition vs inheritance (finance-domain examples), shallow vs deep cloning, super keyword + field-hiding trap (self-discovered via own follow-up queries — genuinely strong independent reasoning).
-
----
-
-### Finance-domain OOP implementation drill (interviewer-style)
-
-This is the practical OOP layer used in trading/finance interviews: the goal is not just to define theory, but to model a real `Security` / `Trade` design and answer the traps that show up in live rounds.
-
-```java
-import java.math.BigDecimal;
-import java.time.LocalDate;
-
-abstract class Security {
-    private final String isin;
-    protected BigDecimal faceValue;
-
-    public Security(String isin, BigDecimal faceValue) {
-        this.isin = isin;
-        this.faceValue = faceValue;
-    }
-
-    public String getIsin() { return isin; }
-    public BigDecimal getFaceValue() { return faceValue; }
-
-    public void printDetails() {
-        System.out.println("Security: " + isin + ", faceValue=" + faceValue);
-    }
-
-    public abstract BigDecimal calculateAccruedInterest(LocalDate asOfDate);
-
-    public static void printMarketType() {
-        System.out.println("Security market type");
-    }
-}
-
-class FixedCouponNote extends Security {
-    private final BigDecimal couponRate;
-
-    public FixedCouponNote(String isin, BigDecimal faceValue, BigDecimal couponRate) {
-        super(isin, faceValue);
-        this.couponRate = couponRate;
-    }
-
-    @Override
-    public BigDecimal calculateAccruedInterest(LocalDate asOfDate) {
-        return faceValue.multiply(couponRate)
-                .divide(BigDecimal.valueOf(100), 4, java.math.RoundingMode.HALF_UP);
-    }
-
-    public BigDecimal calculateAccruedInterest(LocalDate asOfDate, BigDecimal dayCountFraction) {
-        return calculateAccruedInterest(asOfDate).multiply(dayCountFraction);
-    }
-
-    @Override
-    public void printDetails() {
-        System.out.println("FixedCouponNote: " + getIsin() + ", faceValue=" + faceValue);
-    }
-
-    public static void printMarketType() {
-        System.out.println("Fixed Coupon Note market type");
-    }
-}
-
-class Counterparty {
-    private final String name;
-    public Counterparty(String name) { this.name = name; }
-    public String getName() { return name; }
-}
-
-class SettlementInstruction {
-    private final String settlementDate;
-    public SettlementInstruction(String settlementDate) { this.settlementDate = settlementDate; }
-    public String getSettlementDate() { return settlementDate; }
-}
-
-class Trade {
-    private final Security security;
-    private final Counterparty counterparty;
-    private final SettlementInstruction settlementInstruction;
-    private final BigDecimal notional;
-
-    public Trade(Security security, Counterparty counterparty,
-                SettlementInstruction settlementInstruction, BigDecimal notional) {
-        this.security = security;
-        this.counterparty = counterparty;
-        this.settlementInstruction = settlementInstruction;
-        this.notional = notional;
-    }
-
-    public Security getSecurity() { return security; }
-    public Counterparty getCounterparty() { return counterparty; }
-    public BigDecimal getNotional() { return notional; }
-
-    public Trade deepCopy() {
-        Security copiedSecurity = new FixedCouponNote(
-                this.security.getIsin(),
-                this.security.getFaceValue(),
-                new BigDecimal("5.25")
-        );
-        Counterparty copiedCounterparty = new Counterparty(this.counterparty.getName());
-        SettlementInstruction copiedInstruction =
-                new SettlementInstruction(this.settlementInstruction.getSettlementDate());
-
-        return new Trade(copiedSecurity, copiedCounterparty, copiedInstruction, this.notional);
-    }
-}
-```
-
-**Why this is interview-relevant:**
-- `Security` is an abstract base class: common behavior and contract for all securities.
-- `FixedCouponNote extends Security`: genuine `is-a` relationship.
-- `Trade` uses composition: it `has-a` `Security`, `Counterparty`, and `SettlementInstruction` — not a kind of security.
-- `calculateAccruedInterest(...)` is overridden in the subclass with the same method signature.
-- `calculateAccruedInterest(...)` with an extra `dayCountFraction` parameter is an overloaded method, not an override.
-- `super(isin, faceValue)` initializes parent state from the subclass constructor.
-
-**Typical interview Qs and expected answers:**
-
-**Q1. Inheritance or composition?**
-- `Trade` is composition, not inheritance.
-- A trade `has-a` security, counterparty, and settlement instruction — it is not a type of `Security`.
-
-**Q2. What is method overloading here?**
-```java
-public BigDecimal calculateAccruedInterest(LocalDate asOfDate)
-public BigDecimal calculateAccruedInterest(LocalDate asOfDate, BigDecimal dayCountFraction)
-```
-- Same method name, different parameter list.
-- Different signatures => compile-time overload resolution.
-
-**Q3. What is method overriding here?**
-```java
-@Override
-public BigDecimal calculateAccruedInterest(LocalDate asOfDate) { ... }
-```
-- Same method signature as parent.
-- Runtime polymorphism: if the object is a `FixedCouponNote`, the child version executes.
-
-**Q4. Why is `Security.printMarketType()` not overridden by `FixedCouponNote.printMarketType()`?**
-- Because both are `static` methods.
-- Static methods are resolved by the reference type, not the actual object type.
-- This is method hiding, not overriding.
-
-**Q5. What does `super(...)` do here?**
-```java
-public FixedCouponNote(String isin, BigDecimal faceValue, BigDecimal couponRate) {
-    super(isin, faceValue);
-    this.couponRate = couponRate;
-}
-```
-- Calls the parent constructor to initialize shared state.
-- Mandatory when the parent has an explicit constructor.
-
-**Q6. How is deep copy different from shallow copy in this model?**
-```java
-Trade original = ...;
-Trade copy = original.deepCopy();
-```
-- A shallow copy would reuse the same `Security` reference.
-- A deep copy creates new objects for the mutable references, preventing simulation changes from mutating the original dataset.
-- In finance, deep copy is commonly used for pricing and analyst simulation work.
-
-**Q7. Why is `Trade` not `extends Security`?**
-- Because a trade is not a security; it references one.
-- This is the standard design signal: use composition when the relationship is `has-a`, not `is-a`.
-
-**Q8. Can a private parent method be overridden?**
-- No.
-- Private methods are not inherited, so the child method is a separate method with the same name, not an override.
-
-**Expected takeaway:**
-- inheritance for genuine `is-a` relationships like `FixedCouponNote extends Security`
-- composition for `has-a` relationships like `Trade` containing `Security`, `Counterparty`, and `SettlementInstruction`
-- override for runtime polymorphism
-- static methods and fields for reference-type resolution
-- deep copy for simulation safety
-
-This is the exact style of OOP reasoning interviewers expect in trading and risk coding rounds.
-
----
 
 ## Module 3 — Object Contracts (In Progress)
 
@@ -977,6 +618,365 @@ Traced through with `{3, 7, 2, 9, 4}` → correctly returns `9`.
 - **Practical takeaway:** overhead is real but small/usually irrelevant for typical business logic; matters mainly in performance-critical hot paths over very large volumes, where a well-written loop can outperform a Stream. Good interview framing: readability/correctness usually outweighs this small cost in everyday code.
 
 ---
+
+### Q8. Stream laziness — intermediate vs terminal operations
+
+**My answer:** "intermediate operations are stream operations that return another stream... terminal operations return a value or result... forEach is a terminal operation that prints each element of the stream" — correct.
+
+**Confirmed:** intermediate operations (filter/map/sorted) return a new Stream, allowing chaining. Terminal operations (forEach/collect/count) trigger the pipeline execution and produce a final result. After a terminal operation, the stream is considered consumed/closed.
+
+**Key point — why not execute every operation eagerly? **
+
+**My answer:** "that would be a waste if we are filtering and mapping and then collecting... if any intermediate operation is empty then no point in executing the remaining ones" — correct.
+
+**Confirmed:** eager execution would waste CPU and memory, especially on large data. Lazy execution means each element flows through the pipeline, and operations only execute as needed. This also naturally supports infinite streams (like `Stream.generate()`), which would be impossible with eager evaluation.
+
+---
+
+### Q1(streams). `Optional` — replacing null-return patterns
+
+**Task:** Rewrite `findEmployeeById()` to return `Optional<Employee>`; caller uses `.map()`/`.orElse()` instead of `isPresent()`/`get()`.
+
+**My answer:** Needed the mechanics built from scratch — didn't know `Optional.ofNullable()` etc.
+
+**Concept:**
+```java
+public Optional<Employee> findEmployeeById(int id) {
+    return Optional.ofNullable(database.lookup(id));
+}
+String name = findEmployeeById(5).map(Employee::getName).orElse("Unknown Employee");
+```
+- `Optional.of(value)` — throws NPE immediately if null (fails fast).
+- `Optional.ofNullable(value)` — safely wraps null-or-value.
+- `Optional.empty()` — explicit empty.
+- `.map()` only runs its transform if a value is present — no NPE risk. `.orElse()` unwraps with a fallback.
+- Old-style `isPresent()`/`get()` works but doesn't leverage what Optional is for — interviewers look for `.map()`/`.orElse()`/`.filter()` chaining instead.
+
+**Follow-up — `orElseThrow()` vs `orElse()` vs `orElseGet()`?**
+
+**My answer:** "orElse is used for throwing an exception" (meant orElseThrow) "...orElse is if the value is null then we have to return the fallback value... orElseGet returns a Supplier function... the basic difference... if it is a value then even if we add a Supplier function to it... that supplier function will not even run" — **fully correct**, sharp answer on eager vs lazy evaluation, no corrections needed.
+
+**Confirmed:**
+- `orElseThrow(supplier)` — throws the supplied exception if empty; no-arg version throws `NoSuchElementException`.
+- `orElse(value)` — value is **eagerly evaluated always**, even when Optional has a value present (wasteful for expensive fallbacks).
+- `orElseGet(supplier)` — supplier only **invoked if empty** — lazy, preferred whenever the fallback involves real computation/DB calls/etc.
+- **Rule of thumb:** `orElse()` for cheap/literal fallbacks; `orElseGet()` for anything with real cost.
+
+---
+
+### Q2(streams). Method references — 4 types, and a deep lambda/functional-interface rebuild
+
+**Task:** name the 4 types of method references.
+
+**My answer:** didn't know — requested full explanation, then asked for a ground-up rebuild of lambda syntax and functional interfaces (genuinely thorough detour, well worth it).
+
+**4 types explained:**
+1. **Static** — `ClassName::staticMethod` (e.g. `Integer::parseInt`) ≡ `s -> Integer.parseInt(s)`
+2. **Particular instance** — `object::instanceMethod` (e.g. `System.out::println`) ≡ `x -> System.out.println(x)`
+3. **Arbitrary instance of a type** — `ClassName::instanceMethod` (e.g. `String::length`, and our earlier `Employee::getName`) ≡ `s -> s.length()` — the stream element itself becomes the object the method is called on.
+4. **Constructor** — `ClassName::new` (e.g. `Employee::new`) ≡ `() -> new Employee()` or `name -> new Employee(name)` depending on constructor signature.
+
+**Deep detour — lambda/functional-interface fundamentals rebuilt from scratch (my own request, "too much confusion"):**
+
+- **`() ->` clarified:** empty parens mean "this lambda takes zero arguments" — not a special call syntax, just an empty parameter list, same concept as any method's parameter list.
+- **Functional interface clarified:** an interface with exactly one abstract method; a lambda IS the implementation body for that one method. The lambda's parameter shape must match the interface method's shape.
+- **4 core functional interfaces laid out with signatures:** `Supplier<T> { T get(); }` (0 in, 1 out), `Consumer<T> { void accept(T t); }` (1 in, 0 out), `Function<T,R> { R apply(T t); }` (1 in, 1 out/transform), `Predicate<T> { boolean test(T t); }` (1 in, boolean out).
+- **My misconception 1:** thought `giveMeFive.get()` was called with `{}` — corrected: called with `()`, ordinary method-call syntax like any other.
+- **My misconception 2:** thought lambdas for Consumer/Function/Predicate don't create an object ("we don't always have to make an object, we use it everywhere") — corrected: EVERY lambda creates a real object (an anonymous class instance implementing that functional interface) — the difference is just whether it's assigned to a named variable or passed inline/anonymously (which is the common case, creating the "no object" illusion). Directly ties back to the earlier anonymous-class-vs-lambda discussion in Module 1.
+- **My minor terminology slip:** said "declaring the get method" — corrected to "providing the implementation body for" get() (the interface already declares the method; the lambda supplies its behavior).
+- **Final confirmation exercise — `list.stream().filter(e -> e.getSalary() > 50000)`:** correctly identified as a `Predicate<Employee>`; confirmed `.filter()` calls `.test(e)` once per element, keeping elements where it returns true.
+
+**Applied check — `list.stream().map(Employee::new)` for `List<String>` names, `Employee(String name)` constructor — which type, what does it produce?**
+
+**My answer:** recapped the reference-type-to-lambda chain conceptually but didn't directly answer which type/what it produces — answered directly: **Type 4 (constructor reference)**, equivalent to `name -> new Employee(name)`, a `Function<String, Employee>` — transforms `Stream<String>` into `Stream<Employee>`.
+
+**Process feedback from Sudhanshu (important, corrected):** flagged that sessions have been too concept-heavy and too light on actual hands-on coding — bank interviews (Barclays/Citi/MasterCard) often hand a blank editor and ask for live implementation (write a class, an abstract class, a functional/marker interface, use Streams/Lambdas to solve a concrete problem), not just verbal explanation. **Going forward: shift toward more coding exercises, not just concept Q&A**, especially for Streams/Collectors and future modules.
+
+### Q3(streams). Collectors — groupingBy with a downstream collector (coding exercise, finance-domain)
+
+**Task:** Given a `List<Trade>` (counterparty, security, notional fields), write Stream code producing `Map<String, Double>` of total notional per counterparty.
+
+**My attempt:**
+```java
+Collectors.groupingBy(
+    trade -> trade.notional,
+    trade -> trade.counterParty
+)
+```
+Also correctly noted beforehand: no `public` needed on the constructor (package-private is fine here), and `List.of()` creates an immutable list. Asked what `->` means (recapped: lambda arrow, `(param) -> result`, same syntax as any method).
+
+**Correction:** classifier and downstream arguments were swapped, and the second argument was structurally wrong — a raw lambda alone isn't a valid downstream collector.
+
+**Correct solution:**
+```java
+Map<String, Double> totalByCounterparty = trades.stream()
+    .collect(Collectors.groupingBy(
+        trade -> trade.counterparty,                        // classifier: group BY this
+        Collectors.summingDouble(trade -> trade.notional)   // downstream: SUM this per group
+    ));
+// {"Barclays": 5500000.0, "Citi": 2500000.0}
+```
+**Explained:** `groupingBy(classifier, downstream)` — first arg answers "group by what," second arg (a proper Collector like `summingDouble`, `counting`, `toList`) answers "what to do with each group's elements" — default downstream (if omitted) is collecting each group into a `List`.
+
+**Follow-up exercise given (not yet attempted — session paused to update runbook first):** modify the above to produce `Map<String, Long>` — COUNT of trades per counterparty instead of sum of notional (hint toward `Collectors.counting()` as the downstream, not yet revealed).
+
+### Q4(streams). Collectors — counting(), classifier vs downstream reasoning, and full categorized reference
+
+**My follow-up attempt (Map<String, Long> count per counterparty):**
+```java
+Collectors.groupingBy(
+    trade :: counterParty,
+    Collectors.counting()
+)
+```
+Correctly guessed `Collectors.counting()` unprompted — good instinct. **Bug in both this and the earlier summingDouble attempt:** used `::` (method reference operator) to access a plain field — invalid. `::` only works for actual METHODS; field access always requires a lambda (`trade -> trade.counterparty`), never `trade :: counterparty`. Corrected both snippets to use lambdas; otherwise fully correct (right classifier, right downstream for each case, correctly noted `counting()` takes no arguments since it just counts group size).
+
+**My reasoning on why the counterparty-only version doesn't need Trade's equals/hashCode:** "we are not telling to apply distinct on the stream itself [Trade stream]... map already transformed the stream" — fully correct, well explained.
+
+**Confirmed:** `.distinct()` operates on WHATEVER TYPE currently flows through the pipeline at that point — after `.map(trade -> trade.counterparty)`, the stream is `Stream<String>`, and String already has proper equals()/hashCode() built in (content-based). Only if you called `.distinct()` directly on `Stream<Trade>` (no prior map) would Trade's own equals()/hashCode() matter — and internally `.distinct()` uses a HashSet-like mechanism (hashCode narrows bucket, equals confirms match) — the exact same two-stage pattern from Module 4's HashMap internals.
+
+---
+
+### Q6(collections). Fail-fast vs fail-safe iterators, ConcurrentModificationException
+
+**Scenario:** for-each loop over an `ArrayList` calling `list.remove(s)` mid-iteration — what happens?
+
+**My answer:** focused on the list being mutable (correct but not the actual issue) — missed that removing during for-each iteration is the real problem, regardless of mutability.
+
+**Correction:** throws **`ConcurrentModificationException`**. Mechanism ("fail-fast"): `ArrayList`'s iterator tracks `modCount`, incremented on every **structural** modification (add/remove/clear — NOT set()). Iterator snapshots `modCount` at creation; each `it.next()` call checks it still matches; a mismatch (from modifying the list directly, bypassing the iterator) throws the exception immediately.
+
+**Correct removal pattern:**
+```java
+Iterator<String> it = list.iterator();
+while (it.hasNext()) {
+    String s = it.next();
+    if (s.equals("b")) it.remove(); // keeps modCount in sync, no exception
+}
+```
+
+**Follow-up — would `list.set(0, "z")` during iteration also throw?**
+
+**My answer:** "if the existing value is changed there will be no effect on the mod count... it will behave as normal" — fully correct, no corrections needed. `set()` doesn't change list size, so it's not a structural modification, `modCount` untouched.
+
+**Fail-safe collections (the other half) — explained:**
+`CopyOnWriteArrayList` — every write creates an entirely new backing array; existing iterators keep iterating the old snapshot, so no exception is ever thrown. Trade-off: expensive per-write copying, and iteration may show stale data (doesn't reflect concurrent changes). Best for many-reads/rare-writes scenarios (e.g. event listener lists).
+
+**Follow-up — which is genuinely "safer," fail-fast or fail-safe, and why is "fail-safe" a bit of a misleading name?**
+
+**My answer:** "I will consider the fail[-fast] as the safer... because fail-safe work[s] silently... on the stale snapshot[s]" — correct, right reasoning: fail-fast surfaces the bug loudly and immediately (impossible to ignore); fail-safe hides the underlying problem by silently operating on stale data, which can cause harder-to-trace bugs in production. "Fail-safe" only means "doesn't throw an exception," not "handles the situation correctly."
+
+**My question — collection hierarchy: does everything need Iterator to add/remove; does ArrayList "extend" Iterator?**
+
+**My answer:** somewhat confused — implied all add/remove needs an iterator, and that classes "extend" Iterator up a hierarchy.
+
+**Correction:**
+- `Iterator.remove()` is required ONLY when removing **during active iteration** — regular `list.add()`/`list.remove()` outside iteration need no iterator at all.
+- Hierarchy: `Iterable` (top, has `iterator()`) → `Collection` (extends Iterable, adds add/remove/size) → `List`/`Set`/`Queue` → concrete classes (`ArrayList`, `HashSet`, etc.).
+- `Iterator` is a **separate small interface** (`hasNext()`, `next()`, `remove()`) — collections **implement `Iterable`** and their `iterator()` method **produces/returns** an `Iterator` object; they don't "extend" `Iterator` itself. The returned `Iterator` object (not the list) tracks position and `modCount`.
+
+### Q7(collections). Iterator vs ListIterator
+
+**My answer:** didn't know initially — explained from scratch.
+
+**Concept:** plain `Iterator` — forward-only, `hasNext()`/`next()`/`remove()`. `ListIterator extends Iterator`, adds `hasPrevious()`/`previous()`/`nextIndex()`/`previousIndex()`/`set(e)`/`add(e)` — bidirectional traversal plus safe mutation (replace/insert) during iteration, which plain `Iterator` can't do at all. Only available on `List` implementations, not `Set`/`Map` (no stable index/previous-direction concept there).
+
+**My follow-up confusion:** thought `listIterator()` was a "conversion" from a plain `Iterator`, chained after calling `iterator()`.
+
+**Correction:** `iterator()` and `listIterator()` are two **separate, independent methods** on `List` — you call `listIterator()` directly on the list, not by converting an existing `Iterator`.
+
+**My follow-up question — can a ListIterator be assigned to an `Iterator` reference variable?**
+
+**Answer:** Yes (legal upcasting, `ListIterator extends Iterator`) — `Iterator<String> it = list.listIterator();` compiles fine. But then only `Iterator`'s own methods (`hasNext()`/`next()`/`remove()`) are callable on `it` — calling `it.previous()` is a **compile error**, since the reference type (`Iterator`) doesn't declare it, even though the actual object is a full `ListIterator`. Directly ties back to the Module 2 field/method-resolution-by-reference-type principle (`Security s = new FixedCouponNote()`) — same rule, applied here to interface method availability rather than field shadowing. Confirmed understood.
+
+**Module 4 status: HashMap internals ✅, fail-fast/fail-safe iterators ✅, collection hierarchy ✅ (corrected: Collection is an interface not a class; hasNext/next/remove belong to a separate Iterator object returned by iterator(), not implemented directly by the collection class itself), Iterator vs ListIterator ✅. Still open: TreeMap/TreeSet (red-black tree ordering, Comparable/Comparator requirement) — explicitly deferred by Sudhanshu for a later session.**
+
+---
+
+## Module 5 — Generics (Done)
+
+### Q5. Why generics exist
+
+**My answer:** "Before generics, we need to explicitly typecast the elements to read them and also sometimes we don't know the return type so generics is used to adapt as the return type"
+
+**Correction:** Core motivation is **compile-time type safety**, not flexible return types (that's a side benefit). Pre-generics, `List` stored `Object` — no compile-time checks (`list.add(42)` into a string list compiled fine, failed at runtime as `ClassCastException`), and required manual casting on every retrieval. Generics let the compiler catch type errors at compile time and eliminate casts.
+
+### Q6. Type erasure
+
+**My answer:** Didn't know.
+
+**Concept:** Generic type info exists only at compile time. At runtime, the JVM erases generics, replacing them with their bound (usually `Object`). `List<String>` becomes raw `List` in bytecode. **Reason:** backward compatibility with pre-Java-5 code.
+
+**Consequences:**
+- Can't do `new T[10]` (JVM doesn't know T at runtime)
+- Can't overload methods differing only by generic type param (same erased signature)
+- `instanceof List<String>` doesn't compile; `instanceof List<?>` does
+- This is *why* the classic raw-type ArrayList bug throws `ClassCastException` at runtime instead of failing at compile time
+
+### Q7. Bounded types — `<T extends Comparable<T>>`
+
+**My answer (after explanation, with follow-up questions):** Confirmed understanding — `extends` here means "must implement" (works for interfaces too, not just class inheritance). The bound is a *promise* enforced by the compiler that whatever type is substituted for T has already implemented `compareTo()` — either by Java itself (String, Integer) or by the developer (custom classes like Employee).
+
+**Also clarified:** `Comparable`/`Comparator` distinction (see Module 3, Q3).
+
+### Coding Exercise — generic `findMax`
+
+**Final correct answer (self-written):**
+```java
+public static <T extends Comparable<T>> T findMax(T[] array) {
+    T max = array[0];
+    for (T item : array) {
+        if (item.compareTo(max) > 0) {
+            max = item;
+        }
+    }
+    return max;
+}
+```
+Traced through with `{3, 7, 2, 9, 4}` → correctly returns `9`.
+
+---
+
+## Module 6 — Streams & Functional Programming (Partial)
+
+**Process note (self-flagged by Sudhanshu):** he correctly observed the session had jumped into Stream internals (laziness, Optional, method references) without first covering the foundational "what is a Stream / what problem does it solve" layer. Retroactively addressed below — going forward, every new topic should follow: (1) what is it, (2) what problem does it solve, (3) how it works internally, (4) traps/gotchas.
+
+### Q0(streams). What is a Stream, and what problem does it solve? (retroactive foundational question)
+
+**My answer:** "streams are a pipeline of java objects that gives us the object one at a time to perform operations, but is it not similar to for loop? for filtering we used for loop" — good instinct raising the for-loop comparison directly, showed the surface-level definition was already understood, but needed the deeper "why" filled in.
+
+**Concept:**
+- A Stream is NOT a data structure — it stores nothing. It's a sequence of described computational steps (filter, transform, etc.) applied to a source (List, array, file), executed only when a terminal operation is invoked.
+- **Pre-Java 8 "before" example** (filter + transform employees by salary): required manual intermediate lists, imperative style (`for` loop + `.add()` bookkeeping), two separate loops for filter then map, and painful manual work to parallelize.
+- **Streams version** chains `.filter().map().collect()` directly — no manual intermediate list, declarative ("what" not "how"), and `.parallelStream()` trivially parallelizes work Java would otherwise require manual thread-splitting for.
+
+**Direct answer to "isn't it just a for-loop?":** functionally similar for simple cases, but Streams are genuinely different in: (a) declarative vs imperative style, (b) no manually-managed intermediate collections, (c) true laziness — one element flows through the WHOLE pipeline before the next starts (a for-loop can't naturally do this without hand-writing it), (d) trivial built-in parallelism.
+
+**Follow-up — is `list.stream().forEach(System.out::println)` genuinely better than a plain for-each loop for something this simple?**
+
+**My answer:** asked me to answer directly rather than guessing — fair, given no chaining/filtering was involved to reason about.
+
+**Answer given:** **No — plain for-each is actually better here.** Reasons: (1) Stream setup has real overhead (pipeline object, function objects, iterator machinery) for zero benefit on a single trivial operation; (2) declarative style only pays off when chaining multiple operations — nothing to declare/compose here; (3) most Java developers find the plain loop more immediately readable for a single trivial action. **Rule of thumb:** reach for Streams for multi-step pipelines (filter/map/reduce/collect); prefer plain loops for single trivial operations — using Streams unconditionally "because modern" isn't good judgment, and recognizing Streams' limits is itself a strong interview signal.
+
+**Follow-up — "so using streams creates an internal pipeline object, so it causes overhead?"**
+
+**My question, answered:** Yes, but precisely scoped. Each `.stream()`/`.filter()`/`.map()` creates lightweight objects (a Stream wrapper, plus a functional-interface object per lambda) — not free, but small. A raw for-loop has ~zero extra object creation by comparison.
+- **Small/one-off operations** (printing 5 items) — overhead is relatively more noticeable vs. the tiny actual work; plain loop wins.
+- **Larger datasets/pipelines** (filter+map+collect over thousands of elements) — setup cost becomes negligible vs. actual processing cost.
+- **`parallelStream()`** — genuinely more overhead (thread pool coordination, work-splitting, merging) — only worth it when per-element work is substantial; using it on a small list can be SLOWER than sequential/plain loop due to threading overhead with barely any real work to parallelize.
+- **Practical takeaway:** overhead is real but small/usually irrelevant for typical business logic; matters mainly in performance-critical hot paths over very large volumes, where a well-written loop can outperform a Stream. Good interview framing: readability/correctness usually outweighs this small cost in everyday code.
+
+---
+
+### Q8. Stream laziness — intermediate vs terminal operations
+
+**My answer:** "intermediate operations are stream operations that return another stream... terminal operations return a value or result... forEach is a terminal operation that prints each element of the stream" — correct.
+
+**Confirmed:** intermediate operations (filter/map/sorted) return a new Stream, allowing chaining. Terminal operations (forEach/collect/count) trigger the pipeline execution and produce a final result. After a terminal operation, the stream is considered consumed/closed.
+
+**Key point — why not execute every operation eagerly? **
+
+**My answer:** "that would be a waste if we are filtering and mapping and then collecting... if any intermediate operation is empty then no point in executing the remaining ones" — correct.
+
+**Confirmed:** eager execution would waste CPU and memory, especially on large data. Lazy execution means each element flows through the pipeline, and operations only execute as needed. This also naturally supports infinite streams (like `Stream.generate()`), which would be impossible with eager evaluation.
+
+---
+
+### Q1(streams). `Optional` — replacing null-return patterns
+
+**Task:** Rewrite `findEmployeeById()` to return `Optional<Employee>`; caller uses `.map()`/`.orElse()` instead of `isPresent()`/`get()`.
+
+**My answer:** Needed the mechanics built from scratch — didn't know `Optional.ofNullable()` etc.
+
+**Concept:**
+```java
+public Optional<Employee> findEmployeeById(int id) {
+    return Optional.ofNullable(database.lookup(id));
+}
+String name = findEmployeeById(5).map(Employee::getName).orElse("Unknown Employee");
+```
+- `Optional.of(value)` — throws NPE immediately if null (fails fast).
+- `Optional.ofNullable(value)` — safely wraps null-or-value.
+- `Optional.empty()` — explicit empty.
+- `.map()` only runs its transform if a value is present — no NPE risk. `.orElse()` unwraps with a fallback.
+- Old-style `isPresent()`/`get()` works but doesn't leverage what Optional is for — interviewers look for `.map()`/`.orElse()`/`.filter()` chaining instead.
+
+**Follow-up — `orElseThrow()` vs `orElse()` vs `orElseGet()`?**
+
+**My answer:** "orElse is used for throwing an exception" (meant orElseThrow) "...orElse is if the value is null then we have to return the fallback value... orElseGet returns a Supplier function... the basic difference... if it is a value then even if we add a Supplier function to it... that supplier function will not even run" — **fully correct**, sharp answer on eager vs lazy evaluation, no corrections needed.
+
+**Confirmed:**
+- `orElseThrow(supplier)` — throws the supplied exception if empty; no-arg version throws `NoSuchElementException`.
+- `orElse(value)` — value is **eagerly evaluated always**, even when Optional has a value present (wasteful for expensive fallbacks).
+- `orElseGet(supplier)` — supplier only **invoked if empty** — lazy, preferred whenever the fallback involves real computation/DB calls/etc.
+- **Rule of thumb:** `orElse()` for cheap/literal fallbacks; `orElseGet()` for anything with real cost.
+
+---
+
+### Q2(streams). Method references — 4 types, and a deep lambda/functional-interface rebuild
+
+**Task:** name the 4 types of method references.
+
+**My answer:** didn't know — requested full explanation, then asked for a ground-up rebuild of lambda syntax and functional interfaces (genuinely thorough detour, well worth it).
+
+**4 types explained:**
+1. **Static** — `ClassName::staticMethod` (e.g. `Integer::parseInt`) ≡ `s -> Integer.parseInt(s)`
+2. **Particular instance** — `object::instanceMethod` (e.g. `System.out::println`) ≡ `x -> System.out.println(x)`
+3. **Arbitrary instance of a type** — `ClassName::instanceMethod` (e.g. `String::length`, and our earlier `Employee::getName`) ≡ `s -> s.length()` — the stream element itself becomes the object the method is called on.
+4. **Constructor** — `ClassName::new` (e.g. `Employee::new`) ≡ `() -> new Employee()` or `name -> new Employee(name)` depending on constructor signature.
+
+**Deep detour — lambda/functional-interface fundamentals rebuilt from scratch (my own request, "too much confusion"):**
+
+- **`() ->` clarified:** empty parens mean "this lambda takes zero arguments" — not a special call syntax, just an empty parameter list, same concept as any method's parameter list.
+- **Functional interface clarified:** an interface with exactly one abstract method; a lambda IS the implementation body for that one method. The lambda's parameter shape must match the interface method's shape.
+- **4 core functional interfaces laid out with signatures:** `Supplier<T> { T get(); }` (0 in, 1 out), `Consumer<T> { void accept(T t); }` (1 in, 0 out), `Function<T,R> { R apply(T t); }` (1 in, 1 out/transform), `Predicate<T> { boolean test(T t); }` (1 in, boolean out).
+- **My misconception 1:** thought `giveMeFive.get()` was called with `{}` — corrected: called with `()`, ordinary method-call syntax like any other.
+- **My misconception 2:** thought lambdas for Consumer/Function/Predicate don't create an object ("we don't always have to make an object, we use it everywhere") — corrected: EVERY lambda creates a real object (an anonymous class instance implementing that functional interface) — the difference is just whether it's assigned to a named variable or passed inline/anonymously (which is the common case, creating the "no object" illusion). Directly ties back to the earlier anonymous-class-vs-lambda discussion in Module 1.
+- **My minor terminology slip:** said "declaring the get method" — corrected to "providing the implementation body for" get() (the interface already declares the method; the lambda supplies its behavior).
+- **Final confirmation exercise — `list.stream().filter(e -> e.getSalary() > 50000)`:** correctly identified as a `Predicate<Employee>`; confirmed `.filter()` calls `.test(e)` once per element, keeping elements where it returns true.
+
+**Applied check — `list.stream().map(Employee::new)` for `List<String>` names, `Employee(String name)` constructor — which type, what does it produce?**
+
+**My answer:** recapped the reference-type-to-lambda chain conceptually but didn't directly answer which type/what it produces — answered directly: **Type 4 (constructor reference)**, equivalent to `name -> new Employee(name)`, a `Function<String, Employee>` — transforms `Stream<String>` into `Stream<Employee>`.
+
+**Process feedback from Sudhanshu (important, corrected):** flagged that sessions have been too concept-heavy and too light on actual hands-on coding — bank interviews (Barclays/Citi/MasterCard) often hand a blank editor and ask for live implementation (write a class, an abstract class, a functional/marker interface, use Streams/Lambdas to solve a concrete problem), not just verbal explanation. **Going forward: shift toward more coding exercises, not just concept Q&A**, especially for Streams/Collectors and future modules.
+
+### Q3(streams). Collectors — groupingBy with a downstream collector (coding exercise, finance-domain)
+
+**Task:** Given a `List<Trade>` (counterparty, security, notional fields), write Stream code producing `Map<String, Double>` of total notional per counterparty.
+
+**My attempt:**
+```java
+Collectors.groupingBy(
+    trade -> trade.notional,
+    trade -> trade.counterParty
+)
+```
+Also correctly noted beforehand: no `public` needed on the constructor (package-private is fine here), and `List.of()` creates an immutable list. Asked what `->` means (recapped: lambda arrow, `(param) -> result`, same syntax as any method).
+
+**Correction:** classifier and downstream arguments were swapped, and the second argument was structurally wrong — a raw lambda alone isn't a valid downstream collector.
+
+**Correct solution:**
+```java
+Map<String, Double> totalByCounterparty = trades.stream()
+    .collect(Collectors.groupingBy(
+        trade -> trade.counterparty,                        // classifier: group BY this
+        Collectors.summingDouble(trade -> trade.notional)   // downstream: SUM this per group
+    ));
+// {"Barclays": 5500000.0, "Citi": 2500000.0}
+```
+**Explained:** `groupingBy(classifier, downstream)` — first arg answers "group by what," second arg (a proper Collector like `summingDouble`, `counting`, `toList`) answers "what to do with each group's elements" — default downstream (if omitted) is collecting each group into a `List`.
+
+**Follow-up exercise given (not yet attempted — session paused to update runbook first):** modify the above to produce `Map<String, Long>` — COUNT of trades per counterparty instead of sum of notional (hint toward `Collectors.counting()` as the downstream, not yet revealed).
+
+### Q4(streams). Collectors — counting(), classifier vs downstream reasoning, and full categorized reference
+
+**My follow-up attempt (Map<String, Long> count per counterparty):**
+```java
+Collectors.groupingBy(
+    trade :: counterParty,
+    Collectors.counting()
+)
+```
 
 ### Q8. Stream laziness — intermediate vs terminal operations
 

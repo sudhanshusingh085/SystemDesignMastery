@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Microservices Architecture — Distributed Trading Platform</title>
+    <link rel="stylesheet" href="../css/style.css">
+    <script type="module">
+        import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+        mermaid.initialize({ startOnLoad: true, theme: 'dark' });
+    </script>
+</head>
+<body>
+    <nav class="breadcrumb">
+        <a href="../index.html">Home</a> &gt; <span>Microservices Architecture</span>
+    </nav>
+    
+    <header>
+        <h1>Microservices Architecture — Distributed Trading Platform</h1>
+        <p>Architecting robust, fault-tolerant financial systems at scale.</p>
+    </header>
+
+    <main>
+        <section class="pillar">
+            <h2>PILLAR 1: Ground-Zero Theory & The Pain Point</h2>
+            <p><strong>Monolith vs Microservices:</strong> A monolith bundles all financial domains (Trading, Settlement, KYC) into one deployable unit. Microservices split them into independent, deployable services.</p>
+            <p><strong>The Pain Point:</strong> In a monolith, a memory leak in the KYC module crashes the Trading engine. Scaling is all-or-nothing. Microservices allow independent scaling and fault isolation, but introduce distributed system complexities.</p>
+            <div class="mermaid">
+            flowchart LR
+                API[API Gateway] --> Trade[Trade Service]
+                API --> KYC[KYC Service]
+                Trade --> TradeDB[(Trade DB)]
+                KYC --> KDB[(KYC DB)]
+            </div>
+        </section>
+
+        <section class="pillar">
+            <h2>PILLAR 2: Architectural Decision Rationales & Modifier Deep Dives</h2>
+            <h3>Database-per-Microservice</h3>
+            <p>Rule: Never share a database between microservices. If Trade Service needs user data, it must call the User Service API. Why? Schema isolation. If User Service changes a column, Trade Service shouldn't break.</p>
+            <h3>Inter-service Communication</h3>
+            <p>Use <strong>REST/OpenFeign</strong> for synchronous queries (e.g., "Get real-time price"). Use <strong>Kafka/Messaging</strong> for asynchronous commands/events (e.g., "Execute Trade"). Use <strong>gRPC</strong> for low-latency internal communication.</p>
+        </section>
+
+        <section class="pillar">
+            <h2>PILLAR 3: Step-by-Step Evolution & Thought Process</h2>
+            <p><strong>Saga Pattern:</strong> How do we handle distributed transactions? (e.g., deduct funds + execute trade).</p>
+            <p><em>Attempt 1: Two-Phase Commit (2PC).</em> Fails because it's synchronous and locks resources, causing bottlenecks.</p>
+            <p><em>Attempt 2: Saga Pattern.</em> A sequence of local transactions. If one fails, we execute <strong>compensating transactions</strong> to rollback previous steps (e.g., refund the deducted amount). Implemented via Choreography (events) or Orchestration (central coordinator).</p>
+        </section>
+
+        <section class="pillar">
+            <h2>PILLAR 4: Production-Grade Java 21 Code</h2>
+            <pre><code>
+// OpenFeign Client for synchronous Inter-service communication
+@FeignClient(name = "pricing-service", fallback = PricingFallback.class)
+public interface PricingClient {
+    @GetMapping("/api/v1/prices/{symbol}")
+    PriceDTO getPrice(@PathVariable("symbol") String symbol);
+}
+
+// Circuit Breaker with Resilience4j
+@Service
+public class TradeExecutionService {
+
+    @CircuitBreaker(name = "pricingService", fallbackMethod = "cachedPriceFallback")
+    public BigDecimal getTradePrice(String symbol) {
+        return pricingClient.getPrice(symbol).price();
+    }
+    
+    public BigDecimal cachedPriceFallback(String symbol, Throwable t) {
+        // Fallback to last known price in Redis
+        return redisCache.get(symbol);
+    }
+}
+            </code></pre>
+            <pre><code>
+// Rate Limiting Example using Resilience4j
+@RestController
+public class OrderController {
+    @RateLimiter(name = "orderRateLimit", fallbackMethod = "rateLimitExceeded")
+    @PostMapping("/order")
+    public ResponseEntity&lt;String&gt; placeOrder(@RequestBody Order order) {
+        return ResponseEntity.ok("Order Placed");
+    }
+}
+            </code></pre>
+        </section>
+
+        <section class="pillar">
+            <h2>PILLAR 5: The Interviewer's Deep Follow-Up Questions</h2>
+            <div class="interview-box">
+                <h3>📋 How to Answer This in an Interview</h3>
+                <p><strong>Q: Explain the Saga pattern for a fund transfer system.</strong><br>
+                <em>Candidate:</em> A fund transfer spans Account A and Account B. Using an Orchestrator Saga: 1. Saga initiates "Debit A". 2. If successful, it initiates "Credit B". 3. If B's credit fails (e.g., account frozen), the Orchestrator fires a compensating transaction "Refund A" to maintain eventual consistency.</p>
+                <p><strong>Q: Can Saga be implemented without Kafka?</strong><br>
+                <em>Candidate:</em> Yes. We can use REST with HTTP Webhooks/Callbacks, or the Outbox pattern with database polling, though Kafka provides better guarantees and throughput.</p>
+            </div>
+            
+            <div class="interview-box">
+                <h3>🎯 Interviewer Follow-Up Questions</h3>
+                <p><strong>Q: Service A calls B. B is unavailable. A keeps retrying, preventing B from recovering. What pattern fixes this?</strong><br>
+                <em>Answer:</em> Circuit Breaker. After N failures, the circuit OPENS, failing fast and giving B time to recover. It moves to HALF_OPEN to test if B is back, then CLOSED if successful.</p>
+                <p><strong>Q: How would you migrate a monolithic application to microservices?</strong><br>
+                <em>Answer:</em> Strangler Fig Pattern. Put an API Gateway in front. Gradually extract domains (e.g., KYC first) into a microservice. Route KYC traffic to the new service, keeping the rest pointing to the monolith.</p>
+                <p><strong>Q: What are the different Rate Limiting algorithms?</strong><br>
+                <em>Answer:</em> Token Bucket (smooth bursts), Leaky Bucket (constant rate), Fixed Window (simple but allows bursts at edges), Sliding Window Log/Counter (accurate).</p>
+            </div>
+        </section>
+
+        <section class="pillar">
+            <h2>PILLAR 6: Trade-offs & When NOT To Use It</h2>
+            <p><strong>Microservices Trade-offs:</strong> Increased operational overhead, network latency, difficult debugging (requires Distributed Tracing like Jaeger/Zipkin). Do NOT use microservices for a small startup finding product-market fit; build a modular monolith instead.</p>
+        </section>
+    </main>
+    <script src="../js/main.js"></script>
+</body>
+</html>

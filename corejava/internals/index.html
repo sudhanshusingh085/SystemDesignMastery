@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Java Internals — ClassLoader, Reflection & Serialization</title>
+    <link rel="stylesheet" href="../../css/style.css">
+</head>
+<body>
+    <nav class="breadcrumbs">
+        <a href="../index.html">Home</a> &gt; <span>Java Internals</span>
+    </nav>
+    <header>
+        <h1>Java Internals — ClassLoader, Reflection & Serialization</h1>
+        <p>Mastering the inner workings of the JVM for dynamic, secure, and robust financial systems.</p>
+    </header>
+
+    <main>
+        <section id="classloader">
+            <h2>1. ClassLoader Hierarchy</h2>
+            <p>The ClassLoader dynamically loads Java classes into the JVM during runtime. It follows a parent-first delegation model to ensure core Java classes are not overridden securely.</p>
+            <div class="mermaid">
+            flowchart TD
+                A[Bootstrap ClassLoader] --> B[Platform ClassLoader]
+                B --> C[Application ClassLoader]
+                C --> D[Custom ClassLoader]
+            </div>
+            
+            <div class="interview-box">
+                <h4>📋 How to Answer This in an Interview</h4>
+                <p><strong>Q: What is ClassLoader? Explain the hierarchy.</strong></p>
+                <p>A: A ClassLoader is part of the JRE that dynamically loads Java classes into the JVM. The hierarchy starts with the Bootstrap ClassLoader (loads core API), followed by the Platform/Extension ClassLoader, and finally the Application (System) ClassLoader. They follow a delegation model: a classloader delegates the load request to its parent before attempting to load it itself, preventing spoofing of core classes like <code>java.lang.String</code>.</p>
+            </div>
+        </section>
+
+        <section id="reflection">
+            <h2>2. Reflection API</h2>
+            <p>Reflection allows inspecting classes, interfaces, fields, and methods at runtime, without knowing the names of the classes at compile time.</p>
+            <pre><code>// Dynamically loading a trading strategy
+Class&lt;?&gt; strategyClass = Class.forName("com.finance.strategies.MomentumStrategy");
+TradingStrategy strategy = (TradingStrategy) strategyClass.getDeclaredConstructor().newInstance();
+strategy.execute(marketData);
+</code></pre>
+            <div class="interview-box">
+                <h4>🎯 Interviewer Follow-Up Questions</h4>
+                <p><strong>Q: What is reflection? Where is it used? Trade-offs?</strong></p>
+                <p>A: Reflection is runtime metadata inspection and manipulation. It's used in frameworks like Spring (Dependency Injection), Hibernate (ORM), and JUnit. Trade-offs include severe performance overhead (bypasses JIT optimizations), security risks (accessing private fields), and breaking encapsulation.</p>
+            </div>
+        </section>
+
+        <section id="serialization">
+            <h2>3. Serialization & Deserialization</h2>
+            <p>Converting an object's state into a byte stream for network transfer (e.g., to Kafka) or persistence.</p>
+            <pre><code>public class Trade implements Serializable {
+    @Serial
+    private static final long serialVersionUID = 1L;
+    private String tradeId;
+    private transient String sensitiveAuditToken; // Not serialized
+}</code></pre>
+            <div class="pillar">
+                <h3>PILLAR 6: Trade-offs & When NOT To Use It</h3>
+                <p>Native Java Serialization is notoriously slow, vulnerable to remote code execution (RCE) via deserialization gadget chains, and language-locked. In modern finance, use JSON (Jackson/Gson) for REST, and Protocol Buffers or Avro for high-throughput binary streaming.</p>
+            </div>
+        </section>
+
+        <section id="equals-hashcode">
+            <h2>4. equals() and hashCode() Contract</h2>
+            <p>If two objects are equal according to <code>equals(Object)</code>, they must have the same <code>hashCode()</code>. If you break this, hash-based collections (HashMap, HashSet) will lose your objects.</p>
+            <pre><code>public final class Trade {
+    private final String tradeId;
+    
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (!(o instanceof Trade trade)) return false; // Java 16+ Pattern Matching
+        return Objects.equals(tradeId, trade.tradeId);
+    }
+    
+    @Override
+    public int hashCode() {
+        return Objects.hash(tradeId);
+    }
+}</code></pre>
+        </section>
+
+        <section id="immutability">
+            <h2>5. Immutable Class Design</h2>
+            <p>Immutable objects are inherently thread-safe, making them ideal for concurrent financial environments.</p>
+            <pre><code>public final class Price {
+    private final BigDecimal amount;
+    private final LocalDateTime timestamp;
+    
+    public Price(BigDecimal amount, LocalDateTime timestamp) {
+        // Defensive copy not strictly needed for these immutable types, but crucial for mutable types like Date
+        this.amount = amount;
+        this.timestamp = timestamp;
+    }
+    // No setters.
+}</code></pre>
+        </section>
+
+        <section id="marker">
+            <h2>6. Marker Interface vs Annotation</h2>
+            <p>Marker interfaces (like <code>Serializable</code>, <code>Cloneable</code>) have no methods. They signal to the JVM/frameworks that a class has a specific property. Modern Java prefers Annotations (like <code>@Deprecated</code>) because they can carry metadata and target specific elements (fields, methods).</p>
+        </section>
+
+    </main>
+    <script src="../../js/main.js"></script>
+    <script type="module">
+        import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+        mermaid.initialize({ startOnLoad: true });
+    </script>
+</body>
+</html>

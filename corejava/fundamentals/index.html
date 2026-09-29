@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Java Fundamentals — The Bedrock of Financial Systems</title>
+    <link rel="stylesheet" href="../css/style.css">
+    <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+    <script>mermaid.initialize({startOnLoad:true, theme: 'dark'});</script>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; line-height: 1.6; color: #333; max-width: 1200px; margin: 0 auto; padding: 20px; }
+        h1, h2, h3 { color: #004d99; }
+        .breadcrumbs { font-size: 0.9em; margin-bottom: 20px; color: #666; }
+        .breadcrumbs a { color: #004d99; text-decoration: none; }
+        .callout { background-color: #f8f9fa; border-left: 5px solid #004d99; padding: 15px; margin: 20px 0; border-radius: 0 4px 4px 0; }
+        .callout.interview { border-left-color: #d9534f; background-color: #fdf7f7; }
+        .callout.grill { border-left-color: #f0ad4e; background-color: #fcf8e3; }
+        .jargon { font-weight: bold; color: #d9534f; }
+        .comparison { display: flex; gap: 20px; }
+        .comparison > div { flex: 1; background: #f4f4f4; padding: 15px; border-radius: 5px; }
+        pre { background: #2d2d2d; color: #ccc; padding: 15px; border-radius: 5px; overflow-x: auto; font-family: 'Consolas', monospace; }
+        code { color: #e06c75; font-family: 'Consolas', monospace; }
+        .mermaid { text-align: center; margin: 30px 0; }
+    </style>
+</head>
+<body>
+    <nav class="breadcrumbs">
+        <a href="../index.html">Home</a> &gt; <span>00 · Java Fundamentals</span>
+    </nav>
+
+    <header>
+        <h1>Java Fundamentals — The Bedrock of Financial Systems</h1>
+        <p class="subtitle">A definitive guide to the foundational mechanics of the Java ecosystem, precision-engineered for developers targeting high-frequency trading platforms, risk calculation engines, and tier-1 banking infrastructure.</p>
+    </header>
+
+    <main>
+        <!-- 1. JDK vs JRE vs JVM -->
+        <section id="jdk-jre-jvm">
+            <h2>1. JDK vs JRE vs JVM: The Architecture of Execution</h2>
+            
+            <h3>Ground-Zero Conceptual Theory & The Real-World Finance Pain Point</h3>
+            <p>In electronic trading, the runtime environment is not just a sandbox; it is the arena where microseconds equate to millions of dollars. The distinction between the JDK, JRE, and JVM dictates how a trading application is developed, optimized, and executed across highly customized Linux trading servers (e.g., matching engines colocated at Nasdaq).</p>
+            <p>Without understanding this triad, developers cannot tune the JVM for the low-latency garbage collection necessary to avoid latency spikes during critical market events (like the Non-Farm Payrolls release), nor can they properly utilize JDK diagnostic tools like Flight Recorder or `jcmd` in production to debug a stalled Order Management System (OMS).</p>
+
+            <h3>Architectural Layout</h3>
+            <div class="mermaid">
+            flowchart TD
+                subgraph JDK [Java Development Kit (JDK)]
+                    direction TB
+                    Compiler[javac]
+                    Tools[Diagnostic Tools: jmap, jcmd, JFR]
+                    subgraph JRE [Java Runtime Environment (JRE)]
+                        direction TB
+                        Libs[Core Libraries: java.lang, java.util]
+                        subgraph JVM [Java Virtual Machine (JVM)]
+                            direction TB
+                            ClassLoader[Class Loader Subsystem]
+                            subgraph MemoryArea [Runtime Data Areas]
+                                Heap[Heap]
+                                Stack[Thread Stacks]
+                                Metaspace[Metaspace]
+                            end
+                            subgraph ExecutionEngine [Execution Engine]
+                                Interpreter[Interpreter]
+                                JIT[JIT Compiler: C1/C2]
+                                GC[Garbage Collector: ZGC/G1]
+                            end
+                            ClassLoader --> MemoryArea
+                            MemoryArea --> ExecutionEngine
+                        end
+                        Libs -.-> JVM
+                    end
+                    Compiler -.-> JRE
+                    Tools -.-> JVM
+                end
+            </div>
+            
+            <p><strong>JVM (Java Virtual Machine):</strong> The beating heart. It executes Java bytecode. In trading, the JVM's JIT compiler identifies "hot" code paths (like the main order routing loop) and compiles them down to highly optimized native machine code. The Garbage Collector manages memory, and choosing the right one (like ZGC for sub-millisecond pause times) is critical.</p>
+            <p><strong>JRE (Java Runtime Environment):</strong> The payload. It contains the JVM and all standard libraries. When deploying a containerized FIX engine to production, you technically only need the JRE (though modern practices often deploy slimmed JDKs via jlink).</p>
+            <p><strong>JDK (Java Development Kit):</strong> The armory. It contains the JRE, plus compilation tools (<code>javac</code>) and profiling tools essential for dissecting latency anomalies in market data parsers.</p>
+
+            <div class="callout interview">
+                <h4>📋 How to Answer This in an Interview</h4>
+                <p><strong>Q: What is the difference between JDK, JRE, and JVM?</strong></p>
+                <p>"The JVM is the execution engine that interprets and compiles bytecode into machine code, managing memory and garbage collection. The JRE is the deployment environment, containing the JVM plus the core libraries necessary to run a Java application. The JDK is the complete developer kit; it contains the JRE but adds the compiler, debuggers, and profiling tools like Flight Recorder. In a low-latency trading environment, we develop and tune with the JDK, but in production, we deploy the JRE—often stripping it down via modules—while heavily tuning the JVM flags, particularly the JIT compiler and Garbage Collector (like ZGC or Shenandoah), to ensure our order routing algorithms don't experience stop-the-world pauses."</p>
+            </div>
+
+            <div class="callout grill">
+                <h4>🎯 Interviewer Follow-Up Questions (The Grill Round)</h4>
+                <ul>
+                    <li><strong>Trap:</strong> "Does the JVM actually execute Java code?"<br><strong>Answer:</strong> "No, the JVM executes Java <em>bytecode</em> (.class files). It is language-agnostic. Languages like Kotlin or Scala can run on the JVM, provided they compile down to valid bytecode."</li>
+                    <li><strong>Trap:</strong> "If I want to check a memory leak in production on a running Risk Gateway, which component do I need?"<br><strong>Answer:</strong> "You need the JDK tools. The JRE alone lacks utilities like <code>jmap</code>, <code>jstat</code>, or <code>jcmd</code> which are required to take a heap dump or monitor GC behavior live."</li>
+                    <li><strong>Trap:</strong> "Is the JVM platform-independent?"<br><strong>Answer:</strong> "No. Java is platform-independent because of the bytecode. The JVM itself is platform-dependent; a Linux JVM translates bytecode to x86/ARM machine code differently than a Windows JVM."</li>
+                </ul>
+            </div>
+        </section>
+
+        <!-- 2. Data Types & Wrapper Classes -->
+        <section id="data-types">
+            <h2>2. Data Types & Wrapper Classes: Precision Under Pressure</h2>
+
+            <h3>Ground-Zero Conceptual Theory & The Real-World Finance Pain Point</h3>
+            <p>Data representation is catastrophic if mishandled. If an execution algorithm represents currency using standard <code>double</code> or <code>float</code> primitives, it falls victim to IEEE 754 floating-point arithmetic precision loss. In trading, losing a fraction of a cent across billions of shares leads to massive P&L (Profit and Loss) discrepancies, triggering regulatory fines and audit failures.</p>
+            
+            <h3>Architectural & Modifier Rationale</h3>
+            <p>To avoid rounding errors (e.g., <code>0.1 + 0.2 != 0.3</code>), financial systems either use <code>java.math.BigDecimal</code> for exact decimal arithmetic (at the cost of object allocation overhead) or use a <code>long</code> to represent the smallest indivisible unit (cents, or fractional ticks) to maintain primitive performance without precision loss.</p>
+            <p>Furthermore, wrapper classes (<code>Integer</code>, <code>Long</code>) introduce boxing/unboxing overhead. A NullPointerException during unboxing inside a critical trade path will kill the thread.</p>
+
+<pre><code>package com.bank.core.types;
+
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+
+public class FinancialDataTypes {
+    
+    // BAD: Never use float/double for money!
+    public static void doublePrecisionTrap() {
+        double buyPrice = 0.1;
+        double spread = 0.2;
+        double total = buyPrice + spread;
+        // Prints 0.30000000000000004 - Disastrous for reconciliation!
+        System.out.println("Double calculation: " + total); 
+    }
+
+    // GOOD: Use BigDecimal for exact calculation
+    public static BigDecimal calculateSettlement(BigDecimal price, BigDecimal quantity) {
+        // BigDecimal is immutable; operations return new instances
+        return price.multiply(quantity).setScale(4, RoundingMode.HALF_UP);
+    }
+
+    public static void wrapperTraps() {
+        // 1. The Integer Cache Trap
+        Integer tradeId1 = 100;
+        Integer tradeId2 = 100;
+        System.out.println(tradeId1 == tradeId2); // true (cached -128 to 127)
+
+        Integer tradeId3 = 500;
+        Integer tradeId4 = 500;
+        System.out.println(tradeId3 == tradeId4); // false (heap objects, different memory addresses)
+        
+        // Always use .equals() for wrapper comparisons!
+        System.out.println(tradeId3.equals(tradeId4)); // true
+
+        // 2. The Unboxing NPE Trap
+        Integer receivedQuantity = null; // Maybe missing from FIX message
+        try {
+            // Implicit unboxing: receivedQuantity.intValue() -> throws NullPointerException
+            long totalVolume = 1000L + receivedQuantity; 
+        } catch (NullPointerException e) {
+            System.err.println("CRITICAL FATAL: Trade flow crashed due to null unboxing");
+        }
+    }
+}
+</code></pre>
+
+            <div class="callout interview">
+                <h4>📋 How to Answer This in an Interview</h4>
+                <p><strong>Q: Why shouldn't you use 'double' for currency, and what are the alternatives?</strong></p>
+                <p>"Primitives like double and float use base-2 floating-point representation (IEEE 754), which cannot accurately represent many base-10 fractions. For example, 0.1 plus 0.2 yields 0.30000000000000004. In a trading ledger, this precision loss compounds, leading to massive reconciliation failures. I would use one of two approaches: For applications where calculation fidelity is paramount but latency is less critical, I use `BigDecimal`, which guarantees arbitrary precision but allocates objects on the heap. For ultra-low latency components like a Matching Engine, I use a primitive `long` representing the fixed-point 'ticks' or cents (e.g., storing $10.50 as 1050), avoiding both precision loss and the garbage collection overhead associated with `BigDecimal`."</p>
+            </div>
+
+            <div class="callout grill">
+                <h4>🎯 Interviewer Follow-Up Questions (The Grill Round)</h4>
+                <ul>
+                    <li><strong>Trap:</strong> "Why did Integer 100 equal 100 with '==', but 500 did not equal 500?"<br><strong>Answer:</strong> "The JVM caches Integer objects for values between -128 and 127 (configurable via `-XX:AutoBoxCacheMax`). Values inside this range point to the same cached object in memory. Values outside this range are instantiated as new objects on the heap, thus having different memory addresses, making '==' return false. You must always use `.equals()`."</li>
+                    <li><strong>Trap:</strong> "What's the performance cost of autoboxing in an OMS processing 100k messages/sec?"<br><strong>Answer:</strong> "Autoboxing creates a new wrapper object for every primitive value not in the cache. At 100k msgs/sec, this floods the Eden space, forcing minor GCs. We actively avoid wrapper classes in critical paths, relying exclusively on primitives or specialized primitive-based collections like Eclipse Collections or Agrona."</li>
+                </ul>
+            </div>
+        </section>
+
+        <!-- 3. Pass-by-Value in Java -->
+        <section id="pass-by-value">
+            <h2>3. Pass-by-Value in Java: References as Values</h2>
+
+            <h3>Ground-Zero Conceptual Theory & The Real-World Finance Pain Point</h3>
+            <p>One of the most persistent myths is that Java passes primitives by value and objects by reference. <strong>False. Java is strictly 100% pass-by-value.</strong></p>
+            <p>When you pass an `Order` object to an `ExecutionService`, you are passing the <em>value of the reference</em> (the pointer address), not the actual object itself, nor a true reference to the original variable. If developers don't grasp this, they might attempt to reassign an object inside a method and assume the caller sees the new object, leading to silently dropped trades or stale data.</p>
+
+            <h3>Architectural Layout</h3>
+            <div class="mermaid">
+            flowchart LR
+                subgraph Stack ["Stack Memory (Thread)"]
+                    direction TB
+                    Caller[Caller Frame\nOrder order = Addr:0x123]
+                    Method[Method Frame\nOrder param = Addr:0x123]
+                end
+                subgraph Heap ["Heap Memory"]
+                    Obj1("Order Object\n{id='T-1', status=NEW}\n[Addr:0x123]")
+                    Obj2("New Order Object\n{id='T-2', status=REJECTED}\n[Addr:0x999]")
+                end
+                Caller -->|Points to| Obj1
+                Method -->|Points to| Obj1
+                Method -.->|Reassignment changes \nonly local variable| Obj2
+            </div>
+
+<pre><code>package com.bank.core.memory;
+
+class Order {
+    String orderId;
+    String status;
+
+    public Order(String orderId, String status) {
+        this.orderId = orderId;
+        this.status = status;
+    }
+}
+
+public class OrderRoutingService {
+
+    public static void main(String[] args) {
+        Order mainOrder = new Order("ORD-001", "PENDING");
+        
+        System.out.println("Before mutating: " + mainOrder.status); // PENDING
+        mutateOrder(mainOrder);
+        System.out.println("After mutating: " + mainOrder.status); // EXECUTED
+        
+        reassignOrder(mainOrder);
+        // Still EXECUTED! Reassignment inside the method did not affect 'mainOrder'
+        System.out.println("After reassigning: " + mainOrder.status); 
+    }
+
+    // Pass-by-value of the reference: Both 'order' and 'mainOrder' point to the same heap object.
+    // Changing internal fields reflects globally.
+    public static void mutateOrder(Order order) {
+        order.status = "EXECUTED"; 
+    }
+
+    // 'order' here is a local copy of the memory address.
+    // Pointing it to a new object only affects this local variable.
+    public static void reassignOrder(Order order) {
+        order = new Order("ORD-999", "REJECTED");
+    }
+}
+</code></pre>
+
+            <div class="callout interview">
+                <h4>📋 How to Answer This in an Interview</h4>
+                <p><strong>Q: Is Java pass-by-value or pass-by-reference? Can you prove it?</strong></p>
+                <p>"Java is strictly pass-by-value. When passing primitive types, a copy of the actual value is passed to the method. When passing object references, Java passes a copy of the reference memory address. This means the method parameter points to the exact same object in the heap, allowing the method to mutate the object's internal state (e.g., changing an Order's status from PENDING to FILLED). However, if you reassign the parameter inside the method to point to a completely new object, it only updates the local variable on the stack. The caller's original reference remains pointing to the original object. That proves it's not pass-by-reference; otherwise, the caller's variable would point to the new object."</p>
+            </div>
+            
+            <div class="callout grill">
+                <h4>🎯 Interviewer Follow-Up Questions (The Grill Round)</h4>
+                <ul>
+                    <li><strong>Trap:</strong> "If I pass a final Order reference to a method, can the method modify the Order's state?"<br><strong>Answer:</strong> "Yes. The `final` keyword only prevents reassignment of the reference variable itself. The object it points to on the heap remains entirely mutable, unless the class itself is designed to be immutable."</li>
+                </ul>
+            </div>
+        </section>
+
+        <!-- 4. this vs super Keywords & Constructor Chaining -->
+        <section id="this-super">
+            <h2>4. `this` vs `super` & Constructor Chaining</h2>
+
+            <h3>Ground-Zero Conceptual Theory & The Real-World Finance Pain Point</h3>
+            <p>Financial asset modeling heavily utilizes inheritance (e.g., an `Option` IS-A `Derivative` which IS-A `FinancialInstrument`). Proper initialization of these multi-tiered objects is critical. If a base class property like `assetId` or `currency` is not initialized because a child constructor skipped calling the parent constructor, the risk management systems will fail to aggregate exposure correctly.</p>
+            <p>Constructor chaining ensures state integrity from the base class up to the specialized leaf class.</p>
+
+<pre><code>package com.bank.core.assets;
+
+class Instrument {
+    protected String instrumentId;
+    protected String currency;
+
+    public Instrument(String instrumentId, String currency) {
+        this.instrumentId = instrumentId; // 'this' resolves shadowing
+        this.currency = currency;
+        System.out.println("Instrument initialized: " + instrumentId);
+    }
+}
+
+class Equity extends Instrument {
+    private String tickerSymbol;
+    private String exchange;
+
+    // Primary constructor
+    public Equity(String instrumentId, String currency, String tickerSymbol, String exchange) {
+        super(instrumentId, currency); // Must be the FIRST line! Invokes parent constructor.
+        this.tickerSymbol = tickerSymbol;
+        this.exchange = exchange;
+    }
+
+    // Convenience constructor (Constructor Chaining using 'this()')
+    public Equity(String tickerSymbol) {
+        // Defaults to USD and NASDAQ
+        this("EQ-" + tickerSymbol, "USD", tickerSymbol, "NASDAQ"); 
+    }
+}
+</code></pre>
+
+            <div class="callout interview">
+                <h4>📋 How to Answer This in an Interview</h4>
+                <p><strong>Q: Explain constructor chaining. Why must `super()` or `this()` be the first statement?</strong></p>
+                <p>"Constructor chaining is the process of calling one constructor from another within the same class using `this()`, or invoking a parent class constructor using `super()`. In a financial hierarchy, like initializing an Equity instrument, we use `super()` to guarantee the base `Instrument` state (like ID and currency) is fully and safely constructed before the subclass adds its specific state (like ticker symbol). The JVM mandates that `this()` or `super()` must be the very first statement in a constructor to prevent the subclass from attempting to use inherited fields before the parent object has been properly initialized in memory. You cannot use both `this()` and `super()` in the same constructor."</p>
+            </div>
+        </section>
+
+        <!-- 5. static Keyword Deep Dive -->
+        <section id="static-keyword">
+            <h2>5. `static` Keyword Deep Dive: Shared State in Trading</h2>
+
+            <h3>Ground-Zero Conceptual Theory & The Real-World Finance Pain Point</h3>
+            <p>In low-latency systems, you avoid object creation at all costs. The `static` keyword ties a member (field, method, block, or nested class) to the class type itself, residing in the Metaspace, rather than to instances on the heap. This is heavily used for configuration registries, market data singletons, and utility methods (like checksum calculators for FIX messages).</p>
+
+<pre><code>package com.bank.core.exchange;
+
+import java.util.HashMap;
+import java.util.Map;
+
+public class ExchangeConfig {
+    
+    // 1. Static Field: Shared across all instances
+    public static final String PRIMARY_MARKET = "NYSE";
+    
+    // 2. Static Map (Pre-cached reference data)
+    private static final Map<String, Double> fxRates = new HashMap<>();
+
+    // 3. Static Initialization Block
+    // Used for complex initialization of static variables. Runs once when class is loaded.
+    static {
+        System.out.println("Loading FX rates into memory on startup...");
+        fxRates.put("EUR/USD", 1.09);
+        fxRates.put("GBP/USD", 1.25);
+        // In a real system, this might load from a DB or memory-mapped file
+    }
+
+    // 4. Static Method
+    // Cannot access 'this' or instance fields. Used for pure utility functions.
+    public static double convertToUSD(String pair, double amount) {
+        return amount * fxRates.getOrDefault(pair, 1.0);
+    }
+
+    // 5. Static Nested Class (Builder Pattern)
+    // Does not hold a hidden reference to the outer class instance, saving memory.
+    public static class TradeBuilder {
+        private String symbol;
+        private int qty;
+        
+        public TradeBuilder symbol(String s) { this.symbol = s; return this; }
+        public TradeBuilder quantity(int q) { this.qty = q; return this; }
+        public String build() { return "Trade[" + symbol + ":" + qty + "]"; }
+    }
+}
+</code></pre>
+
+            <div class="callout interview">
+                <h4>📋 How to Answer This in an Interview</h4>
+                <p><strong>Q: What are all the ways the `static` keyword can be used? Can you override a static method?</strong></p>
+                <p>"`static` is used for fields (shared class-level state), methods (utility functions without instance scope), initialization blocks (complex startup logic executed on class loading), and nested classes (to create decoupled helpers like Builders that don't need a reference to the outer instance). Regarding overriding: No, you cannot override a static method. Method overriding relies on dynamic dispatch at runtime based on the object instance. Static methods are bound at compile-time to the class type. If a subclass defines a static method with the exact same signature as a parent class, it is called 'Method Hiding', not overriding. Calling the method via the parent reference will execute the parent's version, completely ignoring the child's version."</p>
+            </div>
+            
+            <div class="callout grill">
+                <h4>🎯 Interviewer Follow-Up Questions (The Grill Round)</h4>
+                <ul>
+                    <li><strong>Trap:</strong> "Is a static variable thread-safe?"<br><strong>Answer:</strong> "Absolutely not. Just because it's static doesn't make it thread-safe; it just means it's shared. If multiple threads (like different order entry threads) modify a static map simultaneously, it will result in race conditions. We must use `ConcurrentHashMap` or synchronization primitives to ensure thread safety."</li>
+                </ul>
+            </div>
+        </section>
+
+        <!-- 6. The main() Method Mystery -->
+        <section id="main-method">
+            <h2>6. The `main()` Method Mystery</h2>
+
+            <h3>Ground-Zero Conceptual Theory & The Real-World Finance Pain Point</h3>
+            <p>Every standalone Java process—be it a massive matching engine or a lightweight End-of-Day reconciliation script—starts via the `main` method. It is the designated entry point for the JVM. Understanding its exact signature is fundamental; altering it means the JVM will throw a <code>NoSuchMethodError</code>.</p>
+
+<pre><code>package com.bank.core.bootstrap;
+
+public class MatchingEngineNode {
+
+    // THE Entry Point
+    // public: JVM needs external access to invoke it.
+    // static: JVM can invoke it without creating an instance of the class.
+    // void: The application doesn't return a value to the JVM upon normal completion (use System.exit for status codes).
+    // String[] args: Command line parameters (e.g., config file paths, JVM flags).
+    public static void main(String[] args) {
+        System.out.println("Starting matching engine...");
+    }
+
+    // Valid method overloading, but the JVM will NEVER call this as the entry point!
+    public static void main(String arg) {
+        System.out.println("Overloaded main with single String.");
+    }
+    
+    // Also valid overloading.
+    public static void main(int exitCode) {
+        System.out.println("Overloaded main with exit code.");
+    }
+}
+</code></pre>
+
+            <div class="callout grill">
+                <h4>🎯 Interviewer Follow-Up Questions (The Grill Round)</h4>
+                <ul>
+                    <li><strong>Trap:</strong> "Can we declare the main method as private or non-static?"<br><strong>Answer:</strong> "It will compile fine, but at runtime, the JVM will refuse to run it. If it's private, the JVM can't access it. If it's non-static, the JVM would have to instantiate the class first, which creates ambiguity (e.g., what constructor to use?). Thus, it must be `public static`."</li>
+                    <li><strong>Trap:</strong> "Can we overload the main method?"<br><strong>Answer:</strong> "Yes, we can overload it like any other method. However, the JVM strictly looks for the exact signature `public static void main(String[] args)` to launch the application. The overloaded methods can only be called programmatically by us."</li>
+                </ul>
+            </div>
+        </section>
+
+        <!-- 7. final Keyword in High-Frequency Trading -->
+        <section id="final-keyword">
+            <h2>7. `final` Keyword in High-Frequency Trading: Invariants & Memory</h2>
+
+            <h3>Ground-Zero Conceptual Theory & The Real-World Finance Pain Point</h3>
+            <p>In concurrent programming, mutability is the root of all evil. The `final` keyword is a cornerstone of defensive programming in finance. It guarantees that references don't change, methods aren't maliciously or accidentally overridden (which could alter risk checks), and classes cannot be subclassed (preventing security breaches in cryptography or core types like `String`).</p>
+            <p>More importantly, under the Java Memory Model (JMM), `final` fields provide crucial visibility guarantees. When an object is constructed, any `final` fields are guaranteed to be visible to all other threads completely initialized, preventing the dangerous "partially constructed object" anti-pattern in concurrent trade pipelines.</p>
+
+<pre><code>package com.bank.core.execution;
+
+// 1. Final Class: Cannot be subclassed. Guarantees security and immutability.
+// (e.g., java.lang.String, java.math.BigDecimal)
+public final class ExecutionReport {
+    
+    // 2. Final Fields: Must be initialized during construction. Cannot be modified later.
+    // Thread-safe publication is guaranteed by the JMM.
+    private final String orderId;
+    private final double executedPrice;
+    private final long timestamp;
+
+    public ExecutionReport(String orderId, double executedPrice) {
+        this.orderId = orderId;
+        this.executedPrice = executedPrice;
+        this.timestamp = System.nanoTime();
+    }
+    
+    // 3. Final Method: Cannot be overridden. 
+    // If this wasn't a final class, making a method final prevents subclasses from 
+    // changing core logic (e.g., bypassing risk compliance checks).
+    public final boolean isCompliant() {
+        return executedPrice > 0;
+    }
+}
+</code></pre>
+
+            <div class="callout interview">
+                <h4>📋 How to Answer This in an Interview</h4>
+                <p><strong>Q: Why is the `final` keyword critical in multi-threaded financial applications?</strong></p>
+                <p>"The `final` keyword enforces immutability and design intent. A `final` class prevents inheritance, securing core system mechanics. A `final` method prevents subclasses from altering critical algorithms, like margin calculation logic. Most crucially, `final` fields are essential for thread safety. Under the Java Memory Model, `final` fields have special initialization safety guarantees. If a thread publishes an `ExecutionReport` object to a concurrent queue, the JMM guarantees that any thread reading that object will see the fully initialized values of its `final` fields, without requiring explicit synchronization or `volatile` keywords. This allows us to build fast, lock-free data structures by passing immutable, final-field-heavy objects between threads."</p>
+            </div>
+        </section>
+
+    </main>
+
+    <script src="../js/main.js"></script>
+</body>
+</html>

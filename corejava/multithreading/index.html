@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Multithreading — Concurrent Trading System Internals</title>
+    <link rel="stylesheet" href="../../css/style.css">
+    <script src="../../js/main.js" defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+    <script>mermaid.initialize({startOnLoad:true});</script>
+</head>
+<body>
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li><a href="../../index.html">Home</a></li>
+            <li>Multithreading</li>
+        </ol>
+    </nav>
+    <main>
+        <h1>Multithreading — Concurrent Trading System Internals</h1>
+        
+        <section id="pillar-1">
+            <h2>PILLAR 1: Ground-Zero Theory & The Pain Point</h2>
+            <p>A modern trading system cannot process ticks sequentially. If an exchange sends 100,000 market data ticks per second, processing them on a single thread will cause unbounded queue growth, stale prices, and massive financial loss. Multithreading allows a JVM to execute multiple instruction streams concurrently. However, sharing mutable state (like an order book) across threads introduces race conditions, deadlocks, and memory visibility hazards.</p>
+        </section>
+
+        <section id="pillar-2">
+            <h2>PILLAR 2: Architectural Decision Rationales</h2>
+            <h3>Thread Creation: Runnable vs Callable</h3>
+            <p>We rarely extend <code>Thread</code> because Java doesn't support multiple inheritance. We implement <code>Runnable</code> for fire-and-forget tasks (e.g., flushing logs). We implement <code>Callable&lt;T&gt;</code> when we need a return value (e.g., calculating portfolio risk and returning a <code>RiskReport</code>) or when we need to throw checked exceptions.</p>
+            
+            <h3>start() vs run()</h3>
+            <p>Calling <code>run()</code> just executes the method synchronously on the current thread. Calling <code>start()</code> invokes native OS calls (via the JVM) to allocate a new call stack, register the thread with the OS scheduler, and <em>then</em> asynchronously invoke <code>run()</code>.</p>
+
+            <h3>The volatile keyword</h3>
+            <p><code>volatile</code> solves the CPU cache visibility problem. It does NOT solve atomicity. It instructs the JVM to read the variable directly from main memory and flush writes directly to main memory, bypassing L1/L2 caches, preventing instruction reordering.</p>
+        </section>
+
+        <section id="pillar-3">
+            <h2>PILLAR 3: Step-by-Step Evolution & Thought Process</h2>
+            <p>Naive approach: Shared state without locks → Race conditions. <br>
+            Fix 1: Add <code>synchronized</code> everywhere → System bottlenecks, lock contention.<br>
+            Fix 2: Use <code>volatile</code> → Still fails because <code>i++</code> is read-modify-write (not atomic).<br>
+            Fix 3: Use <code>AtomicInteger</code> / <code>LongAdder</code> or lock striping (<code>ConcurrentHashMap</code>).</p>
+        </section>
+
+        <section id="pillar-4">
+            <h2>PILLAR 4: Production-Grade Java 21 Code</h2>
+            <pre><code>
+package com.finance.trading.concurrency;
+
+import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.locks.ReentrantLock;
+
+// 1. Callable for Risk Calculation
+public record RiskReport(String portfolioId, double var) {}
+
+public class RiskCalculator implements Callable&lt;RiskReport&gt; {
+    private final String portfolioId;
+    public RiskCalculator(String portfolioId) { this.portfolioId = portfolioId; }
+    
+    @Override
+    public RiskReport call() throws Exception {
+        // Expensive simulation
+        return new RiskReport(portfolioId, 45000.50);
+    }
+}
+
+// 2. Race Condition Fix via AtomicInteger
+public class TradeCounter {
+    private final AtomicInteger tradeCount = new AtomicInteger(0);
+    
+    public void increment() {
+        tradeCount.incrementAndGet(); // Atomic CAS operation
+    }
+}
+
+// 3. ThreadLocal (Beware of Thread Pool Leaks!)
+public class TradeContextHolder {
+    // ThreadLocal stores user context per thread. 
+    // MUST call .remove() in a finally block to prevent leaks in thread pools!
+    public static final ThreadLocal&lt;String&gt; currentTrader = new ThreadLocal&lt;&gt;();
+}
+
+// 4. Deadlock Example & Prevention
+public class AccountManager {
+    // ReentrantLock provides tryLock() with timeout, preventing deadlocks
+    public void transfer(Account from, Account to, double amount) {
+        // Always lock in a globally consistent order (e.g., by Account ID) to prevent circular wait!
+        Account first = from.id().compareTo(to.id()) &lt; 0 ? from : to;
+        Account second = from.id().compareTo(to.id()) &lt; 0 ? to : from;
+        
+        synchronized(first) {
+            synchronized(second) {
+                from.debit(amount);
+                to.credit(amount);
+            }
+        }
+    }
+}
+            </code></pre>
+        </section>
+
+        <section id="pillar-5">
+            <h2>PILLAR 5: The Interviewer's Deep Follow-Up Questions</h2>
+            <div class="interview-box">
+                <h3>📋 How to Answer This in an Interview</h3>
+                <p>Always frame multithreading in terms of throughput vs latency, and correctness vs liveness. Be ready to explain the Java Memory Model (JMM), Happens-Before relationships, and exactly how locks behave.</p>
+            </div>
+            <div class="follow-up-box">
+                <h3>🎯 Interviewer Follow-Up Questions</h3>
+                <p><strong>Trap Question:</strong> "What is the difference between volatile, transient, and synchronized?"</p>
+                <p><strong>Answer:</strong> <code>volatile</code> guarantees memory visibility and prevents instruction reordering (JMM boundary). <code>synchronized</code> guarantees both visibility AND mutual exclusion (atomicity) by acquiring a monitor lock. <code>transient</code> has nothing to do with multithreading; it tells the JVM to ignore the field during object serialization.</p>
+                
+                <p><strong>Trap Question:</strong> "A ThreadLocal variable is causing a memory leak in our web server. How does it happen?"</p>
+                <p><strong>Answer:</strong> Web servers use thread pools. When a request finishes, the thread isn't destroyed; it's returned to the pool. If you don't call <code>ThreadLocal.remove()</code>, the thread holds a strong reference to the object in its ThreadLocalMap, preventing garbage collection for the lifetime of the application.</p>
+                
+                <p><strong>Trap Question:</strong> "wait() vs sleep() - how can incorrect usage lead to deadlocks?"</p>
+                <p><strong>Answer:</strong> <code>wait()</code> releases the monitor lock of the object it's called on, allowing other threads to enter the synchronized block and eventually call <code>notify()</code>. <code>Thread.sleep()</code> pauses the thread but <strong>holds onto the lock</strong>. If a thread sleeps inside a synchronized block, no other thread can acquire the lock, potentially stalling the entire system.</p>
+            </div>
+        </section>
+
+        <section id="pillar-6">
+            <h2>PILLAR 6: Trade-offs & When NOT To Use It</h2>
+            <p><strong>Trade-off:</strong> Raw threads map 1:1 to OS platform threads (1MB stack space each). Spawning 10,000 platform threads will crash the JVM. Context switching between OS threads is expensive (saving/restoring registers, CPU cache invalidation). For massive concurrency (e.g., maintaining 100k open FIX connections), raw <code>Thread</code> is obsolete—use Java 21 Virtual Threads instead.</p>
+        </section>
+    </main>
+</body>
+</html>

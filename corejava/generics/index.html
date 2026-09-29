@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Generics & Type System — Writing Flexible, Type-Safe Code</title>
+    <link rel="stylesheet" href="../../css/style.css">
+</head>
+<body>
+    <nav class="breadcrumbs">
+        <a href="../index.html">Home</a> &gt; <span>Generics & Type System</span>
+    </nav>
+    <header>
+        <h1>Generics & Type System — Writing Flexible, Type-Safe Code</h1>
+        <p>Leveraging Java's type system to build robust, reusable financial algorithms.</p>
+    </header>
+
+    <main>
+        <section id="why-generics">
+            <h2>1. Why Generics?</h2>
+            <p>Before Java 5, collections held <code>Object</code>. You had to cast elements, risking <code>ClassCastException</code> at runtime. Generics move type checking to compile time.</p>
+        </section>
+
+        <section id="generic-classes-methods">
+            <h2>2. Generic Classes & 3. Methods</h2>
+            <pre><code>// Generic Interface
+public interface Repository&lt;T&gt; {
+    void save(T item);
+}
+
+// Generic Class
+public class TradeRepository&lt;T extends Trade&gt; implements Repository&lt;T&gt; {
+    public void save(T trade) { /* DB logic */ }
+}
+
+// Generic Method
+public &lt;T&gt; T findInstrument(String id, Class&lt;T&gt; type) {
+    // DB fetch and map to type
+    return type.cast(dbResult);
+}
+</code></pre>
+        </section>
+
+        <section id="bounded-types">
+            <h2>4. Bounded Types</h2>
+            <p>Restrict the types that can be used as type arguments. Useful in financial calculations.</p>
+            <pre><code>public static &lt;T extends Comparable&lt;T&gt;&gt; T maxPrice(T p1, T p2) {
+    return p1.compareTo(p2) > 0 ? p1 : p2;
+}</code></pre>
+        </section>
+
+        <section id="wildcards">
+            <h2>5. Wildcards and PECS</h2>
+            <div class="pillar">
+                <h3>PILLAR 3: Step-by-Step Evolution & Thought Process</h3>
+                <p>The <strong>PECS</strong> rule: <strong>P</strong>roducer <strong>E</strong>xtends, <strong>C</strong>onsumer <strong>S</strong>uper. If you need to read from a collection, use <code>&lt;? extends T&gt;</code>. If you need to write to a collection, use <code>&lt;? super T&gt;</code>.</p>
+            </div>
+            
+            <pre><code>// Read-only (Producer)
+public void processTrades(List&lt;? extends FinancialInstrument&gt; instruments) {
+    for (FinancialInstrument i : instruments) {
+        // Can read as FinancialInstrument, but CANNOT add to list
+    }
+}
+
+// Write-only (Consumer)
+public void addTrade(List&lt;? super Trade&gt; dest) {
+    dest.add(new EquityTrade());
+    // Can add Trade and subtypes, but cannot read safely as a specific type
+}
+</code></pre>
+
+            <div class="interview-box">
+                <h4>📋 How to Answer This in an Interview</h4>
+                <p><strong>Q: Explain wildcard bounds and the PECS principle.</strong></p>
+                <p>A: <code>&lt;? extends T&gt;</code> sets an upper bound, meaning the collection contains <code>T</code> or its subclasses. It acts as a producer—safe to read <code>T</code>, but unsafe to add anything. <code>&lt;? super T&gt;</code> sets a lower bound, meaning the collection contains <code>T</code> or its superclasses. It acts as a consumer—safe to add <code>T</code> or its subclasses, but reading yields <code>Object</code>.</p>
+            </div>
+        </section>
+
+        <section id="type-erasure">
+            <h2>6. Type Erasure</h2>
+            <p>Generics are a compile-time construct. At runtime, <code>List&lt;String&gt;</code> and <code>List&lt;Integer&gt;</code> are both just <code>List</code>. The JVM erases the type parameters and replaces them with their bounds (or <code>Object</code>).</p>
+            <div class="interview-box">
+                <h4>🎯 Interviewer Follow-Up Questions</h4>
+                <p><strong>Q: Why can't you instantiate a generic type like <code>new T()</code>?</strong></p>
+                <p>A: Because of Type Erasure. The JVM doesn't know what <code>T</code> is at runtime. To work around this, we pass a <code>Class&lt;T&gt;</code> token and use reflection, or use a Supplier/Factory pattern.</p>
+            </div>
+        </section>
+
+        <section id="generic-factory">
+            <h2>7. Generic Factory Pattern</h2>
+            <pre><code>public class InstrumentFactory {
+    public &lt;T extends Instrument&gt; T create(Class&lt;T&gt; clazz) throws Exception {
+        return clazz.getDeclaredConstructor().newInstance();
+    }
+}
+</code></pre>
+        </section>
+    </main>
+    <script src="../../js/main.js"></script>
+    <script type="module">
+        import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+        mermaid.initialize({ startOnLoad: true });
+    </script>
+</body>
+</html>

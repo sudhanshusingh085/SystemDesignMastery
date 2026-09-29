@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SQL & Database — Mastering Financial Data Queries</title>
+    <link rel="stylesheet" href="../css/style.css">
+    <script type="module">
+        import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+        mermaid.initialize({ startOnLoad: true, theme: 'dark' });
+    </script>
+</head>
+<body>
+    <nav class="breadcrumb">
+        <a href="../index.html">Home</a> &gt; <span>SQL & Database</span>
+    </nav>
+    
+    <header>
+        <h1>SQL & Database — Mastering Financial Data Queries</h1>
+        <p>Advanced SQL techniques, query optimization, and ACID properties for financial systems.</p>
+    </header>
+
+    <main>
+        <section class="pillar">
+            <h2>PILLAR 1: Ground-Zero Theory & The Pain Point</h2>
+            <p><strong>The Pain Point:</strong> Financial data must be impeccably accurate and highly available. Bad queries can lock up the settlement database, causing millions in losses. Knowing how the database executes queries and manages locks is critical.</p>
+            <h3>Order of Execution</h3>
+            <p>You write: <code>SELECT ... FROM ... WHERE ... GROUP BY ... HAVING ... ORDER BY</code></p>
+            <p>The DB executes: <code>FROM &rarr; JOIN &rarr; WHERE &rarr; GROUP BY &rarr; HAVING &rarr; SELECT &rarr; DISTINCT &rarr; ORDER BY &rarr; LIMIT</code></p>
+            <p><em>Why you can't use an alias in WHERE:</em> The <code>WHERE</code> clause filters data before the <code>SELECT</code> clause creates the aliases.</p>
+        </section>
+
+        <section class="pillar">
+            <h2>PILLAR 2: Architectural Decision Rationales & Modifier Deep Dives</h2>
+            <h3>Transactions & Isolation Levels</h3>
+            <p>Isolation levels define how strictly transactions are separated.</p>
+            <table border="1">
+                <tr><th>Isolation Level</th><th>Dirty Read</th><th>Non-Repeatable Read</th><th>Phantom Read</th></tr>
+                <tr><td>READ_UNCOMMITTED</td><td>Yes</td><td>Yes</td><td>Yes</td></tr>
+                <tr><td>READ_COMMITTED</td><td>No</td><td>Yes</td><td>Yes</td></tr>
+                <tr><td>REPEATABLE_READ</td><td>No</td><td>No</td><td>Yes</td></tr>
+                <tr><td>SERIALIZABLE</td><td>No</td><td>No</td><td>No</td></tr>
+            </table>
+            <p><strong>Finance context:</strong> Money transfers usually require <code>READ_COMMITTED</code> with pessimistic row locks (<code>SELECT FOR UPDATE</code>) or optimistic locking (version numbers).</p>
+        </section>
+
+        <section class="pillar">
+            <h2>PILLAR 3: Step-by-Step Evolution & Thought Process</h2>
+            <h3>Indexing Strategies</h3>
+            <p><strong>Naive:</strong> Create an index on every column. Result: Extremely slow inserts/updates, as B-Trees must be rebalanced.</p>
+            <p><strong>Better:</strong> Composite Index. E.g., `INDEX(trader_id, trade_date)`. The order matters! It filters by `trader_id` first.</p>
+            <p><strong>Best:</strong> Covering Index. If a query is `SELECT amount FROM trades WHERE trader_id = X`, and we have `INDEX(trader_id, amount)`, the DB never touches the actual table (Index-Only Scan).</p>
+        </section>
+
+        <section class="pillar">
+            <h2>PILLAR 4: Production-Grade SQL Code</h2>
+            <pre><code>
+-- Window Functions: Running Total of Daily P&L
+SELECT 
+    trade_date,
+    daily_pnl,
+    SUM(daily_pnl) OVER (ORDER BY trade_date ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as cumulative_pnl,
+    LAG(daily_pnl, 1) OVER (ORDER BY trade_date) as previous_day_pnl
+FROM daily_trader_stats
+WHERE trader_id = 'T123';
+            </code></pre>
+            <pre><code>
+-- Joins: Finding unmatched trades (Reconciliation)
+SELECT 
+    t.trade_id, t.amount, s.settlement_id
+FROM trades t
+LEFT JOIN settlements s ON t.trade_id = s.trade_id
+WHERE s.settlement_id IS NULL; -- Trades that haven't been settled
+            </code></pre>
+        </section>
+
+        <section class="pillar">
+            <h2>PILLAR 5: The Interviewer's Deep Follow-Up Questions</h2>
+            <div class="interview-box">
+                <h3>📋 How to Answer This in an Interview</h3>
+                <p><strong>Q: What is the difference between RANK(), DENSE_RANK(), and ROW_NUMBER()?</strong><br>
+                <em>Candidate:</em> Let's say salaries are 100k, 100k, 90k.<br>
+                - <code>ROW_NUMBER()</code>: 1, 2, 3 (always sequential)<br>
+                - <code>RANK()</code>: 1, 1, 3 (skips the next rank after a tie)<br>
+                - <code>DENSE_RANK()</code>: 1, 1, 2 (never skips ranks)</p>
+            </div>
+            
+            <div class="interview-box">
+                <h3>🎯 Interviewer Follow-Up Questions</h3>
+                <p><strong>Q: Write an SQL query to rank employees based on their experience (highest to lowest).</strong><br>
+                <code>SELECT emp_id, exp_years, DENSE_RANK() OVER (ORDER BY exp_years DESC) as rank FROM employees;</code></p>
+
+                <p><strong>Q: Given account transactions A:+100, B:+200, A:-50, C:+300, B:-100, A:+150, calculate the final balance for each account.</strong><br>
+                <code>SELECT account_id, SUM(amount) as final_balance FROM transactions GROUP BY account_id;</code></p>
+                
+                <p><strong>Q: How would you identify and resolve a database bottleneck?</strong><br>
+                <em>Answer:</em> 1. Enable Slow Query Log. 2. Use <code>EXPLAIN ANALYZE</code> on the slow query to check for Full Table Scans. 3. Add appropriate B-Tree or Covering indexes. 4. Avoid `SELECT *`. 5. Implement application-level caching (Redis) for read-heavy data.</p>
+            </div>
+        </section>
+
+        <section class="pillar">
+            <h2>PILLAR 6: Trade-offs & When NOT To Use It</h2>
+            <p><strong>Relational DB Trade-offs:</strong> ACID compliance guarantees data integrity, but vertical scaling is expensive and horizontal scaling (sharding) is very complex compared to NoSQL databases. Don't use RDBMS for unstructured data, high-velocity time-series data (use InfluxDB/Kdb+), or heavy document storage.</p>
+        </section>
+    </main>
+    <script src="../js/main.js"></script>
+</body>
+</html>

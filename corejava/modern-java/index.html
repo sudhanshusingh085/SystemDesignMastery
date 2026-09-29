@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Java 11-21 Modern Features — The New Java</title>
+    <link rel="stylesheet" href="../../css/style.css">
+    <script src="../../js/main.js" defer></script>
+</head>
+<body>
+    <div class="breadcrumb">Home &gt; Modern Java (11-21)</div>
+    <h1>Java 11-21 Modern Features — The New Java</h1>
+
+    <section id="var">
+        <h2>1. var (Type Inference)</h2>
+        <div class="theory">
+            <p><strong>PILLAR 1: Theory</strong><br>
+            Introduced in Java 10. Allows the compiler to infer the type of a local variable from its initializer. It reduces verbosity.</p>
+            <p><strong>PILLAR 6: Trade-offs</strong><br>
+            Do not use <code>var</code> when it obscures the type and harms readability (e.g., <code>var result = calculate();</code>). Use it when the RHS explicitly shows the type (e.g., <code>var cache = new HashMap&lt;String, Trade&gt;();</code>).</p>
+        </div>
+    </section>
+
+    <section id="text-blocks">
+        <h2>2. Text Blocks</h2>
+        <div class="theory">
+            <p>Multi-line string literals (Java 15). Eliminates the need for cumbersome concatenation and escaping, perfect for SQL queries, JSON, or FIX messages in trading systems.</p>
+            <pre><code class="language-java">
+String fixMessage = """
+    8=FIX.4.4
+    9=148
+    35=D
+    49=CLIENT1
+    56=BROKER
+    52=20231024-10:00:00.000
+    """;
+            </code></pre>
+        </div>
+    </section>
+
+    <section id="records">
+        <h2>3. Records</h2>
+        <div class="theory">
+            <p><strong>PILLAR 1: Theory</strong><br>
+            Introduced in Java 16, Records are transparent carriers for immutable data. They automatically generate constructors, accessors, equals(), hashCode(), and toString().</p>
+            <pre><code class="language-java">
+public record Trade(String tradeId, String currencyPair, BigDecimal amount, LocalDateTime timestamp) {
+    // Compact constructor for validation
+    public Trade {
+        if (amount.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new IllegalArgumentException("Trade amount must be positive");
+        }
+    }
+}
+            </code></pre>
+            <div class="interview-box">
+                <h3>📋 How to Answer This in an Interview</h3>
+                <p><strong>Records vs Lombok @Value vs Classes:</strong> "Records are a language-level feature guaranteeing immutability and providing a standard semantic for data carriers. Unlike Lombok, which relies on annotation processing and bytecode manipulation, Records are natively understood by the JVM, which optimizes them (e.g., in serialization). They are ideal for DTOs and API responses."</p>
+            </div>
+        </div>
+    </section>
+
+    <section id="sealed-classes">
+        <h2>4. Sealed Classes</h2>
+        <div class="theory">
+            <p><strong>PILLAR 1: Theory</strong><br>
+            Restricts which classes can extend or implement a class/interface. Provides exhaustiveness for pattern matching.</p>
+            <pre><code class="language-java">
+public sealed interface OrderType permits MarketOrder, LimitOrder, StopOrder {}
+            </code></pre>
+        </div>
+    </section>
+
+    <section id="pattern-matching">
+        <h2>5. Pattern Matching</h2>
+        <div class="theory">
+            <p>Allows <code>instanceof</code> to declare a binding variable, eliminating explicit casting. Combined with switch expressions, it creates expressive, data-oriented logic.</p>
+            <pre><code class="language-java">
+public void processOrder(OrderType order) {
+    switch(order) {
+        case MarketOrder m -> executeMarket(m);
+        case LimitOrder l when l.price().compareTo(currentPrice) >= 0 -> executeLimit(l);
+        case LimitOrder l -> queueLimit(l);
+        case StopOrder s -> monitorStop(s);
+    }
+}
+            </code></pre>
+        </div>
+    </section>
+
+    <section id="virtual-threads">
+        <h2>6. Virtual Threads (Project Loom)</h2>
+        <div class="theory">
+            <p><strong>PILLAR 1: Theory</strong><br>
+            Java 21 feature. Virtual threads are lightweight, JVM-managed threads. They solve the thread-per-request bottleneck in I/O-heavy applications (like trading gateways). Millions of virtual threads can be created, running on a small pool of platform (OS) threads.</p>
+            <div class="interview-box">
+                <h3>📋 How to Answer This in an Interview</h3>
+                <p><strong>Why use Virtual Threads?</strong> "Platform threads map 1:1 to OS threads, which are expensive (~1MB stack, context switching overhead). In blocking I/O applications, threads sit idle waiting for responses. Virtual threads map M:N to OS threads. When a virtual thread blocks on I/O, the JVM unmounts it from the carrier platform thread, allowing another virtual thread to execute. This achieves reactive-level scalability (millions of concurrent connections) without the complex, callback-hell programming model of reactive frameworks like WebFlux."</p>
+            </div>
+            <h4>🎯 Interviewer Follow-Up Questions</h4>
+            <ul>
+                <li><strong>Trap:</strong> "Will virtual threads make CPU-intensive tasks faster?"<br><strong>Answer:</strong> No. Virtual threads excel at blocking I/O tasks. For pure CPU-bound tasks, platform threads or parallel streams are better.</li>
+                <li><strong>Trap:</strong> "What is thread pinning?"<br><strong>Answer:</strong> If a virtual thread performs a blocking operation while inside a <code>synchronized</code> block or native method, it pins the carrier thread to the OS thread, blocking others. We must migrate <code>synchronized</code> to <code>ReentrantLock</code> to prevent this.</li>
+            </ul>
+        </div>
+    </section>
+
+    <section id="structured-concurrency">
+        <h2>7. Structured Concurrency (Preview)</h2>
+        <div class="theory">
+            <p>Provides a clean way to manage multi-threaded tasks as a single unit of work, simplifying error handling and cancellation. E.g., querying 3 different exchanges and cleanly canceling the others once the fastest responds.</p>
+        </div>
+    </section>
+</body>
+</html>

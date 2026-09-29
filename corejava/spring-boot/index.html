@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Spring Boot Deep Dive — Enterprise Java in Practice</title>
+    <link rel="stylesheet" href="../css/style.css">
+    <script type="module">
+        import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+        mermaid.initialize({ startOnLoad: true, theme: 'base' });
+    </script>
+</head>
+<body>
+    <nav class="breadcrumb">
+        <a href="../index.html">Home</a> &gt; <span>Spring Boot Deep Dive</span>
+    </nav>
+
+    <header>
+        <h1>Spring Boot Deep Dive — Enterprise Java in Practice</h1>
+        <p class="subtitle">Mastering the heart of modern Java financial architectures</p>
+    </header>
+
+    <main>
+        <section class="topic-section" id="mvc-flow">
+            <h2>1. Spring MVC Request Flow</h2>
+            <div class="pillar pillar-1">
+                <h3>Pillar 1: Ground-Zero Theory & The Pain Point</h3>
+                <p>In the dark ages of Java web development, developers mapped every single HTTP endpoint to a distinct <code>HttpServlet</code>. This resulted in thousands of classes, redundant parsing logic, and unmaintainable routing tables. Spring MVC introduced the <strong>Front Controller</strong> pattern via the <code>DispatcherServlet</code>. It acts as the single point of entry, routing incoming requests, managing the lifecycle, and delegating to the appropriate business logic. Without it, you are manually parsing HTTP streams, which is a disaster for latency and maintainability.</p>
+                <div class="jargon"><strong>.jargon(Front Controller):</strong> A centralized entry point that handles all requests for a web application, providing a unified mechanism for routing, security, and rendering.</div>
+            </div>
+
+            <div class="pillar pillar-2">
+                <h3>Pillar 2: Architectural Decision Rationales</h3>
+                <p>Why a single <code>DispatcherServlet</code> instead of multiple servlets? By centralizing the entry point, Spring can uniformly apply Cross-Origin Resource Sharing (CORS) rules, security filters, and content-negotiation strategies. The <code>HandlerMapping</code> is abstracted as an interface rather than a concrete class, allowing teams to route by URL, headers, or even custom annotations seamlessly.</p>
+            </div>
+
+            <div class="pillar pillar-3">
+                <h3>Pillar 3: Step-by-Step Evolution</h3>
+                <pre class="mermaid">
+                sequenceDiagram
+                    participant Client
+                    participant DispatcherServlet
+                    participant HandlerMapping
+                    participant Controller
+                    participant Service
+                    participant Repository
+                    
+                    Client->>DispatcherServlet: HTTP POST /api/v1/trades
+                    DispatcherServlet->>HandlerMapping: Inspect URL & Headers
+                    HandlerMapping-->>DispatcherServlet: Return TradeController & Interceptors
+                    DispatcherServlet->>Controller: Invoke executeTrade()
+                    Controller->>Service: process(tradeDTO)
+                    Service->>Repository: save(tradeEntity)
+                    Repository-->>Service: Trade ID
+                    Service-->>Controller: TradeResponse
+                    Controller-->>DispatcherServlet: ResponseEntity (JSON)
+                    DispatcherServlet-->>Client: 200 OK
+                </pre>
+            </div>
+
+            <div class="pillar pillar-4">
+                <h3>Pillar 4: Production-Grade Java 21 Code</h3>
+                <pre><code class="language-java">
+@RestController
+@RequestMapping("/api/v1/trades")
+public class TradeController {
+    
+    private final TradeService tradeService;
+
+    public TradeController(TradeService tradeService) {
+        this.tradeService = tradeService;
+    }
+
+    @PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity&lt;TradeResponse&gt; executeTrade(@RequestBody @Valid TradeRequest request) {
+        // DispatcherServlet routed us here via RequestMappingHandlerMapping
+        TradeResponse response = tradeService.execute(request);
+        return ResponseEntity.ok(response);
+    }
+}
+                </code></pre>
+            </div>
+
+            <div class="pillar pillar-5">
+                <h3>Pillar 5: The Interviewer's Deep Follow-Up</h3>
+                <div class="interview-box">
+                    <h4>📋 How to Answer This in an Interview</h4>
+                    <p><strong>Q: "Explain the flow of Spring MVC from request to response."</strong></p>
+                    <p><em>Candidate:</em> "The request hits the Servlet container and reaches the DispatcherServlet. It consults the HandlerMapping to find the exact Controller method mapped to the URL. If interceptors are defined, their preHandle methods fire. The DispatcherServlet then uses a HandlerAdapter to invoke the Controller. The Controller delegates to the Service and returns a payload. Finally, the HttpMessageConverter serializes the return object (like a Record) to JSON and sends it back in the HTTP response."</p>
+                </div>
+                <div class="interview-box">
+                    <h4>🎯 Interviewer Follow-Up Questions</h4>
+                    <p><strong>Q: "What if the controller throws an exception? Where does the flow go?"</strong></p>
+                    <p><em>A:</em> "It bypasses the normal return flow and is caught by the <code>HandlerExceptionResolver</code>, specifically handled by an <code>@ControllerAdvice</code> class if defined, which translates the exception into an RFC-7807 ProblemDetail response."</p>
+                </div>
+            </div>
+
+            <div class="pillar pillar-6">
+                <h3>Pillar 6: Trade-offs & When NOT To Use It</h3>
+                <p>Spring MVC is thread-per-request. For extremely high-concurrency systems (like real-time market data streaming), this model blocks threads. In such cases, Spring WebFlux (Reactive) or Java 21 Virtual Threads (which make blocking cheap) are better suited than traditional MVC.</p>
+            </div>
+        </section>
+
+        <!-- Topic 2: Bean Lifecycle -->
+        <section class="topic-section" id="bean-lifecycle">
+            <h2>2. Bean Lifecycle</h2>
+            <div class="pillar pillar-1">
+                <h3>Pillar 1: Ground-Zero Theory & The Pain Point</h3>
+                <p>If you just use <code>new Object()</code>, you are responsible for initializing it, passing dependencies, and destroying it. Spring's Inversion of Control (IoC) container takes over. The Bean Lifecycle is the exact sequence of events Spring executes to create, wire, initialize, and destroy a bean. Failing to understand this means resource leaks (unclosed database connections) and NullPointerExceptions when accessing uninitialized properties.</p>
+            </div>
+            
+            <div class="pillar pillar-3">
+                <h3>Pillar 3: Step-by-Step Evolution</h3>
+                <pre class="mermaid">
+                flowchart TD
+                    A[Instantiation (Constructor)] --> B[Populate Properties (Dependency Injection)]
+                    B --> C[BeanNameAware / ApplicationContextAware]
+                    C --> D[BeanPostProcessor preInit]
+                    D --> E[@PostConstruct]
+                    E --> F[InitializingBean afterPropertiesSet]
+                    F --> G[BeanPostProcessor postInit]
+                    G --> H[READY FOR USE]
+                    H --> I[@PreDestroy]
+                    I --> J[DisposableBean destroy]
+                </pre>
+            </div>
+
+            <div class="pillar pillar-4">
+                <h3>Pillar 4: Production-Grade Java 21 Code</h3>
+                <pre><code class="language-java">
+@Component
+public class TradeProcessingBean implements InitializingBean, DisposableBean, ApplicationContextAware {
+    
+    private final FIXEngine fixEngine; // Field 1
+    private ApplicationContext context;
+
+    // 1. Instantiation & DI
+    public TradeProcessingBean(FIXEngine fixEngine) {
+        this.fixEngine = fixEngine;
+        System.out.println("1. Constructor: Dependencies injected");
+    }
+
+    // 2. Aware interfaces
+    @Override
+    public void setApplicationContext(ApplicationContext applicationContext) {
+        this.context = applicationContext;
+        System.out.println("2. ApplicationContextAware invoked");
+    }
+
+    // 3. JSR-250 Annotation
+    @PostConstruct
+    public void init() {
+        System.out.println("3. @PostConstruct: Warming up FIX caches");
+    }
+
+    // 4. Spring specific initialization
+    @Override
+    public void afterPropertiesSet() throws Exception {
+        System.out.println("4. InitializingBean: Checking FIX connection");
+    }
+
+    // 5. Destruction
+    @PreDestroy
+    public void shutdown() {
+        System.out.println("5. @PreDestroy: Draining FIX messages cleanly");
+    }
+
+    @Override
+    public void destroy() throws Exception {
+        System.out.println("6. DisposableBean: Socket closed");
+    }
+}
+                </code></pre>
+            </div>
+        </section>
+
+        <!-- Topic 5: @Transactional Trap -->
+        <section class="topic-section" id="transactional-trap">
+            <h2>5. The @Transactional TRAP</h2>
+            <div class="pillar pillar-1">
+                <h3>Pillar 1: Ground-Zero Theory</h3>
+                <p><code>@Transactional</code> guarantees ACID properties for database operations. If an exception occurs, changes are rolled back. However, Spring uses proxy-based Aspect-Oriented Programming (AOP). Spring wraps your bean in a proxy. When an external caller invokes the method, the proxy starts the transaction, delegates to your class, and commits. The trap occurs during <strong>self-invocation</strong>.</p>
+            </div>
+
+            <div class="pillar pillar-5">
+                <div class="interview-box">
+                    <h4>📋 How to Answer This in an Interview</h4>
+                    <p><strong>Q: "@Transactional is applied to a private method. Why does it silently have no effect?"</strong></p>
+                    <p><em>Candidate:</em> "Spring AOP relies on dynamic proxies (CGLIB or JDK). Proxies can only intercept public method calls coming from OUTSIDE the bean. If a method is private, the proxy cannot override it to inject transaction management logic. Furthermore, if a public non-transactional method inside the same bean calls a public transactional method inside that same bean, the transaction will ALSO fail to start. This is known as the self-invocation problem, because the internal call uses <code>this.method()</code>, completely bypassing the Spring proxy."</p>
+                </div>
+            </div>
+
+            <div class="pillar pillar-4">
+                <h3>Pillar 4: Production-Grade Java 21 Code</h3>
+                <pre><code class="language-java">
+@Service
+public class OrderService {
+
+    // TRAP: Caller hits this non-transactional method.
+    public void processOrder(Order order) {
+        // self-invocation! 'this' reference used. Bypasses proxy.
+        // @Transactional below is completely IGNORED.
+        saveToDatabase(order); 
+    }
+
+    @Transactional
+    public void saveToDatabase(Order order) {
+        // database ops...
+    }
+}
+                </code></pre>
+                <p><strong>The Fix:</strong> Either extract <code>saveToDatabase</code> into a separate <code>OrderRepositoryService</code> so it's called through a proxy, or use AspectJ weaving instead of Spring AOP proxies (which operates at byte-code level and doesn't suffer from self-invocation).</p>
+            </div>
+        </section>
+
+    </main>
+    <script src="../js/main.js"></script>
+</body>
+</html>

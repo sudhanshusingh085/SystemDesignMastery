@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kafka & Messaging — Event-Driven Trading Architecture</title>
+    <link rel="stylesheet" href="../css/style.css">
+    <script type="module">
+        import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+        mermaid.initialize({ startOnLoad: true, theme: 'dark' });
+    </script>
+</head>
+<body>
+    <nav class="breadcrumb">
+        <a href="../index.html">Home</a> &gt; <span>Kafka & Messaging</span>
+    </nav>
+    
+    <header>
+        <h1>Kafka & Messaging — Event-Driven Trading Architecture</h1>
+        <p>Mastering distributed event streaming for high-frequency trading platforms.</p>
+    </header>
+
+    <main>
+        <section class="pillar">
+            <h2>PILLAR 1: Ground-Zero Theory & The Pain Point</h2>
+            <p><strong>What is it?</strong> Apache Kafka is a distributed event streaming platform designed to handle trillions of events a day. In the finance domain, think of Kafka as the central nervous system of a trading platform.</p>
+            <p><strong>The Pain Point:</strong> Without Kafka, microservices rely on synchronous REST or brittle message queues. If the matching engine is down, trade events are lost. If we use a traditional RDBMS to store transient events, it becomes a severe bottleneck.</p>
+            <div class="jargon-box">
+                <strong>.jargon: Topic</strong> - A category or feed name. Analogy: A conveyor belt in a factory.<br>
+                <strong>.jargon: Partition</strong> - A topic is divided into partitions for parallel processing. Analogy: Parallel lanes on the conveyor belt.<br>
+                <strong>.jargon: Offset</strong> - A unique ID for each message within a partition.
+            </div>
+            <div class="mermaid">
+            flowchart TD
+                P1[Trade Producer] -->|Send| B1(Broker 1: Leader P0)
+                P2[Order Producer] -->|Send| B2(Broker 2: Leader P1)
+                B1 --> C1[Trade Consumer Grp A]
+                B2 --> C2[Settlement Consumer Grp B]
+            </div>
+        </section>
+
+        <section class="pillar">
+            <h2>PILLAR 2: Architectural Decision Rationales & Modifier Deep Dives</h2>
+            <h3>Producer Acks</h3>
+            <p><code>acks=0</code>: Fire and forget. <code>acks=1</code>: Leader acknowledgment. <code>acks=all</code> (or <code>-1</code>): Leader and all in-sync replicas (ISR) acknowledge. For financial trades, <strong>always use acks=all</strong>.</p>
+            <h3>Idempotent Producer</h3>
+            <p><code>enable.idempotence=true</code> ensures that retries don't result in duplicate trades. It assigns a Producer ID (PID) and sequence number to messages.</p>
+            <h3>Schema Registry</h3>
+            <p>Financial messages evolve (e.g., adding a `taxRate` field). Schema Registry (Avro, Protobuf) enforces schemas, ensuring backward/forward compatibility. If an upstream service changes the message structure abruptly, the schema registry rejects it.</p>
+        </section>
+
+        <section class="pillar">
+            <h2>PILLAR 3: Step-by-Step Evolution & Thought Process</h2>
+            <p><strong>Naive:</strong> REST API to save trade -> DB crashes -> Trade lost.</p>
+            <p><strong>Better:</strong> Messaging Queue (RabbitMQ) -> Good, but messages are deleted after reading. Hard to replay.</p>
+            <p><strong>Best (Kafka):</strong> Distributed log. Messages persist. If the settlement service is down, it can resume from its last committed offset when it wakes up.</p>
+        </section>
+
+        <section class="pillar">
+            <h2>PILLAR 4: Production-Grade Java 21 Code</h2>
+            <pre><code>
+import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+public record TradeEvent(String tradeId, String currencyPair, double amount, String action) {}
+
+@Service
+public class TradeProducerService {
+    
+    private final KafkaTemplate&lt;String, TradeEvent&gt; kafkaTemplate;
+    
+    public TradeProducerService(KafkaTemplate&lt;String, TradeEvent&gt; kafkaTemplate) {
+        this.kafkaTemplate = kafkaTemplate;
+    }
+    
+    // Exactly-once semantics with Transactional outbox/Kafka transactions
+    @Transactional
+    public void executeTrade(TradeEvent event) {
+        // Partitioning by currencyPair ensures strict ordering for a given pair
+        kafkaTemplate.send("fx-trades", event.currencyPair(), event);
+    }
+}
+            </code></pre>
+            <pre><code>
+import org.springframework.kafka.annotation.KafkaListener;
+import org.springframework.stereotype.Component;
+
+@Component
+public class TradeConsumer {
+
+    @KafkaListener(topics = "fx-trades", groupId = "settlement-group")
+    public void consumeTrade(TradeEvent event) {
+        try {
+            // Process settlement
+        } catch (Exception e) {
+            // Dead Letter Queue (DLQ) routing for poison messages
+            sendToDlq(event, e);
+        }
+    }
+}
+            </code></pre>
+        </section>
+
+        <section class="pillar">
+            <h2>PILLAR 5: The Interviewer's Deep Follow-Up Questions</h2>
+            <div class="interview-box">
+                <h3>📋 How to Answer This in an Interview</h3>
+                <p><strong>Q: How would Kafka partitions help with ordering?</strong><br>
+                <em>Candidate:</em> Kafka only guarantees order within a partition. To maintain order for a specific entity (like all trades for `EUR/USD`), we use the entity ID as the message key. Kafka hashes the key to assign it to the same partition consistently.</p>
+            </div>
+            
+            <div class="interview-box">
+                <h3>🎯 Interviewer Follow-Up Questions</h3>
+                <p><strong>Q: How would you prevent duplicate transactions if the user clicks multiple times?</strong><br>
+                <em>Answer:</em> 1) UI debouncing. 2) Idempotent API with a unique `requestId` stored in a Redis/DB with a unique constraint. 3) Kafka Idempotent producer `enable.idempotence=true` prevents network retry duplicates.</p>
+                
+                <p><strong>Q: What happens when a database crashes while consuming data from Kafka?</strong><br>
+                <em>Answer:</em> Disable auto-commit (`enable.auto.commit=false`). Process the message, write to DB, and manually commit the offset. If DB crashes before commit, the consumer restarts and re-reads the uncommitted message. The DB write must be idempotent.</p>
+                
+                <p><strong>Q: How would you process 1 lakh (100,000) messages/second?</strong><br>
+                <em>Answer:</em> 1. Increase topic partitions. 2. Scale consumer instances (up to the number of partitions). 3. Tune `batch.size` and `linger.ms` on producer. 4. Use LZ4 or ZSTD compression. 5. Optimize consumer processing (e.g., async DB batch inserts).</p>
+            </div>
+        </section>
+
+        <section class="pillar">
+            <h2>PILLAR 6: Trade-offs & When NOT To Use It</h2>
+            <h3>REST vs Kafka</h3>
+            <table border="1">
+                <tr><th>Feature</th><th>REST API</th><th>Kafka (Event-Driven)</th></tr>
+                <tr><td>Communication</td><td>Synchronous (Request-Reply)</td><td>Asynchronous (Publish-Subscribe)</td></tr>
+                <tr><td>Coupling</td><td>Tight (Service A must know B's URL)</td><td>Loose (Producers don't know Consumers)</td></tr>
+                <tr><td>Use Case</td><td>Fetching balance, synchronous validation</td><td>Trade execution, log aggregation</td></tr>
+            </table>
+            <p><strong>Don't use Kafka if:</strong> You need immediate, synchronous user feedback (e.g., login validation), or if the infrastructure overhead is too high for a simple CRUD app.</p>
+        </section>
+    </main>
+    <script src="../js/main.js"></script>
+</body>
+</html>

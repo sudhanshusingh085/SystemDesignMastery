@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Spring Security — Protecting Financial Applications</title>
+    <link rel="stylesheet" href="../css/style.css">
+    <script type="module">
+        import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+        mermaid.initialize({ startOnLoad: true, theme: 'base' });
+    </script>
+</head>
+<body>
+    <nav class="breadcrumb">
+        <a href="../index.html">Home</a> &gt; <span>Spring Security Deep Dive</span>
+    </nav>
+
+    <header>
+        <h1>Spring Security — Protecting Financial Applications</h1>
+        <p class="subtitle">Zero-trust architecture, OAuth 2.0, and JWTs in Banking</p>
+    </header>
+
+    <main>
+        <!-- Topic 1: SecurityFilterChain -->
+        <section class="topic-section" id="security-filter-chain">
+            <h2>1. SecurityFilterChain & Architecture</h2>
+            <div class="pillar pillar-1">
+                <h3>Pillar 1: Ground-Zero Theory & The Pain Point</h3>
+                <p>Spring Security acts as a massive bouncer before requests ever reach your <code>DispatcherServlet</code>. It operates entirely on Servlet <code>Filter</code>s. Without it, you would manually check headers, cookies, and tokens in every single controller. The <code>SecurityFilterChain</code> is an ordered list of these filters. If a request fails a filter (e.g., missing JWT), it is rejected with a 401/403 before your application logic even knows it existed.</p>
+            </div>
+            
+            <div class="pillar pillar-3">
+                <h3>Pillar 3: Step-by-Step Evolution</h3>
+                <pre class="mermaid">
+                flowchart LR
+                    A[Client Request] --> B[DelegatingFilterProxy]
+                    B --> C[FilterChainProxy]
+                    C --> D[SecurityContextPersistenceFilter]
+                    D --> E[UsernamePasswordAuthenticationFilter / JwtAuthenticationFilter]
+                    E --> F[AuthorizationFilter]
+                    F --> G[DispatcherServlet (Controllers)]
+                </pre>
+            </div>
+
+            <div class="pillar pillar-5">
+                <div class="interview-box">
+                    <h4>📋 How to Answer This in an Interview</h4>
+                    <p><strong>Q: "How does SecurityFilterChain work?"</strong></p>
+                    <p><em>Candidate:</em> "Spring Security hooks into the standard Servlet Filter API via a <code>DelegatingFilterProxy</code>. This proxy delegates work to a Spring Bean called <code>FilterChainProxy</code>. The <code>FilterChainProxy</code> manages one or more <code>SecurityFilterChain</code>s. Each chain is a sequence of highly specialized filters—some handle CORS, some extract JWTs, some handle authentication (AuthN), and finally, the AuthorizationFilter handles access control (AuthZ). If all filters pass, the request proceeds to the DispatcherServlet."</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Topic 4: JWT -->
+        <section class="topic-section" id="jwt">
+            <h2>4. JWT Structure, Creation, Validation</h2>
+            <div class="pillar pillar-1">
+                <h3>Pillar 1: Ground-Zero Theory</h3>
+                <p>JSON Web Tokens (JWT) are a stateless, cryptographically verifiable way to transmit claims between parties. Traditional session management requires storing session IDs in a central database (Redis) which introduces a network hop and scalability limits. JWTs solve this because the server only needs its private/public key to verify the token's authenticity.</p>
+            </div>
+            
+            <div class="pillar pillar-4">
+                <h3>Pillar 4: Production-Grade Java 21 Code</h3>
+                <pre><code class="language-java">
+@Component
+public sealed class JwtTokenProvider permits InternalJwtTokenProvider {
+    private final RSAPrivateKey privateKey;
+    private final RSAPublicKey publicKey;
+
+    public String generateToken(Authentication auth) {
+        var user = (CustomUserDetails) auth.getPrincipal();
+        Instant now = Instant.now();
+        
+        return Jwts.builder()
+                .subject(user.getUsername())
+                .claim("roles", user.getAuthorities())
+                .claim("trader_id", user.getTraderId())
+                .issuer("finance-auth-server")
+                .issuedAt(Date.from(now))
+                .expiration(Date.from(now.plusSeconds(3600)))
+                .signWith(privateKey)
+                .compact();
+    }
+}
+                </code></pre>
+            </div>
+            
+            <div class="pillar pillar-5">
+                <div class="interview-box">
+                    <h4>🎯 Interviewer Follow-Up Questions</h4>
+                    <p><strong>Q: "When API Gateway generates a JWT token and forwards to microservice A, should A validate the token again?"</strong></p>
+                    <p><em>A:</em> "YES. This is the principle of Defense in Depth. While the API Gateway validates the signature and expiry to prevent bad traffic from entering the network, Microservice A must also validate the token. The Gateway shouldn't know the intricate business roles required for every endpoint in Service A. Service A validates the JWT to extract claims and enforce method-level authorization (AuthZ) using <code>@PreAuthorize</code>."</p>
+                </div>
+            </div>
+        </section>
+
+    </main>
+    <script src="../js/main.js"></script>
+</body>
+</html>
