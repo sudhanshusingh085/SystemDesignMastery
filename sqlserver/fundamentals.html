@@ -286,13 +286,258 @@ flowchart TD
           </tr>
         </tbody>
       </table>
+
+      <h3>NULLIF(): The Divide-by-Zero Defense Weapon</h3>
+      <p><code>NULLIF(expression1, expression2)</code> takes two arguments. If <code>expression1 == expression2</code>, it returns <strong>NULL</strong>; otherwise, it returns <code>expression1</code>.</p>
+      <div class="card" style="border-left: 4px solid var(--success); background: #f0fdf4;">
+        <h4>💡 The Universal Financial Formula Guard:</h4>
+        <pre><code class="language-sql">-- If TotalTrades is 0, standard division throws fatal error 8134 (Divide by zero)!
+-- NULLIF converts 0 to NULL. Dividing by NULL safely yields NULL without crashing the batch!
+SELECT AccountID, (TotalNotional / NULLIF(TotalTrades, 0)) AS AvgTradeNotional
+FROM DailyAccountTradingSummary;
+</code></pre>
+      </div>
     </section>
 
     <!-- ================================================================= -->
-    <!-- PILLAR 4: ALL AGGREGATE FUNCTIONS -->
+    <!-- PILLAR 4: STRING PATTERN MATCHING & THE LIKE OPERATOR -->
     <!-- ================================================================= -->
     <section>
-      <h2>4. Deep Dive: All SQL Server Aggregate Functions Explained from First Principles</h2>
+      <h2>4. String Pattern Matching & The LIKE Operator Masterclass</h2>
+
+      <h3>A. How the LIKE Operator Works Under the Hood</h3>
+      <p>The <code>LIKE</code> operator determines whether a character string matches a specified pattern. Unlike standard equality (<code>=</code>) which checks for identical character matches, <code>LIKE</code> invokes SQL Server's string pattern evaluation engine.</p>
+
+      <table border="1" style="width: 100%; border-collapse: collapse; margin: 1.5rem 0;">
+        <thead>
+          <tr style="background: #f1f5f9;">
+            <th>Wildcard Character</th>
+            <th>Matching Meaning</th>
+            <th>Production Example</th>
+            <th>Matches</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>%</code> (Percent)</td>
+            <td>Any string of <strong>zero or more characters</strong>.</td>
+            <td><code>WHERE Ticker LIKE 'A%'</code></td>
+            <td>'A', 'AAPL', 'AMZN'</td>
+          </tr>
+          <tr>
+            <td><code>_</code> (Underscore)</td>
+            <td>Strictly <strong>exactly one single character</strong>.</td>
+            <td><code>WHERE CurrencyCode LIKE 'US_'</code></td>
+            <td>'USD', 'USX' (Does NOT match 'USDT')</td>
+          </tr>
+          <tr>
+            <td><code>[ ]</code> (Brackets)</td>
+            <td>Any single character within the specified <strong>character set or range</strong>.</td>
+            <td><code>WHERE AccountNumber LIKE 'ACC-[0-9]%'</code></td>
+            <td>'ACC-101', 'ACC-882' (Does NOT match 'ACC-ABC')</td>
+          </tr>
+          <tr>
+            <td><code>[^ ]</code> (Caret in Brackets)</td>
+            <td>Any single character <strong>NOT</strong> within the specified character set.</td>
+            <td><code>WHERE Tag LIKE '[^0-9]%'</code></td>
+            <td>Any string that does NOT start with a number.</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>B. Escaping Wildcard Characters (The ESCAPE Clause)</h3>
+      <p>What if your data actually contains literal percent signs or underscores (e.g. searching for a discount tag <code>'10%_OFF'</code>)? If you write <code>LIKE '%10%_OFF%'</code>, the percent and underscore are interpreted as wildcards!</p>
+      <p><strong>The Solution: The ESCAPE Clause:</strong></p>
+<pre><code class="language-sql">-- Declare '!' as the escape character:
+SELECT ReferenceNote
+FROM LedgerTransactions
+WHERE ReferenceNote LIKE '%10!%__OFF%' ESCAPE '!';
+</code></pre>
+
+      <h3>C. The SARGability of LIKE: Index Seek vs Table Scan</h3>
+      <div class="grid grid-2" style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin: 1rem 0;">
+        <div class="card" style="border-left: 4px solid var(--success);">
+          <h4>✅ SARGable: Prefix Search (Index Seek)</h4>
+          <pre><code class="language-sql">WHERE ClientName LIKE 'Blackstone%';</code></pre>
+          <p>Because the start of the string is fixed, the engine navigates down the B-tree to the 'B' range and performs an <strong>Index Seek</strong>!</p>
+        </div>
+        <div class="card" style="border-left: 4px solid var(--danger);">
+          <h4>🚫 Non-SARGable: Infix / Suffix Search (Full Table Scan)</h4>
+          <pre><code class="language-sql">WHERE ClientName LIKE '%Management';</code></pre>
+          <p>Because the string starts with a wildcard, the B-tree cannot be navigated alphabetically. The engine must scan <strong>every page in the table</strong>!</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================================================================= -->
+    <!-- PILLAR 5: COMPLETE DATE & TIME ENGINEERING MASTERCLASS -->
+    <!-- ================================================================= -->
+    <section>
+      <h2>5. Complete SQL Server Date & Time Engineering Masterclass</h2>
+
+      <h3>A. SQL Server Temporal Data Types Compared</h3>
+      <table border="1" style="width: 100%; border-collapse: collapse; margin: 1.5rem 0;">
+        <thead>
+          <tr style="background: #f1f5f9;">
+            <th>Data Type</th>
+            <th>Storage Size</th>
+            <th>Precision</th>
+            <th>Range</th>
+            <th>Recommended Usage in Modern Systems</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>DATE</code></td>
+            <td>3 Bytes</td>
+            <td>1 Day (No time component)</td>
+            <td>0001-01-01 to 9999-12-31</td>
+            <td>Settlement dates, birth dates, trade calendar days.</td>
+          </tr>
+          <tr>
+            <td><code>TIME</code></td>
+            <td>3 to 5 Bytes</td>
+            <td>100 nanoseconds</td>
+            <td>00:00:00.0000000 to 23:59:59.9999999</td>
+            <td>Market opening/closing hours.</td>
+          </tr>
+          <tr>
+            <td><code>DATETIME</code> (Legacy)</td>
+            <td>8 Bytes</td>
+            <td>~3.33 milliseconds (Rounds to .000, .003, or .007!)</td>
+            <td>1753-01-01 to 9999-12-31</td>
+            <td><strong>Legacy type — AVOID!</strong> Rounding errors cause midnight boundary bugs.</td>
+          </tr>
+          <tr>
+            <td><code>DATETIME2(3)</code></td>
+            <td>7 Bytes</td>
+            <td>1 millisecond</td>
+            <td>0001-01-01 to 9999-12-31</td>
+            <td><strong>Industry Standard:</strong> Exact millisecond precision with 1 byte less storage than legacy DATETIME!</td>
+          </tr>
+          <tr>
+            <td><code>DATETIMEOFFSET(7)</code></td>
+            <td>10 Bytes</td>
+            <td>100 nanoseconds + Time Zone Offset</td>
+            <td>-14:00 to +14:00 offset</td>
+            <td>Cross-border multi-exchange trading (NYSE, London LSE, Tokyo TSE).</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <!-- DATE FUNCTIONS -->
+      <h3>B. System Date Functions & UTC Discipline</h3>
+      <ul>
+        <li><code>GETDATE()</code> / <code>CURRENT_TIMESTAMP</code>: Returns local server clock time as legacy <code>DATETIME</code>. (Dangerous if server is relocated or daylight savings changes!).</li>
+        <li><code>SYSUTCDATETIME()</code>: <strong>The Golden Standard.</strong> Returns high-precision <code>DATETIME2(7)</code> in universal UTC time. Always use this for order and trade timestamps.</li>
+        <li><code>SYSDATETIMEOFFSET()</code>: Returns current UTC time with the server's local time zone offset.</li>
+      </ul>
+
+      <!-- DATE MATH & MANIPULATION -->
+      <h3>C. Date Manipulation: DATEADD, DATEDIFF, EOMONTH, and DATEFROMPARTS</h3>
+      <table border="1" style="width: 100%; border-collapse: collapse; margin: 1.5rem 0;">
+        <thead>
+          <tr style="background: #f1f5f9;">
+            <th>Function</th>
+            <th>Signature & Description</th>
+            <th>Production Financial Example</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>DATEADD()</code></td>
+            <td><code>DATEADD(datepart, number, date)</code><br>Adds or subtracts temporal units.</td>
+            <td><code>DATEADD(DAY, 2, OrderDate)</code> (T+2 Settlement calculation).</td>
+          </tr>
+          <tr>
+            <td><code>DATEDIFF()</code></td>
+            <td><code>DATEDIFF(datepart, startdate, enddate)</code><br>Returns boundary transitions between dates.</td>
+            <td><code>DATEDIFF(MILLISECOND, OrderTime, ExecutedAt)</code> (Execution latency in ms).</td>
+          </tr>
+          <tr>
+            <td><code>EOMONTH()</code></td>
+            <td><code>EOMONTH(start_date [, month_to_add])</code><br>Returns the last day of the month.</td>
+            <td><code>EOMONTH(SYSUTCDATETIME())</code> (End-of-Month accounting close date).</td>
+          </tr>
+          <tr>
+            <td><code>DATEFROMPARTS()</code></td>
+            <td><code>DATEFROMPARTS(year, month, day)</code><br>Constructs a valid date from integers without string parsing.</td>
+            <td><code>DATEFROMPARTS(2024, 3, 15)</code> (Returns <code>2024-03-15</code>).</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <!-- CONVERT & TRY_CONVERT -->
+      <h3>D. Converting & Formatting: CAST, CONVERT, and TRY_CONVERT</h3>
+      <p>In T-SQL, dates are converted to strings and formatted using <code>CONVERT(data_type, expression, style_number)</code>:</p>
+
+      <table border="1" style="width: 100%; border-collapse: collapse; margin: 1.5rem 0;">
+        <thead>
+          <tr style="background: #f1f5f9;">
+            <th>Style Number</th>
+            <th>Standard Format Produced</th>
+            <th>Example Output (for March 15, 2024 14:30:00)</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>120 (ODBC Canonical)</strong></td>
+            <td><code>yyyy-mm-dd hh:mi:ss</code></td>
+            <td><code>2024-03-15 14:30:00</code> (Universal API exchange format)</td>
+          </tr>
+          <tr>
+            <td><strong>112 (ISO Integer)</strong></td>
+            <td><code>yyyymmdd</code></td>
+            <td><code>20240315</code> (Unambiguous date key for data warehouses)</td>
+          </tr>
+          <tr>
+            <td><strong>101 (US Standard)</strong></td>
+            <td><code>mm/dd/yyyy</code></td>
+            <td><code>03/15/2024</code></td>
+          </tr>
+          <tr>
+            <td><strong>103 (British / French)</strong></td>
+            <td><code>dd/mm/yyyy</code></td>
+            <td><code>15/03/2024</code></td>
+          </tr>
+          <tr>
+            <td><strong>126 (ISO 8601)</strong></td>
+            <td><code>yyyy-mm-ddThh:mi:ss.mmm</code></td>
+            <td><code>2024-03-15T14:30:00.000</code></td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="card" style="border-left: 5px solid var(--purple); background: #faf5ff; margin-top: 1rem;">
+        <h4>🛡️ TRY_CAST() and TRY_CONVERT(): Immunity from Runtime Crashes</h4>
+        <p>If an incoming CSV feed contains an invalid date like <code>'2024-02-31'</code> (February 31st), standard <code>CONVERT()</code> or <code>CAST()</code> throws a fatal runtime exception and halts the entire 1,000,000-row batch!</p>
+        <p><strong>The Solution:</strong> Use <code>TRY_CONVERT()</code>. If the string is invalid, it returns <strong>NULL</strong> instead of crashing, allowing you to filter out bad rows cleanly:</p>
+<pre><code class="language-sql">-- Prevents batch aborts on corrupted incoming feeds:
+SELECT RawDateString, TRY_CONVERT(DATE, RawDateString, 120) AS CleanDate
+FROM IncomingTradeFeed
+WHERE TRY_CONVERT(DATE, RawDateString, 120) IS NOT NULL;
+</code></pre>
+      </div>
+
+      <!-- TIME ZONES -->
+      <h3>E. Global Time Zone Conversions: AT TIME ZONE</h3>
+      <p>Financial transactions are stored in UTC, but regional trading desks need to view orders in their local market time. SQL Server provides the <code>AT TIME ZONE</code> clause to handle time zones and daylight savings automatically:</p>
+<pre><code class="language-sql">-- Convert UTC Execution Timestamp to US Eastern and London Time:
+SELECT 
+    ExecutionID,
+    ExecutedAt AS UTCTime,
+    ExecutedAt AT TIME ZONE 'UTC' AT TIME ZONE 'Eastern Standard Time' AS WallStreetTime,
+    ExecutedAt AT TIME ZONE 'UTC' AT TIME ZONE 'GMT Standard Time' AS LondonTime,
+    ExecutedAt AT TIME ZONE 'UTC' AT TIME ZONE 'India Standard Time' AS MumbaiTime
+FROM Executions;
+</code></pre>
+    </section>
+
+    <!-- ================================================================= -->
+    <!-- PILLAR 6: ALL AGGREGATE FUNCTIONS -->
+    <!-- ================================================================= -->
+    <section>
+      <h2>6. Deep Dive: All SQL Server Aggregate Functions Explained from First Principles</h2>
       <p>An <strong>Aggregate Function</strong> performs a calculation across a set of values in a column and collapses them into a single scalar value. In relational theory, aggregate functions ignore <code>NULL</code> values in their calculations (with the single exception of <code>COUNT(*)</code>).</p>
 
       <!-- COUNT VARIANTS -->
@@ -422,10 +667,10 @@ GROUP BY AccountID;
     </section>
 
     <!-- ================================================================= -->
-    <!-- PILLAR 5: SARGABILITY INTERNALS -->
+    <!-- PILLAR 7: SARGABILITY INTERNALS -->
     <!-- ================================================================= -->
     <section>
-      <h2>5. SARGability (Search Argument Able) Internals</h2>
+      <h2>7. SARGability (Search Argument Able) Internals</h2>
       
       <h3>What is SARGability & Why Does It Dictate 90% of Performance?</h3>
       <p>A query predicate is <strong>SARGable</strong> if the SQL Server Query Optimizer can utilize an <strong>Index Seek</strong> down the B-Tree index to pinpoint matching rows directly, instead of scanning every single 8 KB data page in the entire table.</p>
@@ -476,10 +721,10 @@ SELECT ClientID FROM Clients WHERE ClientName LIKE 'Capital%';
     </section>
 
     <!-- ================================================================= -->
-    <!-- PILLAR 6: INTERVIEW SCRIPT & FOLLOW-UP GRILL ROUND -->
+    <!-- PILLAR 8: INTERVIEW SCRIPT & FOLLOW-UP GRILL ROUND -->
     <!-- ================================================================= -->
     <section>
-      <h2>📋 How to Master This in an Interview</h2>
+      <h2>8. 📋 How to Master This in an Interview</h2>
       
       <div class="card" style="background: #f8fafc; border-left: 5px solid var(--purple); margin-bottom: 1.5rem;">
         <h4>Interviewer Question: "Explain the Logical Query Processing Order in SQL Server and why it matters."</h4>
