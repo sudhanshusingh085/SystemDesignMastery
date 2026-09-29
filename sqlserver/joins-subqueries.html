@@ -1,0 +1,515 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>02 · JOINs Deep Dive & Subqueries — SQL Server Mastery</title>
+  <link rel="stylesheet" href="css/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+</head>
+<body>
+
+<button class="menu-toggle" aria-label="Toggle menu">☰</button>
+
+<div class="page-wrapper">
+  <aside class="sidebar" id="sidebar"></aside>
+
+  <main class="main-content">
+    <div class="platform-switcher">
+      <span>Mastery Portals:</span>
+      <a href="../Architecture/index.html">🏛️ System Design</a>
+      <a href="../CoreJava/index.html">☕ Core Java 21</a>
+      <a href="index.html" class="active">🗄️ MS SQL Server</a>
+    </div>
+
+    <nav class="breadcrumb">
+      <a href="index.html">SQL Mastery</a> &gt; <span>02 · JOINs & Subqueries</span>
+    </nav>
+
+    <header>
+      <h1>02 · All JOIN Types, Physical Operators & Subqueries</h1>
+      <p class="lead">Relational Algebra Joins, Physical Join Algorithms (Nested Loops, Merge, Hash Match), CROSS APPLY / OUTER APPLY Power Patterns, and Correlated Subqueries.</p>
+    </header>
+
+    <!-- SECTION 1: LOGICAL VS PHYSICAL JOINS -->
+    <section>
+      <h2>1. Logical Join Types vs Physical Join Operators</h2>
+      <p>When you write a query, you specify a <strong>logical join</strong> (INNER, LEFT, RIGHT, FULL OUTER, CROSS). The SQL Server Cost-Based Optimizer (CBO) maps this to one of three <strong>physical join operators</strong> based on table statistics, cardinalities, and available indexes.</p>
+
+      <div class="mermaid">
+graph TD
+    Logical["Logical Join (T-SQL Syntax)<br/>INNER, LEFT, FULL, CROSS"] --> CBO["SQL Server Cost-Based Optimizer"]
+    CBO --> Phys1["1. Nested Loops Join<br/>(One small input + Index Seek on inner)"]
+    CBO --> Phys2["2. Merge Join<br/>(Both inputs sorted on join key)"]
+    CBO --> Phys3["3. Hash Match Join<br/>(Large, unsorted inputs - builds in-memory hash table)"]
+      </div>
+
+      <table border="1" style="width: 100%; border-collapse: collapse; margin: 1.5rem 0;">
+        <thead>
+          <tr style="background: #f1f5f9;">
+            <th>Physical Operator</th>
+            <th>When SQL Server Uses It</th>
+            <th>Memory Grant Requirement</th>
+            <th>Performance Characteristic</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Nested Loops</strong></td>
+            <td>One input is small (outer) and the other has an index on the join column (inner).</td>
+            <td><strong>0 MB</strong> (Stream-based, pipelined)</td>
+            <td>Sub-millisecond for OLTP seeks; catastrophic if inner input has no index (O(N*M) table scan).</td>
+          </tr>
+          <tr>
+            <td><strong>Merge Join</strong></td>
+            <td>Both inputs are already sorted on the join key (e.g. Clustered Index on join keys).</td>
+            <td><strong>0 MB</strong> (Stream-based)</td>
+            <td>Fastest possible join algorithm for large datasets; linear O(N+M) time complexity.</td>
+          </tr>
+          <tr>
+            <td><strong>Hash Match</strong></td>
+            <td>Neither input is sorted and inputs are large. Builds an in-memory hash table on the smaller input.</td>
+            <td><strong>High</strong> (Can spill to TempDB if memory grant is insufficient)</td>
+            <td>Excellent fallback for ad-hoc DW queries; vulnerable to memory pressure and hash spills.</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <!-- SECTION 2: CROSS APPLY AND OUTER APPLY -->
+    <section>
+      <h2>2. The Superpower: CROSS APPLY & OUTER APPLY</h2>
+      <p>Standard ANSI joins evaluate both relations independently before applying the <code>ON</code> clause predicate. <code>APPLY</code> evaluates the right-side expression for <strong>every individual row</strong> produced by the left-side table, allowing the right side to reference columns from the left side.</p>
+
+      <div class="grid grid-2" style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin: 1rem 0;">
+        <div class="card" style="border-left: 4px solid var(--primary);">
+          <h4><code>CROSS APPLY</code></h4>
+          <p>Acts like an <code>INNER JOIN</code> to a correlated table expression or function. If the right side produces 0 rows for a given left row, the left row is <strong>excluded</strong>.</p>
+        </div>
+        <div class="card" style="border-left: 4px solid var(--accent);">
+          <h4><code>OUTER APPLY</code></h4>
+          <p>Acts like a <code>LEFT OUTER JOIN</code>. If the right side produces 0 rows for a given left row, the left row is still returned with <code>NULL</code> values in the right-side columns.</p>
+        </div>
+      </div>
+
+      <div class="card" style="background: #f8fafc; margin-top: 1rem;">
+        <h4>Key Production Use Cases for APPLY:</h4>
+        <ol>
+          <li><strong>Top N per Group:</strong> Finding the most recent 3 trades for every client account without scanning the whole table.</li>
+          <li><strong>Inline Table-Valued Functions (iTVFs):</strong> Passing row values directly into a TVF.</li>
+          <li><strong>JSON / XML Shredding:</strong> Using <code>CROSS APPLY OPENJSON(...)</code> or <code>CROSS APPLY nodes(...)</code>.</li>
+          <li><strong>Calculation Re-use:</strong> Defining a derived column once and referencing it multiple times in <code>WHERE</code> and <code>SELECT</code>.</li>
+        </ol>
+      </div>
+    </section>
+
+    <!-- SECTION 3: SUBQUERIES -->
+    <section>
+      <h2>3. Correlated vs Non-Correlated Subqueries</h2>
+      <ul>
+        <li><strong>Non-Correlated Subquery:</strong> Completely independent of the outer query. SQL Server evaluates it once, caches the scalar result or intermediate result set, and applies it to the outer query.</li>
+        <li><strong>Correlated Subquery:</strong> References columns from the outer query row. Logically executes once per row of the outer table (unless the optimizer transforms it into a Semi-Join or Hash Match).</li>
+      </ul>
+    </section>
+
+    <!-- SECTION 4: EXERCISES -->
+    <section>
+      <h2>🏋️ Module 02 Exercises (With Toggleable Solutions)</h2>
+
+      <!-- Exercise 1 -->
+      <div class="exercise-box">
+        <div class="exercise-header">
+          <div class="exercise-title">Exercise 2.1: Finding Accounts with Active Orders but Zero Executions</div>
+          <span class="badge badge-easy">Easy</span>
+        </div>
+        <div class="schema-context">
+          <strong>Context:</strong> <code>Accounts</code>, <code>Orders</code>, <code>Executions</code>
+        </div>
+        <p><strong>Requirement:</strong> Retrieve the AccountNumber, CashBalance, and total count of active orders for all accounts that have placed at least one Order, but have had <strong>zero</strong> fills/executions recorded in the <code>Executions</code> table. Order by CashBalance descending.</p>
+
+        <div class="solution-details">
+          <details>
+            <summary class="solution-summary"><span>💡 View Solution & Explanation</span> <span>▼</span></summary>
+            <div class="solution-content">
+<pre><code class="language-sql">SELECT 
+    a.AccountNumber,
+    a.CashBalance,
+    COUNT(o.OrderID) AS ActiveOrderCount
+FROM Accounts a
+INNER JOIN Orders o ON a.AccountID = o.AccountID
+WHERE NOT EXISTS (
+    SELECT 1 
+    FROM Executions e
+    WHERE e.OrderID = o.OrderID
+)
+GROUP BY a.AccountID, a.AccountNumber, a.CashBalance
+ORDER BY a.CashBalance DESC;
+</code></pre>
+              <div class="solution-explanation">
+                <strong>Why NOT EXISTS:</strong> The optimizer converts <code>NOT EXISTS</code> into a high-performance <strong>Left Anti Semi Join</strong>, halting the inner search on the very first execution match found instead of counting rows.
+              </div>
+            </div>
+          </details>
+        </div>
+      </div>
+
+      <!-- Exercise 2 -->
+      <div class="exercise-box">
+        <div class="exercise-header">
+          <div class="exercise-title">Exercise 2.2: Top 3 Largest Executions per Security via CROSS APPLY</div>
+          <span class="badge badge-medium">Medium</span>
+        </div>
+        <div class="schema-context">
+          <strong>Context:</strong> <code>Securities s</code>, <code>Orders o</code>, <code>Executions e</code>
+        </div>
+        <p><strong>Requirement:</strong> For every active equity security, return the top 3 highest notional executions (<code>FillQuantity * FillPrice</code>) ever recorded. If a security has fewer than 3 executions, return whatever exists. Include Ticker, ExecutionID, FillQuantity, FillPrice, and TotalNotional.</p>
+
+        <div class="solution-details">
+          <details>
+            <summary class="solution-summary"><span>💡 View Solution & Explanation</span> <span>▼</span></summary>
+            <div class="solution-content">
+<pre><code class="language-sql">SELECT 
+    s.Ticker,
+    top_execs.ExecutionID,
+    top_execs.FillQuantity,
+    top_execs.FillPrice,
+    top_execs.TotalNotional,
+    top_execs.ExecutedAt
+FROM Securities s
+CROSS APPLY (
+    SELECT TOP (3)
+        e.ExecutionID,
+        e.FillQuantity,
+        e.FillPrice,
+        CAST(e.FillQuantity * e.FillPrice AS DECIMAL(18,2)) AS TotalNotional,
+        e.ExecutedAt
+    FROM Orders o
+    INNER JOIN Executions e ON o.OrderID = e.OrderID
+    WHERE o.SecurityID = s.SecurityID
+    ORDER BY (e.FillQuantity * e.FillPrice) DESC
+) AS top_execs
+ORDER BY s.Ticker, top_execs.TotalNotional DESC;
+</code></pre>
+              <div class="solution-explanation">
+                <strong>CROSS APPLY Efficiency:</strong> Compared to a full-table window function over millions of rows, <code>CROSS APPLY</code> combined with an index on <code>(SecurityID, OrderID)</code> drives a lightning-fast loop seeking only the top 3 executions per security.
+              </div>
+            </div>
+          </details>
+        </div>
+      </div>
+
+      <!-- Exercise 3 -->
+      <div class="exercise-box">
+        <div class="exercise-header">
+          <div class="exercise-title">Exercise 2.3: Detecting Unsettled Discrepancies via FULL OUTER JOIN</div>
+          <span class="badge badge-medium">Medium</span>
+        </div>
+        <div class="schema-context">
+          <strong>Context:</strong> <code>Orders o (Quantity, LimitPrice)</code> vs <code>LedgerTransactions lt (Amount)</code>
+        </div>
+        <p><strong>Requirement:</strong> During end-of-day reconciliation, compare total order values placed today against actual ledger debits. Write a <code>FULL OUTER JOIN</code> query to detect: (1) Orders placed with no matching ledger transaction, and (2) Ledger debits that have no corresponding order record. Label each discrepancy with an alert flag.</p>
+
+        <div class="solution-details">
+          <details>
+            <summary class="solution-summary"><span>💡 View Solution & Explanation</span> <span>▼</span></summary>
+            <div class="solution-content">
+<pre><code class="language-sql">WITH TodayOrders AS (
+    SELECT 
+        AccountID,
+        SUM(Quantity * ISNULL(LimitPrice, 0)) AS TotalOrderAmount
+    FROM Orders
+    WHERE CAST(OrderTime AS DATE) = CAST(SYSUTCDATETIME() AS DATE)
+    GROUP BY AccountID
+),
+TodayLedger AS (
+    SELECT 
+        AccountID,
+        SUM(Amount) AS TotalLedgerDebit
+    FROM LedgerTransactions
+    WHERE TransactionType IN ('TRADE_BUY', 'FEE')
+      AND CAST(TransactionTimestamp AS DATE) = CAST(SYSUTCDATETIME() AS DATE)
+    GROUP BY AccountID
+)
+SELECT 
+    COALESCE(o.AccountID, l.AccountID) AS AccountID,
+    ISNULL(o.TotalOrderAmount, 0) AS OrderAmount,
+    ISNULL(l.TotalLedgerDebit, 0) AS LedgerDebit,
+    CASE 
+        WHEN o.AccountID IS NULL THEN 'ORPHAN_LEDGER_DEBIT (No Order Found)'
+        WHEN l.AccountID IS NULL THEN 'UNBILLED_ORDER (No Ledger Debit Found)'
+        WHEN ABS(o.TotalOrderAmount - l.TotalLedgerDebit) > 0.01 THEN 'AMOUNT_MISMATCH'
+        ELSE 'RECONCILED'
+    END AS ReconciliationStatus
+FROM TodayOrders o
+FULL OUTER JOIN TodayLedger l ON o.AccountID = l.AccountID
+WHERE o.AccountID IS NULL 
+   OR l.AccountID IS NULL 
+   OR ABS(o.TotalOrderAmount - l.TotalLedgerDebit) > 0.01;
+</code></pre>
+              <div class="solution-explanation">
+                <strong>Why FULL OUTER JOIN:</strong> Full outer joins are essential in financial reconciliation to identify orphan rows on either side of two independent ledger tables.
+              </div>
+            </div>
+          </details>
+        </div>
+      </div>
+
+      <!-- Exercise 4 -->
+      <div class="exercise-box">
+        <div class="exercise-header">
+          <div class="exercise-title">Exercise 2.4: Self Join for Security Price Volatility Spread</div>
+          <span class="badge badge-medium">Medium</span>
+        </div>
+        <div class="schema-context">
+          <strong>Context:</strong> Table <code>Executions</code> with <code>FillPrice</code>, <code>ExecutedAt</code>
+        </div>
+        <p><strong>Requirement:</strong> For each security that traded today, find every pair of consecutive executions where the execution price jumped or dropped by more than 5% within a 60-second window. Use a self-join approach.</p>
+
+        <div class="solution-details">
+          <details>
+            <summary class="solution-summary"><span>💡 View Solution & Explanation</span> <span>▼</span></summary>
+            <div class="solution-content">
+<pre><code class="language-sql">WITH ExecsWithSecurity AS (
+    SELECT 
+        e.ExecutionID,
+        o.SecurityID,
+        e.FillPrice,
+        e.ExecutedAt
+    FROM Executions e
+    INNER JOIN Orders o ON e.OrderID = o.OrderID
+)
+SELECT 
+    e1.SecurityID,
+    e1.ExecutionID AS EarlierExecID,
+    e1.FillPrice AS EarlierPrice,
+    e1.ExecutedAt AS EarlierTime,
+    e2.ExecutionID AS LaterExecID,
+    e2.FillPrice AS LaterPrice,
+    e2.ExecutedAt AS LaterTime,
+    CAST(ABS(e2.FillPrice - e1.FillPrice) * 100.0 / e1.FillPrice AS DECIMAL(5,2)) AS PctChange
+FROM ExecsWithSecurity e1
+INNER JOIN ExecsWithSecurity e2 
+        ON e1.SecurityID = e2.SecurityID
+       AND e2.ExecutedAt > e1.ExecutedAt
+       AND e2.ExecutedAt <= DATEADD(SECOND, 60, e1.ExecutedAt)
+WHERE ABS(e2.FillPrice - e1.FillPrice) / e1.FillPrice > 0.05;
+</code></pre>
+              <div class="solution-explanation">
+                <strong>Self-Join Key Concept:</strong> Joining a table to itself using inequality predicates (<code>e2.ExecutedAt > e1.ExecutedAt</code>) enables cross-event latency and delta tracking across chronological event feeds.
+              </div>
+            </div>
+          </details>
+        </div>
+      </div>
+
+      <!-- Exercise 5 -->
+      <div class="exercise-box">
+        <div class="exercise-header">
+          <div class="exercise-title">Exercise 2.5: Generating All Trading Day Cross Products via CROSS JOIN</div>
+          <span class="badge badge-easy">Easy</span>
+        </div>
+        <div class="schema-context">
+          <strong>Context:</strong> <code>Securities</code>, and a calendar table or date sequence
+        </div>
+        <p><strong>Requirement:</strong> Generate a Cartesian matrix of every active Equity security and the last 7 calendar dates. Show the total fills for that security on that date, outputting 0 if no fills occurred (do not drop dates with zero trades).</p>
+
+        <div class="solution-details">
+          <details>
+            <summary class="solution-summary"><span>💡 View Solution & Explanation</span> <span>▼</span></summary>
+            <div class="solution-content">
+<pre><code class="language-sql">-- Generate 7 day date spine
+WITH DateSpine AS (
+    SELECT CAST(SYSUTCDATETIME() AS DATE) AS TradeDate
+    UNION ALL
+    SELECT DATEADD(DAY, -1, TradeDate)
+    FROM DateSpine
+    WHERE TradeDate > DATEADD(DAY, -6, CAST(SYSUTCDATETIME() AS DATE))
+),
+SecurityDateMatrix AS (
+    SELECT 
+        s.SecurityID,
+        s.Ticker,
+        d.TradeDate
+    FROM Securities s
+    CROSS JOIN DateSpine d
+    WHERE s.AssetClass = 'EQUITY' AND s.IsActive = 1
+)
+SELECT 
+    m.Ticker,
+    m.TradeDate,
+    ISNULL(COUNT(e.ExecutionID), 0) AS FillCount,
+    ISNULL(SUM(e.FillQuantity), 0) AS TotalShares
+FROM SecurityDateMatrix m
+LEFT JOIN Orders o 
+       ON m.SecurityID = o.SecurityID 
+      AND CAST(o.OrderTime AS DATE) = m.TradeDate
+LEFT JOIN Executions e 
+       ON o.OrderID = e.OrderID
+GROUP BY m.SecurityID, m.Ticker, m.TradeDate
+ORDER BY m.Ticker, m.TradeDate DESC;
+</code></pre>
+              <div class="solution-explanation">
+                <strong>Cartesian Matrix Pattern:</strong> <code>CROSS JOIN</code> generates the complete continuous grid of dimensions (Tickers × Dates). Following with a <code>LEFT JOIN</code> guarantees that days with 0 trades are preserved in the reporting pipeline.
+              </div>
+            </div>
+          </details>
+        </div>
+      </div>
+
+      <!-- Exercise 6 -->
+      <div class="exercise-box">
+        <div class="exercise-header">
+          <div class="exercise-title">Exercise 2.6: Unpacking JSON FIX Audit Tags with CROSS APPLY OPENJSON</div>
+          <span class="badge badge-hard">Hard</span>
+        </div>
+        <div class="schema-context">
+          <strong>Context:</strong> <code>AuditLogs (LogID, ChangePayload)</code> where <code>ChangePayload</code> stores JSON: <code>{"Tag35": "D", "ClOrdID": "ORD-991", "SenderCompID": "CITADEL"}</code>
+        </div>
+        <p><strong>Requirement:</strong> Write a query to shred the JSON payload and return LogID, LoggedAt, and individual columns for <code>ClOrdID</code> and <code>SenderCompID</code> for all rows where <code>Tag35 = 'D'</code> (New Order Single).</p>
+
+        <div class="solution-details">
+          <details>
+            <summary class="solution-summary"><span>💡 View Solution & Explanation</span> <span>▼</span></summary>
+            <div class="solution-content">
+<pre><code class="language-sql">SELECT 
+    a.LogID,
+    a.LoggedAt,
+    j.ClOrdID,
+    j.SenderCompID,
+    j.MsgType
+FROM AuditLogs a
+CROSS APPLY OPENJSON(a.ChangePayload)
+WITH (
+    MsgType VARCHAR(10) '$.Tag35',
+    ClOrdID VARCHAR(50) '$.ClOrdID',
+    SenderCompID VARCHAR(50) '$.SenderCompID'
+) AS j
+WHERE j.MsgType = 'D';
+</code></pre>
+              <div class="solution-explanation">
+                <strong>Modern T-SQL Feature:</strong> <code>OPENJSON</code> with a strongly-typed <code>WITH</code> clause transforms JSON text into relational rows with zero string-parsing overhead.
+              </div>
+            </div>
+          </details>
+        </div>
+      </div>
+
+      <!-- Exercise 7 -->
+      <div class="exercise-box">
+        <div class="exercise-header">
+          <div class="exercise-title">Exercise 2.7: Forcing Physical Join Algorithms with Join Hints (When & Why)</div>
+          <span class="badge badge-hard">Hard</span>
+        </div>
+        <div class="schema-context">
+          <strong>Context:</strong> Performance tuning large joins between <code>Orders</code> and <code>Executions</code>
+        </div>
+        <p><strong>Requirement:</strong> Write queries explicitly forcing: (1) <code>INNER LOOP JOIN</code>, (2) <code>INNER MERGE JOIN</code>, and (3) <code>INNER HASH JOIN</code>. Explain why join hints are dangerous in production and when they are justified.</p>
+
+        <div class="solution-details">
+          <details>
+            <summary class="solution-summary"><span>💡 View Solution & Explanation</span> <span>▼</span></summary>
+            <div class="solution-content">
+<pre><code class="language-sql">-- 1. Force Nested Loops
+SELECT o.OrderID, e.FillPrice
+FROM Orders o
+INNER LOOP JOIN Executions e ON o.OrderID = e.OrderID;
+
+-- 2. Force Merge Join (Both inputs must be sorted on OrderID!)
+SELECT o.OrderID, e.FillPrice
+FROM Orders o
+INNER MERGE JOIN Executions e ON o.OrderID = e.OrderID;
+
+-- 3. Force Hash Join
+SELECT o.OrderID, e.FillPrice
+FROM Orders o
+INNER HASH JOIN Executions e ON o.OrderID = e.OrderID;
+</code></pre>
+              <div class="solution-explanation">
+                <strong>Why Join Hints are Risky:</strong> A hint overrides the Cost-Based Optimizer. If data volume grows from 10,000 rows to 50,000,000 rows, a hardcoded <code>LOOP JOIN</code> will freeze your server with billions of nested iterations. Use hints only as emergency hotfixes while statistics or indexes are rebuilt!
+              </div>
+            </div>
+          </details>
+        </div>
+      </div>
+
+      <!-- Exercise 8 -->
+      <div class="exercise-box">
+        <div class="exercise-header">
+          <div class="exercise-title">Exercise 2.8: Anti-Join Showdown: NOT EXISTS vs NOT IN vs LEFT JOIN / IS NULL</div>
+          <span class="badge badge-hard">Hard</span>
+        </div>
+        <div class="schema-context">
+          <strong>Context:</strong> Finding Clients who have never deposited funds.
+        </div>
+        <p><strong>Requirement:</strong> Write a comprehensive query comparing the generated execution plan operators for <code>NOT EXISTS</code>, <code>NOT IN</code>, and <code>LEFT JOIN...WHERE IS NULL</code>. Demonstrate how a single NULL row alters the <code>NOT IN</code> query behavior.</p>
+
+        <div class="solution-details">
+          <details>
+            <summary class="solution-summary"><span>💡 View Solution & Explanation</span> <span>▼</span></summary>
+            <div class="solution-content">
+<pre><code class="language-sql">-- Demonstration of the NULL trap:
+-- Assume a Ledger transaction exists with AccountID IS NULL (e.g. system rebalancing)
+INSERT INTO LedgerTransactions (AccountID, TransactionType, Amount)
+VALUES (NULL, 'FEE', 15.00);
+
+-- Query A: NOT IN (RETURNS 0 ROWS! Completely Broken by the NULL above!)
+SELECT c.ClientID, c.ClientName
+FROM Clients c
+WHERE c.ClientID NOT IN (
+    SELECT a.ClientID 
+    FROM Accounts a 
+    INNER JOIN LedgerTransactions lt ON a.AccountID = lt.AccountID
+    WHERE lt.TransactionType = 'DEPOSIT'
+);
+
+-- Query B: NOT EXISTS (PRODUCES CORRECT RESULTS REGARDLESS OF NULLs!)
+SELECT c.ClientID, c.ClientName
+FROM Clients c
+WHERE NOT EXISTS (
+    SELECT 1 
+    FROM Accounts a 
+    INNER JOIN LedgerTransactions lt ON a.AccountID = lt.AccountID
+    WHERE a.ClientID = c.ClientID 
+      AND lt.TransactionType = 'DEPOSIT'
+);
+</code></pre>
+              <div class="solution-explanation">
+                <strong>Execution Plan Reality:</strong> Both <code>NOT EXISTS</code> and <code>LEFT JOIN ... IS NULL</code> compile to a <strong>Left Anti Semi Join</strong> in modern SQL Server. However, <code>NOT IN</code> introduces a defensive filter check to handle 3-valued logic, destroying performance and risking catastrophic empty result sets.
+              </div>
+            </div>
+          </details>
+        </div>
+      </div>
+    </section>
+
+    <!-- SECTION 5: INTERVIEW SCRIPT -->
+    <section>
+      <h2>📋 How to Answer This in an Interview</h2>
+      <div class="card" style="background: #f8fafc; border-left: 5px solid var(--purple);">
+        <h4>Interviewer Question: "When would you choose CROSS APPLY over a standard INNER JOIN?"</h4>
+        <p><strong>Staff Engineer Response:</strong></p>
+        <blockquote style="font-style: italic; color: #334155; margin: 0.5rem 0;">
+          "I choose <code>CROSS APPLY</code> in three specific architectural situations:
+          <br><br>
+          1. <strong>Correlated Top-N Per Group Queries:</strong> When I need to fetch the top N records per parent entity (e.g., the 3 most recent executions per trading account). In standard SQL, this requires calculating a window function like <code>ROW_NUMBER()</code> across the entire million-row table before filtering. With <code>CROSS APPLY</code>, the query optimizer executes a targeted <code>TOP (3)</code> index seek per parent row, which is orders of magnitude faster.
+          <br><br>
+          2. <strong>Table-Valued Functions (TVFs) and Modern JSON/XML Parsing:</strong> Standard ANSI joins cannot pass columns from the outer table into parameters of a table-valued function or the <code>OPENJSON()</code> function. <code>CROSS APPLY</code> evaluates the function dynamically for every incoming row.
+          <br><br>
+          3. <strong>DRY Calculation Re-use:</strong> I frequently use <code>CROSS APPLY (SELECT expression1 AS ColA, expression2 AS ColB)</code> to compute complex mathematical formulas once, and immediately reuse those computed aliases in the outer <code>SELECT</code>, <code>WHERE</code>, and <code>GROUP BY</code> clauses without duplicating code."
+        </blockquote>
+      </div>
+    </section>
+
+    <div class="page-nav" style="margin-top: 3rem;">
+      <a href="fundamentals.html" class="nav-prev">← Previous: 01 · Fundamentals & Aggregates</a>
+      <a href="window-functions.html" class="nav-next">Next: 03 · Window Functions →</a>
+    </div>
+
+  </main>
+</div>
+
+<button class="scroll-top" aria-label="Scroll to top">↑</button>
+
+<script src="js/main.js"></script>
+</body>
+</html>

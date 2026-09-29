@@ -1,0 +1,1673 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>🏋️ 50+ MS SQL Server Interview Exercises & Solutions — SQL Server Mastery</title>
+  <link rel="stylesheet" href="css/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+</head>
+<body>
+
+<button class="menu-toggle" aria-label="Toggle menu">☰</button>
+
+<div class="page-wrapper">
+  <aside class="sidebar" id="sidebar"></aside>
+
+  <main class="main-content">
+    <div class="platform-switcher">
+      <span>Mastery Portals:</span>
+      <a href="../Architecture/index.html">🏛️ System Design</a>
+      <a href="../CoreJava/index.html">☕ Core Java 21</a>
+      <a href="index.html" class="active">🗄️ MS SQL Server</a>
+    </div>
+
+    <nav class="breadcrumb">
+      <a href="index.html">SQL Mastery</a> &gt; <span>🏋️ 50+ Exercises & Solutions</span>
+    </nav>
+
+    <header>
+      <h1>🏋️ 50+ Real-World MS SQL Server Interview Exercises</h1>
+      <p class="lead">The Ultimate Production Problem Bank: Wall Street Trading Schema, Complete T-SQL Solutions, Engine Mechanics, and Senior/Staff DBA Interview Traps.</p>
+    </header>
+
+    <div class="card" style="border-left: 5px solid var(--purple); margin-bottom: 2rem;">
+      <h3>🎯 How to Use This Question Bank</h3>
+      <p>Every problem below is taken directly from tier-1 investment bank, fintech, and FAANG database developer interview rounds. Attempt to write each query locally against the schema provided on the <a href="index.html">Home Page</a> before clicking the toggle to reveal the solution and architectural explanation.</p>
+      <div style="display: flex; gap: 1rem; flex-wrap: wrap; margin-top: 0.75rem;">
+        <span class="badge badge-easy">Easy (Q1 - Q12)</span>
+        <span class="badge badge-medium">Medium (Q13 - Q32)</span>
+        <span class="badge badge-hard">Hard (Q33 - Q46)</span>
+        <span class="badge badge-expert">Staff / Expert (Q47 - Q52)</span>
+      </div>
+    </div>
+
+    <!-- ================================================================= -->
+    <!-- PART 1: CORE T-SQL, DML & AGGREGATIONS (Q1 - Q10) -->
+    <!-- ================================================================= -->
+    <h2>Part 1: Core T-SQL, DML & Aggregations (Q1 – Q10)</h2>
+
+    <!-- Q1 -->
+    <div class="exercise-box">
+      <div class="exercise-header">
+        <div class="exercise-title">Q1: Total Trade Volume and Volume Weighted Average Price (VWAP)</div>
+        <span class="badge badge-easy">Easy</span>
+      </div>
+      <p>Write a query to calculate the total shares traded, total gross notional, and Volume Weighted Average Price (<code>VWAP = SUM(Quantity * Price) / SUM(Quantity)</code>) for each security on the current trade date.</p>
+      <div class="solution-details">
+        <details>
+          <summary class="solution-summary"><span>💡 View Solution & Explanation</span> <span>▼</span></summary>
+          <div class="solution-content">
+<pre><code class="language-sql">SELECT 
+    o.SecurityID,
+    s.Ticker,
+    SUM(CAST(e.FillQuantity AS BIGINT)) AS TotalSharesTraded,
+    SUM(CAST(e.FillQuantity AS DECIMAL(18,4)) * e.FillPrice) AS TotalGrossNotional,
+    CAST(SUM(CAST(e.FillQuantity AS DECIMAL(18,4)) * e.FillPrice) / 
+         NULLIF(SUM(CAST(e.FillQuantity AS DECIMAL(18,4))), 0) AS DECIMAL(18,4)) AS VWAP
+FROM Executions e
+INNER JOIN Orders o ON e.OrderID = o.OrderID
+INNER JOIN Securities s ON o.SecurityID = s.SecurityID
+WHERE CAST(e.ExecutedAt AS DATE) = CAST(SYSUTCDATETIME() AS DATE)
+GROUP BY o.SecurityID, s.Ticker;
+</code></pre>
+            <div class="solution-explanation">
+              <strong>Key Tip:</strong> <code>CAST(... AS BIGINT)</code> avoids overflow on large volumes, and <code>NULLIF(..., 0)</code> protects against divide-by-zero crashes.
+            </div>
+          </div>
+        </details>
+      </div>
+    </div>
+
+    <!-- Q2 -->
+    <div class="exercise-box">
+      <div class="exercise-header">
+        <div class="exercise-title">Q2: Finding Accounts Exceeding Their Margin Limit</div>
+        <span class="badge badge-easy">Easy</span>
+      </div>
+      <p>Find all active accounts where negative cash balance (borrowed margin) exceeds their assigned <code>MarginLimit</code>.</p>
+      <div class="solution-details">
+        <details>
+          <summary class="solution-summary"><span>💡 View Solution & Explanation</span> <span>▼</span></summary>
+          <div class="solution-content">
+<pre><code class="language-sql">SELECT 
+    AccountID,
+    AccountNumber,
+    CashBalance,
+    MarginLimit,
+    (ABS(CashBalance) - MarginLimit) AS MarginDeficit
+FROM Accounts
+WHERE AccountType = 'MARGIN'
+  AND CashBalance < 0
+  AND ABS(CashBalance) > MarginLimit;
+</code></pre>
+            <div class="solution-explanation">
+              Simple, high-speed SARGable predicate using direct column comparisons.
+            </div>
+          </div>
+        </details>
+      </div>
+    </div>
+
+    <!-- Q3 -->
+    <div class="exercise-box">
+      <div class="exercise-header">
+        <div class="exercise-title">Q3: Comma-Separated List of Client Accounts via STRING_AGG</div>
+        <span class="badge badge-easy">Easy</span>
+      </div>
+      <p>For each client, produce a single string listing all their account numbers sorted alphabetically, delimited by semicolons.</p>
+      <div class="solution-details">
+        <details>
+          <summary class="solution-summary"><span>💡 View Solution & Explanation</span> <span>▼</span></summary>
+          <div class="solution-content">
+<pre><code class="language-sql">SELECT 
+    c.ClientID,
+    c.ClientName,
+    STRING_AGG(a.AccountNumber, '; ') WITHIN GROUP (ORDER BY a.AccountNumber ASC) AS AccountList
+FROM Clients c
+INNER JOIN Accounts a ON c.ClientID = a.ClientID
+GROUP BY c.ClientID, c.ClientName;
+</code></pre>
+            <div class="solution-explanation">
+              <code>WITHIN GROUP (ORDER BY ...)</code> ensures deterministic ordering in <code>STRING_AGG</code>.
+            </div>
+          </div>
+        </details>
+      </div>
+    </div>
+
+    <!-- Q4 -->
+    <div class="exercise-box">
+      <div class="exercise-header">
+        <div class="exercise-title">Q4: Multi-Dimensional Order Aggregation via GROUP BY ROLLUP</div>
+        <span class="badge badge-medium">Medium</span>
+      </div>
+      <p>Summarize order counts and quantities grouped hierarchically by <code>AssetClass</code>, then <code>Sector</code>, with subtotal and grand total rows.</p>
+      <div class="solution-details">
+        <details>
+          <summary class="solution-summary"><span>💡 View Solution & Explanation</span> <span>▼</span></summary>
+          <div class="solution-content">
+<pre><code class="language-sql">SELECT 
+    ISNULL(s.AssetClass, '[ALL ASSET CLASSES]') AS AssetClass,
+    ISNULL(s.Sector, '[ALL SECTORS]') AS Sector,
+    COUNT(o.OrderID) AS OrderCount,
+    SUM(o.Quantity) AS TotalUnits
+FROM Securities s
+INNER JOIN Orders o ON s.SecurityID = o.SecurityID
+GROUP BY ROLLUP (s.AssetClass, s.Sector);
+</code></pre>
+            <div class="solution-explanation">
+              <code>ROLLUP</code> creates hierarchical aggregation (AssetClass + Sector -> AssetClass -> Grand Total).
+            </div>
+          </div>
+        </details>
+      </div>
+    </div>
+
+    <!-- Q5 -->
+    <div class="exercise-box">
+      <div class="exercise-header">
+        <div class="exercise-title">Q5: Safe Division with NULLIF to Prevent Divide-by-Zero</div>
+        <span class="badge badge-easy">Easy</span>
+      </div>
+      <p>Calculate order fill rate percentage: <code>(FilledQuantity / Quantity) * 100</code>. Handle 0 quantity safely without raising runtime error 8134.</p>
+      <div class="solution-details">
+        <details>
+          <summary class="solution-summary"><span>💡 View Solution & Explanation</span> <span>▼</span></summary>
+          <div class="solution-content">
+<pre><code class="language-sql">SELECT 
+    OrderID,
+    FilledQuantity,
+    Quantity,
+    CAST((FilledQuantity * 100.0) / NULLIF(Quantity, 0) AS DECIMAL(5,2)) AS FillRatePercentage
+FROM Orders;
+</code></pre>
+            <div class="solution-explanation">
+              <code>NULLIF(Quantity, 0)</code> returns NULL when Quantity is 0. Dividing by NULL yields NULL instead of throwing an error.
+            </div>
+          </div>
+        </details>
+      </div>
+    </div>
+
+    <!-- Q6 -->
+    <div class="exercise-box">
+      <div class="exercise-header">
+        <div class="exercise-title">Q6: Coalescing Multiple Audit Columns with Precedence Awareness</div>
+        <span class="badge badge-easy">Easy</span>
+      </div>
+      <p>Demonstrate the data type precedence difference between <code>ISNULL()</code> and <code>COALESCE()</code> with string lengths.</p>
+      <div class="solution-details">
+        <details>
+          <summary class="solution-summary"><span>💡 View Solution & Explanation</span> <span>▼</span></summary>
+          <div class="solution-content">
+<pre><code class="language-sql">DECLARE @ShortVal VARCHAR(4) = NULL;
+DECLARE @LongVal VARCHAR(20) = 'ExceedsFourChars';
+
+-- ISNULL truncates to VARCHAR(4) because first parameter dictates type:
+SELECT ISNULL(@ShortVal, @LongVal) AS IsNullOutput,   -- Returns 'Exce' (TRUNCATED!)
+       COALESCE(@ShortVal, @LongVal) AS CoalesceOutput; -- Returns 'ExceedsFourChars' (PRESERVED!)
+</code></pre>
+            <div class="solution-explanation">
+              <code>COALESCE</code> determines the highest data type precedence among all arguments; <code>ISNULL</code> strictly binds to the 1st parameter's type.
+            </div>
+          </div>
+        </details>
+      </div>
+    </div>
+
+    <!-- Q7 -->
+    <div class="exercise-box">
+      <div class="exercise-header">
+        <div class="exercise-title">Q7: Updating Rows with OUTPUT INTO Another Table</div>
+        <span class="badge badge-medium">Medium</span>
+      </div>
+      <p>Cancel all pending orders older than 24 hours, and immediately capture the cancelled OrderIDs into an audit archive table in one atomic step.</p>
+      <div class="solution-details">
+        <details>
+          <summary class="solution-summary"><span>💡 View Solution & Explanation</span> <span>▼</span></summary>
+          <div class="solution-content">
+<pre><code class="language-sql">DECLARE @CancelledOrders TABLE (OrderID BIGINT, CancelledAt DATETIME2);
+
+UPDATE Orders
+SET OrderStatus = 'CANCELLED'
+OUTPUT inserted.OrderID, SYSUTCDATETIME()
+INTO @CancelledOrders (OrderID, CancelledAt)
+WHERE OrderStatus = 'PENDING'
+  AND OrderTime < DATEADD(HOUR, -24, SYSUTCDATETIME());
+
+-- Verify captured output:
+SELECT * FROM @CancelledOrders;
+</code></pre>
+            <div class="solution-explanation">
+              The <code>OUTPUT INTO</code> clause captures modified rows during the DML operation without requiring a secondary read.
+            </div>
+          </div>
+        </details>
+      </div>
+    </div>
+
+    <!-- Q8 -->
+    <div class="exercise-box">
+      <div class="exercise-header">
+        <div class="exercise-title">Q8: High-Precision Settlement Currency Rounding (ROUND vs FLOOR vs CEILING)</div>
+        <span class="badge badge-easy">Easy</span>
+      </div>
+      <p>Calculate broker fee: 0.125% of fill notional. Show the difference between standard rounding to 2 decimal places, banker's flooring, and ceiling.</p>
+      <div class="solution-details">
+        <details>
+          <summary class="solution-summary"><span>💡 View Solution & Explanation</span> <span>▼</span></summary>
+          <div class="solution-content">
+<pre><code class="language-sql">SELECT 
+    ExecutionID,
+    (FillQuantity * FillPrice * 0.00125) AS RawFee,
+    ROUND(FillQuantity * FillPrice * 0.00125, 2) AS StandardRoundedFee,
+    FLOOR(FillQuantity * FillPrice * 0.00125 * 100.0) / 100.0 AS FlooredFee,
+    CEILING(FillQuantity * FillPrice * 0.00125 * 100.0) / 100.0 AS CeilingFee
+FROM Executions;
+</code></pre>
+            <div class="solution-explanation">
+              Financial reconciliation often requires truncation (FLOOR) rather than rounding to prevent fractional cent creation.
+            </div>
+          </div>
+        </details>
+      </div>
+    </div>
+
+    <!-- Q9 -->
+    <div class="exercise-box">
+      <div class="exercise-header">
+        <div class="exercise-title">Q9: Filtering by Date Range Without Breaking SARGability</div>
+        <span class="badge badge-medium">Medium</span>
+      </div>
+      <p>Given an indexed <code>DATETIME2</code> column <code>OrderTime</code>, write the query to retrieve all orders placed in February 2024 without wrapping the column in functions.</p>
+      <div class="solution-details">
+        <details>
+          <summary class="solution-summary"><span>💡 View Solution & Explanation</span> <span>▼</span></summary>
+          <div class="solution-content">
+<pre><code class="language-sql">-- SARGable Index Seek:
+SELECT OrderID, AccountID, OrderTime
+FROM Orders
+WHERE OrderTime >= '2024-02-01 00:00:00.000'
+  AND OrderTime < '2024-03-01 00:00:00.000';
+</code></pre>
+            <div class="solution-explanation">
+              Using <code>>= start AND < next_month_start</code> handles leap years and milliseconds without table scans.
+            </div>
+          </div>
+        </details>
+      </div>
+    </div>
+
+    <!-- Q10 -->
+    <div class="exercise-box">
+      <div class="exercise-header">
+        <div class="exercise-title">Q10: Aggregating with HAVING vs WHERE Performance Filter</div>
+        <span class="badge badge-easy">Easy</span>
+      </div>
+      <p>Retrieve accounts that placed more than 50 buy orders today. Explain which filter belongs in <code>WHERE</code> and which in <code>HAVING</code>.</p>
+      <div class="solution-details">
+        <details>
+          <summary class="solution-summary"><span>💡 View Solution & Explanation</span> <span>▼</span></summary>
+          <div class="solution-content">
+<pre><code class="language-sql">SELECT 
+    AccountID,
+    COUNT(OrderID) AS TotalBuyOrders
+FROM Orders
+WHERE OrderSide = 'BUY' 
+  AND CAST(OrderTime AS DATE) = CAST(SYSUTCDATETIME() AS DATE) -- WHERE filters rows before grouping!
+GROUP BY AccountID
+HAVING COUNT(OrderID) > 50; -- HAVING filters aggregated buckets!
+</code></pre>
+            <div class="solution-explanation">
+              Filtering <code>OrderSide = 'BUY'</code> in WHERE discards SELL rows before memory grouping; putting it in HAVING forces grouping on all rows.
+            </div>
+          </div>
+        </details>
+      </div>
+    </div>
+
+    <!-- ================================================================= -->
+    <!-- PART 2: JOINS, ANTI-JOINS & SUBQUERIES (Q11 - Q20) -->
+    <!-- ================================================================= -->
+    <h2>Part 2: Joins, Anti-Joins & Correlated Subqueries (Q11 – Q20)</h2>
+
+    <!-- Q11 -->
+    <div class="exercise-box">
+      <div class="exercise-header">
+        <div class="exercise-title">Q11: Finding Inactive Clients with NOT EXISTS Anti-Join</div>
+        <span class="badge badge-easy">Easy</span>
+      </div>
+      <p>Retrieve all clients who have never placed a single order in the system.</p>
+      <div class="solution-details">
+        <details>
+          <summary class="solution-summary"><span>💡 View Solution & Explanation</span> <span>▼</span></summary>
+          <div class="solution-content">
+<pre><code class="language-sql">SELECT c.ClientID, c.ClientName
+FROM Clients c
+WHERE NOT EXISTS (
+    SELECT 1 
+    FROM Accounts a
+    INNER JOIN Orders o ON a.AccountID = o.AccountID
+    WHERE a.ClientID = c.ClientID
+);
+</code></pre>
+            <div class="solution-explanation">
+              Compiles to a Left Anti Semi Join. Halts immediately on first order encounter.
+            </div>
+          </div>
+        </details>
+      </div>
+    </div>
+
+    <!-- Q12 -->
+    <div class="exercise-box">
+      <div class="exercise-header">
+        <div class="exercise-title">Q12: Self-Join to Find Accounts Sharing Identical Margin Limits</div>
+        <span class="badge badge-easy">Easy</span>
+      </div>
+      <p>Find pairs of distinct accounts that have the exact same MarginLimit. Avoid duplicate inverted pairs (e.g. show (A, B) but not (B, A)).</p>
+      <div class="solution-details">
+        <details>
+          <summary class="solution-summary"><span>💡 View Solution & Explanation</span> <span>▼</span></summary>
+          <div class="solution-content">
+<pre><code class="language-sql">SELECT 
+    a1.AccountID AS Account1,
+    a2.AccountID AS Account2,
+    a1.MarginLimit
+FROM Accounts a1
+INNER JOIN Accounts a2 
+        ON a1.MarginLimit = a2.MarginLimit
+       AND a1.AccountID < a2.AccountID; -- Eliminates duplicate symmetric pairs!
+</code></pre>
+            <div class="solution-explanation">
+              <code>a1.AccountID < a2.AccountID</code> eliminates identity matching (A=A) and duplicate mirror pairs.
+            </div>
+          </div>
+        </details>
+      </div>
+    </div>
+
+    <!-- Q13 -->
+    <div class="exercise-box">
+      <div class="exercise-header">
+        <div class="exercise-title">Q13: Top 2 Highest Cash Accounts per Client via CROSS APPLY</div>
+        <span class="badge badge-medium">Medium</span>
+      </div>
+      <p>For each institutional client, find their top 2 accounts with the highest cash balance.</p>
+      <div class="solution-details">
+        <details>
+          <summary class="solution-summary"><span>💡 View Solution & Explanation</span> <span>▼</span></summary>
+          <div class="solution-content">
+<pre><code class="language-sql">SELECT 
+    c.ClientID,
+    c.ClientName,
+    top_acc.AccountID,
+    top_acc.CashBalance
+FROM Clients c
+CROSS APPLY (
+    SELECT TOP (2) a.AccountID, a.CashBalance
+    FROM Accounts a
+    WHERE a.ClientID = c.ClientID
+    ORDER BY a.CashBalance DESC
+) AS top_acc
+WHERE c.ClientType = 'INSTITUTIONAL';
+</code></pre>
+            <div class="solution-explanation">
+              <code>CROSS APPLY</code> evaluates <code>TOP (2)</code> per client row, leveraging the index on <code>Accounts(ClientID, CashBalance DESC)</code>.
+            </div>
+          </div>
+        </details>
+      </div>
+    </div>
+
+    <!-- Q14 -->
+    <div class="exercise-box">
+      <div class="exercise-header">
+        <div class="exercise-title">Q14: Correlated Subquery for Orders Exceeding Account Average Size</div>
+        <span class="badge badge-medium">Medium</span>
+      </div>
+      <p>Find all orders where the order quantity is at least 3x greater than that specific account's average order quantity.</p>
+      <div class="solution-details">
+        <details>
+          <summary class="solution-summary"><span>💡 View Solution & Explanation</span> <span>▼</span></summary>
+          <div class="solution-content">
+<pre><code class="language-sql">SELECT o.OrderID, o.AccountID, o.Quantity
+FROM Orders o
+WHERE o.Quantity >= 3 * (
+    SELECT AVG(CAST(sub.Quantity AS FLOAT))
+    FROM Orders sub
+    WHERE sub.AccountID = o.AccountID
+);
+</code></pre>
+            <div class="solution-explanation">
+              Correlated subquery computes the account baseline dynamically.
+            </div>
+          </div>
+        </details>
+      </div>
+    </div>
+
+    <!-- Q15 -->
+    <div class="exercise-box">
+      <div class="exercise-header">
+        <div class="exercise-title">Q15: FULL OUTER JOIN Audit Discrepancy Matrix</div>
+        <span class="badge badge-medium">Medium</span>
+      </div>
+      <p>Compare yesterday's trade executions against settlement clearances to flag missing records on either side.</p>
+      <div class="solution-details">
+        <details>
+          <summary class="solution-summary"><span>💡 View Solution & Explanation</span> <span>▼</span></summary>
+          <div class="solution-content">
+<pre><code class="language-sql">SELECT 
+    COALESCE(e.ExecutionID, lt.TransactionID) AS Identifier,
+    CASE 
+        WHEN e.ExecutionID IS NULL THEN 'Missing in Executions'
+        WHEN lt.TransactionID IS NULL THEN 'Missing in Settlement Ledger'
+        ELSE 'Matched'
+    END AS DiscrepancyStatus
+FROM Executions e
+FULL OUTER JOIN LedgerTransactions lt ON e.ExecutionID = lt.TransactionID
+WHERE e.ExecutionID IS NULL OR lt.TransactionID IS NULL;
+</code></pre>
+            <div class="solution-explanation">
+              <code>FULL OUTER JOIN ... WHERE Left IS NULL OR Right IS NULL</code> is the standard two-sided reconciliation pattern.
+            </div>
+          </div>
+        </details>
+      </div>
+    </div>
+
+    <!-- Q16 -->
+    <div class="exercise-box">
+      <div class="exercise-header">
+        <div class="exercise-title">Q16: CROSS JOIN Calendar Grid for Liquidity Metrics</div>
+        <span class="badge badge-medium">Medium</span>
+      </div>
+      <p>Generate a Cartesian report of all sectors and all trading venues with trade counts, displaying 0 for combinations with no activity.</p>
+      <div class="solution-details">
+        <details>
+          <summary class="solution-summary"><span>💡 View Solution & Explanation</span> <span>▼</span></summary>
+          <div class="solution-content">
+<pre><code class="language-sql">WITH Sectors AS (
+    SELECT DISTINCT Sector FROM Securities WHERE Sector IS NOT NULL
+),
+Venues AS (
+    SELECT DISTINCT ExecutionVenue FROM Executions
+)
+SELECT 
+    s.Sector,
+    v.ExecutionVenue,
+    COUNT(e.ExecutionID) AS TradeCount
+FROM Sectors s
+CROSS JOIN Venues v
+LEFT JOIN Securities sec ON sec.Sector = s.Sector
+LEFT JOIN Orders o ON o.SecurityID = sec.SecurityID
+LEFT JOIN Executions e ON e.OrderID = o.OrderID AND e.ExecutionVenue = v.ExecutionVenue
+GROUP BY s.Sector, v.ExecutionVenue;
+</code></pre>
+            <div class="solution-explanation">
+              Cartesian grid guarantees full matrix coverage regardless of sparse activity.
+            </div>
+          </div>
+        </details>
+      </div>
+    </div>
+
+    <!-- Q17 -->
+    <div class="exercise-box">
+      <div class="exercise-header">
+        <div class="exercise-title">Q17: Shredding Comma-Separated Values using STRING_SPLIT with CROSS APPLY</div>
+        <span class="badge badge-medium">Medium</span>
+      </div>
+      <p>Given a table with an audit tags column containing <code>"DMA,ALGO,ICEBERG"</code>, split and join into normalized rows.</p>
+      <div class="solution-details">
+        <details>
+          <summary class="solution-summary"><span>💡 View Solution & Explanation</span> <span>▼</span></summary>
+          <div class="solution-content">
+<pre><code class="language-sql">SELECT 
+    lt.TransactionID,
+    s.value AS ExecutionTag
+FROM LedgerTransactions lt
+CROSS APPLY STRING_SPLIT(lt.ReferenceNote, ',') s
+WHERE lt.ReferenceNote IS NOT NULL;
+</code></pre>
+            <div class="solution-explanation">
+              <code>STRING_SPLIT()</code> is a table-valued function called per row via <code>CROSS APPLY</code>.
+            </div>
+          </div>
+        </details>
+      </div>
+    </div>
+
+    <!-- Q18 -->
+    <div class="exercise-box">
+      <div class="exercise-header">
+        <div class="exercise-title">Q18: Finding Securities Traded by All Institutional Clients</div>
+        <span class="badge badge-hard">Hard</span>
+      </div>
+      <p>Find every security ticker that has been traded by <strong>every single</strong> Institutional client registered in the database (Relational Division).</p>
+      <div class="solution-details">
+        <details>
+          <summary class="solution-summary"><span>💡 View Solution & Explanation</span> <span>▼</span></summary>
+          <div class="solution-content">
+<pre><code class="language-sql">SELECT s.SecurityID, s.Ticker
+FROM Securities s
+INNER JOIN Orders o ON s.SecurityID = o.SecurityID
+INNER JOIN Accounts a ON o.AccountID = a.AccountID
+INNER JOIN Clients c ON a.ClientID = c.ClientID
+WHERE c.ClientType = 'INSTITUTIONAL'
+GROUP BY s.SecurityID, s.Ticker
+HAVING COUNT(DISTINCT c.ClientID) = (
+    SELECT COUNT(*) FROM Clients WHERE ClientType = 'INSTITUTIONAL'
+);
+</code></pre>
+            <div class="solution-explanation">
+              Relational Division implemented via <code>COUNT(DISTINCT) = Total Count</code>.
+            </div>
+          </div>
+        </details>
+      </div>
+    </div>
+
+    <!-- Q19 -->
+    <div class="exercise-box">
+      <div class="exercise-header">
+        <div class="exercise-title">Q19: Anti-Join NULL Trap Demonstration with NOT IN</div>
+        <span class="badge badge-medium">Medium</span>
+      </div>
+      <p>Demonstrate how <code>WHERE Col NOT IN (SELECT NullableCol FROM Table)</code> breaks completely when a NULL is present.</p>
+      <div class="solution-details">
+        <details>
+          <summary class="solution-summary"><span>💡 View Solution & Explanation</span> <span>▼</span></summary>
+          <div class="solution-content">
+<pre><code class="language-sql">-- Why NOT IN fails:
+-- (Value NOT IN (1, 2, NULL)) expands logically to:
+-- (Value <> 1) AND (Value <> 2) AND (Value <> NULL)
+-- Because (Value <> NULL) is UNKNOWN, the entire AND chain evaluates to UNKNOWN!
+-- Result: 0 rows returned!
+-- Fix: Always use NOT EXISTS!
+</code></pre>
+            <div class="solution-explanation">
+              3-valued logic trap: Any expression <code>AND UNKNOWN</code> evaluates to UNKNOWN or FALSE.
+            </div>
+          </div>
+        </details>
+      </div>
+    </div>
+
+    <!-- Q20 -->
+    <div class="exercise-box">
+      <div class="exercise-header">
+        <div class="exercise-title">Q20: Joining JSON FIX Protocol Audit Rows via OPENJSON</div>
+        <span class="badge badge-hard">Hard</span>
+      </div>
+      <p>Extract FIX Order Cancel Replace requests (<code>Tag35 = 'G'</code>) stored in JSON audit columns.</p>
+      <div class="solution-details">
+        <details>
+          <summary class="solution-summary"><span>💡 View Solution & Explanation</span> <span>▼</span></summary>
+          <div class="solution-content">
+<pre><code class="language-sql">SELECT 
+    a.LogID,
+    j.OrigClOrdID,
+    j.NewQuantity,
+    j.NewPrice
+FROM AuditLogs a
+CROSS APPLY OPENJSON(a.ChangePayload)
+WITH (
+    MsgType VARCHAR(5) '$.Tag35',
+    OrigClOrdID VARCHAR(50) '$.Tag41',
+    NewQuantity INT '$.Tag38',
+    NewPrice DECIMAL(18,4) '$.Tag44'
+) AS j
+WHERE j.MsgType = 'G';
+</code></pre>
+            <div class="solution-explanation">
+              <code>OPENJSON</code> with strongly-typed <code>WITH</code> projections extracts values into relational columns.
+            </div>
+          </div>
+        </details>
+      </div>
+    </div>
+
+    <!-- ================================================================= -->
+    <!-- PART 3: WINDOW FUNCTIONS & ANALYTICAL FRAMING (Q21 - Q30) -->
+    <!-- ================================================================= -->
+    <h2>Part 3: Window Functions & Analytical Framing (Q21 – Q30)</h2>
+
+    <!-- Q21 -->
+    <div class="exercise-box">
+      <div class="exercise-header">
+        <div class="exercise-title">Q21: Dense Rank of Portfolio Position Market Values</div>
+        <span class="badge badge-easy">Easy</span>
+      </div>
+      <p>Assign contiguous dense rank positions (1, 2, 3...) based on position market value per account.</p>
+      <div class="solution-details">
+        <details>
+          <summary class="solution-summary"><span>💡 View Solution & Explanation</span> <span>▼</span></summary>
+          <div class="solution-content">
+<pre><code class="language-sql">SELECT 
+    AccountID,
+    SecurityID,
+    (PositionUnits * CurrentMarketPrice) AS MarketVal,
+    DENSE_RANK() OVER (
+        PARTITION BY AccountID 
+        ORDER BY (PositionUnits * CurrentMarketPrice) DESC
+    ) AS HoldingRank
+FROM PortfolioPositions;
+</code></pre>
+            <div class="solution-explanation">
+              <code>DENSE_RANK</code> prevents gaps in sequence when two assets have identical valuation.
+            </div>
+          </div>
+        </details>
+      </div>
+    </div>
+
+    <!-- Q22 -->
+    <div class="exercise-box">
+      <div class="exercise-header">
+        <div class="exercise-title">Q22: Year-to-Date (YTD) Running Deposit Total per Client</div>
+        <span class="badge badge-medium">Medium</span>
+      </div>
+      <p>Calculate the running YTD deposit sum for each account with explicit stream framing.</p>
+      <div class="solution-details">
+        <details>
+          <summary class="solution-summary"><span>💡 View Solution & Explanation</span> <span>▼</span></summary>
+          <div class="solution-content">
+<pre><code class="language-sql">SELECT 
+    AccountID,
+    TransactionID,
+    TransactionTimestamp,
+    Amount,
+    SUM(Amount) OVER (
+        PARTITION BY AccountID, YEAR(TransactionTimestamp)
+        ORDER BY TransactionTimestamp, TransactionID
+        ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+    ) AS YTD_Deposits
+FROM LedgerTransactions
+WHERE TransactionType = 'DEPOSIT';
+</code></pre>
+            <div class="solution-explanation">
+              Explicit <code>ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW</code> avoids TempDB on-disk spools.
+            </div>
+          </div>
+        </details>
+      </div>
+    </div>
+
+    <!-- Q23 -->
+    <div class="exercise-box">
+      <div class="exercise-header">
+        <div class="exercise-title">Q23: Trade Latency (Time Delta from Previous Execution)</div>
+        <span class="badge badge-medium">Medium</span>
+      </div>
+      <p>Calculate the millisecond time difference between consecutive trade executions for a security using <code>LAG()</code>.</p>
+      <div class="solution-details">
+        <details>
+          <summary class="solution-summary"><span>💡 View Solution & Explanation</span> <span>▼</span></summary>
+          <div class="solution-content">
+<pre><code class="language-sql">SELECT 
+    o.SecurityID,
+    e.ExecutionID,
+    e.ExecutedAt,
+    DATEDIFF(MILLISECOND, 
+             LAG(e.ExecutedAt) OVER (PARTITION BY o.SecurityID ORDER BY e.ExecutedAt, e.ExecutionID),
+             e.ExecutedAt) AS MillisecondsSincePriorTrade
+FROM Executions e
+INNER JOIN Orders o ON e.OrderID = o.OrderID;
+</code></pre>
+            <div class="solution-explanation">
+              <code>DATEDIFF(MILLISECOND, LAG(...), Current)</code> measures intra-day trade latency.
+            </div>
+          </div>
+        </details>
+      </div>
+    </div>
+
+    <!-- Q24 -->
+    <div class="exercise-box">
+      <div class="exercise-header">
+        <div class="exercise-title">Q24: 7-Day Exponential Moving Average Smoothing Factor</div>
+        <span class="badge badge-medium">Medium</span>
+      </div>
+      <p>Calculate a 7-day rolling average fill price per stock.</p>
+      <div class="solution-details">
+        <details>
+          <summary class="solution-summary"><span>💡 View Solution & Explanation</span> <span>▼</span></summary>
+          <div class="solution-content">
+<pre><code class="language-sql">SELECT 
+    o.SecurityID,
+    e.ExecutionID,
+    e.FillPrice,
+    AVG(e.FillPrice) OVER (
+        PARTITION BY o.SecurityID 
+        ORDER BY e.ExecutedAt
+        ROWS BETWEEN 6 PRECEDING AND CURRENT ROW
+    ) AS Rolling7TradeAvg
+FROM Executions e
+INNER JOIN Orders o ON e.OrderID = o.OrderID;
+</code></pre>
+            <div class="solution-explanation">
+              Sliding 7-trade frame: current row plus 6 predecessors.
+            </div>
+          </div>
+        </details>
+      </div>
+    </div>
+
+    <!-- Q25 -->
+    <div class="exercise-box">
+      <div class="exercise-header">
+        <div class="exercise-title">Q25: First and Last Trade of the Day with LAST_VALUE Framing</div>
+        <span class="badge badge-medium">Medium</span>
+      </div>
+      <p>Return the day's opening trade price and closing trade price on every execution record.</p>
+      <div class="solution-details">
+        <details>
+          <summary class="solution-summary"><span>💡 View Solution & Explanation</span> <span>▼</span></summary>
+          <div class="solution-content">
+<pre><code class="language-sql">SELECT 
+    o.SecurityID,
+    e.ExecutionID,
+    e.FillPrice,
+    FIRST_VALUE(e.FillPrice) OVER (
+        PARTITION BY o.SecurityID, CAST(e.ExecutedAt AS DATE)
+        ORDER BY e.ExecutedAt
+        ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+    ) AS OpenPrice,
+    LAST_VALUE(e.FillPrice) OVER (
+        PARTITION BY o.SecurityID, CAST(e.ExecutedAt AS DATE)
+        ORDER BY e.ExecutedAt
+        ROWS BETWEEN CURRENT ROW AND UNBOUNDED FOLLOWING
+    ) AS ClosePrice
+FROM Executions e
+INNER JOIN Orders o ON e.OrderID = o.OrderID;
+</code></pre>
+            <div class="solution-explanation">
+              Must specify <code>ROWS BETWEEN CURRENT ROW AND UNBOUNDED FOLLOWING</code> for <code>LAST_VALUE</code>.
+            </div>
+          </div>
+        </details>
+      </div>
+    </div>
+
+    <!-- Q26 -->
+    <div class="exercise-box">
+      <div class="exercise-header">
+        <div class="exercise-title">Q26: Gaps and Islands: Consecutive Win/Loss Settlement Streaks</div>
+        <span class="badge badge-hard">Hard</span>
+      </div>
+      <p>Identify streaks of consecutive profitable trading days per account using <code>ROW_NUMBER() - ROW_NUMBER()</code>.</p>
+      <div class="solution-details">
+        <details>
+          <summary class="solution-summary"><span>💡 View Solution & Explanation</span> <span>▼</span></summary>
+          <div class="solution-content">
+<pre><code class="language-sql">WITH DailyPnL AS (
+    SELECT AccountID, CAST(TransactionTimestamp AS DATE) AS TradeDate,
+           IIF(SUM(Amount) > 0, 'PROFIT', 'LOSS') AS DayOutcome
+    FROM LedgerTransactions
+    GROUP BY AccountID, CAST(TransactionTimestamp AS DATE)
+),
+GroupedSequences AS (
+    SELECT AccountID, TradeDate, DayOutcome,
+           ROW_NUMBER() OVER (PARTITION BY AccountID ORDER BY TradeDate) -
+           ROW_NUMBER() OVER (PARTITION BY AccountID, DayOutcome ORDER BY TradeDate) AS IslandID
+    FROM DailyPnL
+)
+SELECT AccountID, DayOutcome, MIN(TradeDate) AS StreakStart, MAX(TradeDate) AS StreakEnd, COUNT(*) AS StreakDays
+FROM GroupedSequences
+WHERE DayOutcome = 'PROFIT'
+GROUP BY AccountID, DayOutcome, IslandID
+HAVING COUNT(*) >= 3;
+</code></pre>
+            <div class="solution-explanation">
+              Subtracting partitioned row numbers groups consecutive matches into unique islands.
+            </div>
+          </div>
+        </details>
+      </div>
+    </div>
+
+    <!-- Q27 -->
+    <div class="exercise-box">
+      <div class="exercise-header">
+        <div class="exercise-title">Q27: Quartile Risk Scoring with NTILE(4)</div>
+        <span class="badge badge-easy">Easy</span>
+      </div>
+      <p>Assign accounts to 4 risk quartiles based on cash balance.</p>
+      <div class="solution-details">
+        <details>
+          <summary class="solution-summary"><span>💡 View Solution & Explanation</span> <span>▼</span></summary>
+          <div class="solution-content">
+<pre><code class="language-sql">SELECT 
+    AccountID,
+    CashBalance,
+    NTILE(4) OVER (ORDER BY CashBalance ASC) AS RiskQuartile
+FROM Accounts;
+</code></pre>
+            <div class="solution-explanation">
+              <code>NTILE(4)</code> partitions the dataset into 4 equal buckets.
+            </div>
+          </div>
+        </details>
+      </div>
+    </div>
+
+    <!-- Q28 -->
+    <div class="exercise-box">
+      <div class="exercise-header">
+        <div class="exercise-title">Q28: Percentage Contribution to Total Portfolio Value</div>
+        <span class="badge badge-medium">Medium</span>
+      </div>
+      <p>Calculate each security holding's exact percentage contribution to total account valuation without subqueries.</p>
+      <div class="solution-details">
+        <details>
+          <summary class="solution-summary"><span>💡 View Solution & Explanation</span> <span>▼</span></summary>
+          <div class="solution-content">
+<pre><code class="language-sql">SELECT 
+    AccountID,
+    SecurityID,
+    (PositionUnits * CurrentMarketPrice) AS HoldingValue,
+    CAST((PositionUnits * CurrentMarketPrice * 100.0) / 
+         SUM(PositionUnits * CurrentMarketPrice) OVER (PARTITION BY AccountID) AS DECIMAL(5,2)) AS PctOfAccount
+FROM PortfolioPositions;
+</code></pre>
+            <div class="solution-explanation">
+              Window aggregation <code>SUM(...) OVER (PARTITION BY AccountID)</code> computes the denominator inline.
+            </div>
+          </div>
+        </details>
+      </div>
+    </div>
+
+    <!-- Q29 -->
+    <div class="exercise-box">
+      <div class="exercise-header">
+        <div class="exercise-title">Q29: Lead Price Delta to Identify Front-Running Anomalies</div>
+        <span class="badge badge-medium">Medium</span>
+      </div>
+      <p>Identify orders placed less than 100 milliseconds before a price spike using <code>LEAD()</code>.</p>
+      <div class="solution-details">
+        <details>
+          <summary class="solution-summary"><span>💡 View Solution & Explanation</span> <span>▼</span></summary>
+          <div class="solution-content">
+<pre><code class="language-sql">SELECT 
+    ExecutionID,
+    FillPrice,
+    ExecutedAt,
+    LEAD(FillPrice) OVER (ORDER BY ExecutedAt) AS NextPrice,
+    LEAD(ExecutedAt) OVER (ORDER BY ExecutedAt) AS NextTime
+FROM Executions;
+</code></pre>
+            <div class="solution-explanation">
+              <code>LEAD()</code> peeks ahead to the subsequent chronological event.
+            </div>
+          </div>
+        </details>
+      </div>
+    </div>
+
+    <!-- Q30 -->
+    <div class="exercise-box">
+      <div class="exercise-header">
+        <div class="exercise-title">Q30: CTE Deduplication using ROW_NUMBER() in DELETE</div>
+        <span class="badge badge-medium">Medium</span>
+      </div>
+      <p>Write an in-place delete statement that purges duplicate security records, preserving strictly the lowest SecurityID.</p>
+      <div class="solution-details">
+        <details>
+          <summary class="solution-summary"><span>💡 View Solution & Explanation</span> <span>▼</span></summary>
+          <div class="solution-content">
+<pre><code class="language-sql">WITH TickerDuplicates AS (
+    SELECT 
+        SecurityID,
+        Ticker,
+        ROW_NUMBER() OVER (PARTITION BY Ticker ORDER BY SecurityID ASC) AS RowNum
+    FROM Securities
+)
+DELETE FROM TickerDuplicates
+WHERE RowNum > 1;
+</code></pre>
+            <div class="solution-explanation">
+              Direct deletion on CTE row numbers updates the base table cleanly.
+            </div>
+          </div>
+        </details>
+      </div>
+    </div>
+
+    <!-- ================================================================= -->
+    <!-- PART 4: VIEWS, CTES, HIERARCHIES & TEMPDB (Q31 - Q40) -->
+    <!-- ================================================================= -->
+    <h2>Part 4: Views, CTEs, Hierarchies & TempDB (Q31 – Q40)</h2>
+
+    <!-- Q31 -->
+    <div class="exercise-box">
+      <div class="exercise-header">
+        <div class="exercise-title">Q31: Indexed View for Real-Time Account Balance Summaries</div>
+        <span class="badge badge-hard">Hard</span>
+      </div>
+      <p>Create an indexed view on <code>LedgerTransactions</code> with schemabinding and a unique clustered index.</p>
+      <div class="solution-details">
+        <details>
+          <summary class="solution-summary"><span>💡 View Solution & Explanation</span> <span>▼</span></summary>
+          <div class="solution-content">
+<pre><code class="language-sql">CREATE OR ALTER VIEW dbo.v_LedgerSummaries
+WITH SCHEMABINDING
+AS
+SELECT 
+    AccountID,
+    COUNT_BIG(*) AS TxnCount,
+    SUM(ISNULL(Amount, 0)) AS TotalAmount
+FROM dbo.LedgerTransactions
+GROUP BY AccountID;
+GO
+
+CREATE UNIQUE CLUSTERED INDEX CIX_v_LedgerSummaries ON dbo.v_LedgerSummaries (AccountID);
+</code></pre>
+            <div class="solution-explanation">
+              <code>SCHEMABINDING</code> and <code>COUNT_BIG(*)</code> are mandatory for indexed aggregation views.
+            </div>
+          </div>
+        </details>
+      </div>
+    </div>
+
+    <!-- Q32 -->
+    <div class="exercise-box">
+      <div class="exercise-header">
+        <div class="exercise-title">Q32: Recursive CTE for Multi-Level Parent-Child Account Traversal</div>
+        <span class="badge badge-hard">Hard</span>
+      </div>
+      <p>Traverse a corporate management hierarchy to report employee depth and tree ancestry.</p>
+      <div class="solution-details">
+        <details>
+          <summary class="solution-summary"><span>💡 View Solution & Explanation</span> <span>▼</span></summary>
+          <div class="solution-content">
+<pre><code class="language-sql">WITH OrgChartCTE AS (
+    SELECT ClientID, ClientName, 0 AS Tier, CAST(ClientName AS VARCHAR(MAX)) AS Path
+    FROM Clients WHERE CountryCode = 'US'
+    UNION ALL
+    SELECT c.ClientID, c.ClientName, p.Tier + 1, CAST(p.Path + ' > ' + c.ClientName AS VARCHAR(MAX))
+    FROM Clients c
+    INNER JOIN OrgChartCTE p ON c.CountryCode = 'IN' AND p.Tier < 5
+)
+SELECT * FROM OrgChartCTE;
+</code></pre>
+            <div class="solution-explanation">
+              Recursive CTE anchor + recursive join with explicit tier termination condition.
+            </div>
+          </div>
+        </details>
+      </div>
+    </div>
+
+    <!-- Q33 -->
+    <div class="exercise-box">
+      <div class="exercise-header">
+        <div class="exercise-title">Q33: Cross-Tab Sector Aggregation via PIVOT</div>
+        <span class="badge badge-medium">Medium</span>
+      </div>
+      <p>Pivot client account balances across account types (CASH, MARGIN, DVP_SETTLEMENT).</p>
+      <div class="solution-details">
+        <details>
+          <summary class="solution-summary"><span>💡 View Solution & Explanation</span> <span>▼</span></summary>
+          <div class="solution-content">
+<pre><code class="language-sql">SELECT 
+    ClientID,
+    ISNULL([CASH], 0.00) AS Cash_Balance,
+    ISNULL([MARGIN], 0.00) AS Margin_Balance,
+    ISNULL([DVP_SETTLEMENT], 0.00) AS DVP_Balance
+FROM (
+    SELECT ClientID, AccountType, CashBalance FROM Accounts
+) AS src
+PIVOT (
+    SUM(CashBalance)
+    FOR AccountType IN ([CASH], [MARGIN], [DVP_SETTLEMENT])
+) AS pvt;
+</code></pre>
+            <div class="solution-explanation">
+              Standard static PIVOT grouping by ClientID.
+            </div>
+          </div>
+        </details>
+      </div>
+    </div>
+
+    <!-- Q34 -->
+    <div class="exercise-box">
+      <div class="exercise-header">
+        <div class="exercise-title">Q34: Unpivoting Quarterly Performance Ratios</div>
+        <span class="badge badge-easy">Easy</span>
+      </div>
+      <p>Normalize wide columns into key-value attribute rows using <code>UNPIVOT</code>.</p>
+      <div class="solution-details">
+        <details>
+          <summary class="solution-summary"><span>💡 View Solution & Explanation</span> <span>▼</span></summary>
+          <div class="solution-content">
+<pre><code class="language-sql">SELECT AccountID, MetricType, MetricValue
+FROM (
+    SELECT AccountID, CashBalance, MarginLimit FROM Accounts
+) AS p
+UNPIVOT (
+    MetricValue FOR MetricType IN (CashBalance, MarginLimit)
+) AS unpvt;
+</code></pre>
+            <div class="solution-explanation">
+              <code>UNPIVOT</code> converts columns to rows while stripping NULLs.
+            </div>
+          </div>
+        </details>
+      </div>
+    </div>
+
+    <!-- Q35 -->
+    <div class="exercise-box">
+      <div class="exercise-header">
+        <div class="exercise-title">Q35: #Temp Table with Clustered Index for Intermediate Batch Join</div>
+        <span class="badge badge-medium">Medium</span>
+      </div>
+      <p>Demonstrate staging intermediate order data into a #temp table and adding an index before joining.</p>
+      <div class="solution-details">
+        <details>
+          <summary class="solution-summary"><span>💡 View Solution & Explanation</span> <span>▼</span></summary>
+          <div class="solution-content">
+<pre><code class="language-sql">CREATE TABLE #StagedOrders (
+    OrderID BIGINT PRIMARY KEY,
+    AccountID INT
+);
+
+INSERT INTO #StagedOrders (OrderID, AccountID)
+SELECT OrderID, AccountID FROM Orders WHERE OrderStatus = 'PENDING';
+
+SELECT s.OrderID, a.AccountNumber
+FROM #StagedOrders s
+INNER JOIN Accounts a ON s.AccountID = a.AccountID;
+
+DROP TABLE #StagedOrders;
+</code></pre>
+            <div class="solution-explanation">
+              Creating a primary key creates a clustered index in TempDB, enabling Merge/Hash joins.
+            </div>
+          </div>
+        </details>
+      </div>
+    </div>
+
+    <!-- Q36 -->
+    <div class="exercise-box">
+      <div class="exercise-header">
+        <div class="exercise-title">Q36: Transaction Rollback Survival: Table Variable vs #Temp Table</div>
+        <span class="badge badge-medium">Medium</span>
+      </div>
+      <p>Demonstrate why an error log inside a <code>@TableVariable</code> survives a <code>ROLLBACK</code> while a <code>#TempTable</code> does not.</p>
+      <div class="solution-details">
+        <details>
+          <summary class="solution-summary"><span>💡 View Solution & Explanation</span> <span>▼</span></summary>
+          <div class="solution-content">
+<pre><code class="language-sql">DECLARE @AuditVar TABLE (Msg VARCHAR(50));
+CREATE TABLE #AuditTemp (Msg VARCHAR(50));
+
+BEGIN TRAN;
+    INSERT INTO @AuditVar VALUES ('Variable Preserved');
+    INSERT INTO #AuditTemp VALUES ('Temp Table Rolled Back');
+ROLLBACK TRAN;
+
+SELECT * FROM @AuditVar;  -- Returns 1 row!
+SELECT * FROM #AuditTemp; -- Returns 0 rows!
+DROP TABLE #AuditTemp;
+</code></pre>
+            <div class="solution-explanation">
+              Table variables do not participate in transaction rollbacks; ideal for logging errors in CATCH blocks.
+            </div>
+          </div>
+        </details>
+      </div>
+    </div>
+
+    <!-- Q37 -->
+    <div class="exercise-box">
+      <div class="exercise-header">
+        <div class="exercise-title">Q37: Global Temp Table (##Global) Cross-Session Batch Handshake</div>
+        <span class="badge badge-easy">Easy</span>
+      </div>
+      <p>Write DDL for a global temporary table accessible across distinct SSMS connections.</p>
+      <div class="solution-details">
+        <details>
+          <summary class="solution-summary"><span>💡 View Solution & Explanation</span> <span>▼</span></summary>
+          <div class="solution-content">
+<pre><code class="language-sql">CREATE TABLE ##GlobalTradeSignal (
+    SignalID INT IDENTITY PRIMARY KEY,
+    Ticker VARCHAR(10),
+    Recommendation VARCHAR(10)
+);
+
+INSERT INTO ##GlobalTradeSignal (Ticker, Recommendation) VALUES ('NVDA', 'STRONG_BUY');
+SELECT * FROM ##GlobalTradeSignal;
+</code></pre>
+            <div class="solution-explanation">
+              <code>##Global</code> tables are visible to all sessions and dropped when creating session disconnects.
+            </div>
+          </div>
+        </details>
+      </div>
+    </div>
+
+    <!-- Q38 -->
+    <div class="exercise-box">
+      <div class="exercise-header">
+        <div class="exercise-title">Q38: Dynamic PIVOT with QUOTENAME Security Injection Defense</div>
+        <span class="badge badge-hard">Hard</span>
+      </div>
+      <p>Build a dynamic pivot query that safely quotes dynamic security tickers using <code>QUOTENAME</code>.</p>
+      <div class="solution-details">
+        <details>
+          <summary class="solution-summary"><span>💡 View Solution & Explanation</span> <span>▼</span></summary>
+          <div class="solution-content">
+<pre><code class="language-sql">DECLARE @Cols NVARCHAR(MAX);
+SELECT @Cols = STRING_AGG(QUOTENAME(Ticker), ',') FROM (SELECT DISTINCT Ticker FROM Securities) s;
+
+DECLARE @Sql NVARCHAR(MAX) = '
+SELECT AccountID, ' + @Cols + '
+FROM (
+    SELECT o.AccountID, s.Ticker, o.Quantity
+    FROM Orders o INNER JOIN Securities s ON o.SecurityID = s.SecurityID
+) src
+PIVOT (SUM(Quantity) FOR Ticker IN (' + @Cols + ')) pvt;';
+
+EXEC sp_executesql @Sql;
+</code></pre>
+            <div class="solution-explanation">
+              <code>QUOTENAME()</code> prevents SQL injection attacks from malicious strings in data rows.
+            </div>
+          </div>
+        </details>
+      </div>
+    </div>
+
+    <!-- Q39 -->
+    <div class="exercise-box">
+      <div class="exercise-header">
+        <div class="exercise-title">Q39: Recursive Date Spine Generator (Zero-Table Calendar)</div>
+        <span class="badge badge-medium">Medium</span>
+      </div>
+      <p>Generate a continuous calendar sequence of all 365 days of 2024 using a recursive CTE with no physical tables.</p>
+      <div class="solution-details">
+        <details>
+          <summary class="solution-summary"><span>💡 View Solution & Explanation</span> <span>▼</span></summary>
+          <div class="solution-content">
+<pre><code class="language-sql">WITH Calendar2024 AS (
+    SELECT CAST('2024-01-01' AS DATE) AS CalDate
+    UNION ALL
+    SELECT DATEADD(DAY, 1, CalDate)
+    FROM Calendar2024
+    WHERE CalDate < '2024-12-31'
+)
+SELECT CalDate FROM Calendar2024
+OPTION (MAXRECURSION 366);
+</code></pre>
+            <div class="solution-explanation">
+              <code>OPTION (MAXRECURSION 366)</code> overrides the default 100-recursion ceiling.
+            </div>
+          </div>
+        </details>
+      </div>
+    </div>
+
+    <!-- Q40 -->
+    <div class="exercise-box">
+      <div class="exercise-header">
+        <div class="exercise-title">Q40: Multiple CTE References in a Single Execution Scope</div>
+        <span class="badge badge-easy">Easy</span>
+      </div>
+      <p>Demonstrate chaining three consecutive CTEs to compute cumulative order stats.</p>
+      <div class="solution-details">
+        <details>
+          <summary class="solution-summary"><span>💡 View Solution & Explanation</span> <span>▼</span></summary>
+          <div class="solution-content">
+<pre><code class="language-sql">WITH BuyOrders AS (
+    SELECT AccountID, SUM(Quantity) AS TotalBuyQty FROM Orders WHERE OrderSide = 'BUY' GROUP BY AccountID
+),
+SellOrders AS (
+    SELECT AccountID, SUM(Quantity) AS TotalSellQty FROM Orders WHERE OrderSide = 'SELL' GROUP BY AccountID
+),
+NetOrders AS (
+    SELECT 
+        COALESCE(b.AccountID, s.AccountID) AS AccountID,
+        ISNULL(b.TotalBuyQty, 0) - ISNULL(s.TotalSellQty, 0) AS NetQty
+    FROM BuyOrders b
+    FULL OUTER JOIN SellOrders s ON b.AccountID = s.AccountID
+)
+SELECT * FROM NetOrders WHERE NetQty <> 0;
+</code></pre>
+            <div class="solution-explanation">
+              Multiple CTEs separated by commas allow clean procedural-style data transformation pipelines.
+            </div>
+          </div>
+        </details>
+      </div>
+    </div>
+
+    <!-- ================================================================= -->
+    <!-- PART 5: PROCEDURES, FUNCTIONS, TRIGGERS & ERRORS (Q41 - Q46) -->
+    <!-- ================================================================= -->
+    <h2>Part 5: Procedures, Functions, Dynamic SQL & Triggers (Q41 – Q46)</h2>
+
+    <!-- Q41 -->
+    <div class="exercise-box">
+      <div class="exercise-header">
+        <div class="exercise-title">Q41: Table-Valued Parameter (TVP) Bulk Insert Procedure</div>
+        <span class="badge badge-hard">Hard</span>
+      </div>
+      <p>Define a TVP type for executions and a stored procedure that inserts thousands of fills in one transaction.</p>
+      <div class="solution-details">
+        <details>
+          <summary class="solution-summary"><span>💡 View Solution & Explanation</span> <span>▼</span></summary>
+          <div class="solution-content">
+<pre><code class="language-sql">CREATE TYPE ExecutionBatchType AS TABLE (
+    OrderID BIGINT,
+    FillQuantity INT,
+    FillPrice DECIMAL(18,4)
+);
+GO
+
+CREATE OR ALTER PROCEDURE usp_BulkInsertFills
+    @Fills ExecutionBatchType READONLY
+AS
+BEGIN
+    SET NOCOUNT ON;
+    INSERT INTO Executions (OrderID, FillQuantity, FillPrice)
+    SELECT OrderID, FillQuantity, FillPrice FROM @Fills;
+END;
+GO
+</code></pre>
+            <div class="solution-explanation">
+              TVP eliminates chatty network calls, inserting thousands of rows in a single batch.
+            </div>
+          </div>
+        </details>
+      </div>
+    </div>
+
+    <!-- Q42 -->
+    <div class="exercise-box">
+      <div class="exercise-header">
+        <div class="exercise-title">Q42: Inline Table-Valued Function (iTVF) vs Multi-Statement TVF (mTVF)</div>
+        <span class="badge badge-medium">Medium</span>
+      </div>
+      <p>Demonstrate the syntax difference and explain why iTVF enables parallel query plans while mTVF blocks them.</p>
+      <div class="solution-details">
+        <details>
+          <summary class="solution-summary"><span>💡 View Solution & Explanation</span> <span>▼</span></summary>
+          <div class="solution-content">
+<pre><code class="language-sql">-- Inline TVF (Optimizer treats as a view):
+CREATE FUNCTION dbo.fn_Orders_iTVF (@AccountID INT)
+RETURNS TABLE AS
+RETURN (SELECT OrderID, Quantity, LimitPrice FROM Orders WHERE AccountID = @AccountID);
+GO
+
+-- Multi-Statement TVF (Uses hidden table variable - lacks statistics):
+CREATE FUNCTION dbo.fn_Orders_mTVF (@AccountID INT)
+RETURNS @Result TABLE (OrderID BIGINT, Quantity INT, LimitPrice DECIMAL(18,4)) AS
+BEGIN
+    INSERT INTO @Result SELECT OrderID, Quantity, LimitPrice FROM Orders WHERE AccountID = @AccountID;
+    RETURN;
+END;
+GO
+</code></pre>
+            <div class="solution-explanation">
+              Inline TVFs are directly inlined into the outer query's plan; mTVFs create hidden table variables that prevent parallelism.
+            </div>
+          </div>
+        </details>
+      </div>
+    </div>
+
+    <!-- Q43 -->
+    <div class="exercise-box">
+      <div class="exercise-header">
+        <div class="exercise-title">Q43: Multi-Row Safe Audit Trigger using the INSERTED Table</div>
+        <span class="badge badge-medium">Medium</span>
+      </div>
+      <p>Write an <code>AFTER INSERT</code> trigger on <code>Orders</code> that audits multi-row batch inserts without missing rows.</p>
+      <div class="solution-details">
+        <details>
+          <summary class="solution-summary"><span>💡 View Solution & Explanation</span> <span>▼</span></summary>
+          <div class="solution-content">
+<pre><code class="language-sql">CREATE OR ALTER TRIGGER trg_Orders_AuditInsert
+ON Orders
+AFTER INSERT
+AS
+BEGIN
+    SET NOCOUNT ON;
+    INSERT INTO AuditLogs (TableName, OperationType, RecordID, ChangedBy, ChangePayload)
+    SELECT 
+        'Orders',
+        'INSERT',
+        CAST(i.OrderID AS VARCHAR(50)),
+        SUSER_SNAME(),
+        CONCAT('Placed Order for Security ', i.SecurityID, ' Qty: ', i.Quantity)
+    FROM inserted i; -- Set-based join against all inserted rows!
+END;
+GO
+</code></pre>
+            <div class="solution-explanation">
+              Always join directly to <code>inserted</code> as a set; never select into a scalar variable inside a trigger.
+            </div>
+          </div>
+        </details>
+      </div>
+    </div>
+
+    <!-- Q44 -->
+    <div class="exercise-box">
+      <div class="exercise-header">
+        <div class="exercise-title">Q44: Parameterized Dynamic SQL with sp_executesql and Output Parameter</div>
+        <span class="badge badge-medium">Medium</span>
+      </div>
+      <p>Execute dynamic SQL that counts matching orders and returns the count via an <code>OUTPUT</code> parameter.</p>
+      <div class="solution-details">
+        <details>
+          <summary class="solution-summary"><span>💡 View Solution & Explanation</span> <span>▼</span></summary>
+          <div class="solution-content">
+<pre><code class="language-sql">DECLARE @Sql NVARCHAR(500) = N'SELECT @OutCount = COUNT(*) FROM Orders WHERE OrderSide = @pSide;';
+DECLARE @ParamDef NVARCHAR(200) = N'@pSide VARCHAR(4), @OutCount INT OUTPUT';
+DECLARE @ResultCount INT;
+
+EXEC sp_executesql 
+    @stmt = @Sql, 
+    @params = @ParamDef, 
+    @pSide = 'BUY', 
+    @OutCount = @ResultCount OUTPUT;
+
+SELECT @ResultCount AS BuyOrderCount;
+</code></pre>
+            <div class="solution-explanation">
+              <code>sp_executesql</code> supports bi-directional strongly-typed parameters with cached execution plans.
+            </div>
+          </div>
+        </details>
+      </div>
+    </div>
+
+    <!-- Q45 -->
+    <div class="exercise-box">
+      <div class="exercise-header">
+        <div class="exercise-title">Q45: Enterprise TRY...CATCH with THROW and XACT_STATE()</div>
+        <span class="badge badge-hard">Hard</span>
+      </div>
+      <p>Write a transactional procedure that handles uncommittable transactions (<code>XACT_STATE() = -1</code>) and re-throws errors.</p>
+      <div class="solution-details">
+        <details>
+          <summary class="solution-summary"><span>💡 View Solution & Explanation</span> <span>▼</span></summary>
+          <div class="solution-content">
+<pre><code class="language-sql">CREATE OR ALTER PROCEDURE usp_RobustFinancialAction
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SET XACT_ABORT ON;
+
+    BEGIN TRY
+        BEGIN TRANSACTION;
+            -- Action logic
+        COMMIT TRANSACTION;
+    END TRY
+    BEGIN CATCH
+        IF XACT_STATE() <> 0
+            ROLLBACK TRANSACTION;
+        THROW; -- Preserves original line number and error message!
+    END CATCH
+END;
+GO
+</code></pre>
+            <div class="solution-explanation">
+              <code>XACT_STATE() = -1</code> indicates a doomed transaction. <code>THROW;</code> re-raises the exact original exception.
+            </div>
+          </div>
+        </details>
+      </div>
+    </div>
+
+    <!-- Q46 -->
+    <div class="exercise-box">
+      <div class="exercise-header">
+        <div class="exercise-title">Q46: INSTEAD OF Trigger for Modifying Complex Non-Updatable Views</div>
+        <span class="badge badge-hard">Hard</span>
+      </div>
+      <p>Create an <code>INSTEAD OF INSERT</code> trigger on a multi-table joined view to route inserts into respective base tables.</p>
+      <div class="solution-details">
+        <details>
+          <summary class="solution-summary"><span>💡 View Solution & Explanation</span> <span>▼</span></summary>
+          <div class="solution-content">
+<pre><code class="language-sql">CREATE OR ALTER TRIGGER trg_ClientAccountsView_Insert
+ON v_ClientAccountsSummary
+INSTEAD OF INSERT
+AS
+BEGIN
+    SET NOCOUNT ON;
+    -- Insert client if not exists
+    INSERT INTO Clients (ClientName, ClientType)
+    SELECT DISTINCT ClientName, 'INSTITUTIONAL' FROM inserted
+    WHERE ClientName NOT IN (SELECT ClientName FROM Clients);
+
+    -- Insert account linking to resolved ClientID
+    INSERT INTO Accounts (ClientID, AccountNumber, AccountType)
+    SELECT c.ClientID, i.AccountNumber, 'MARGIN'
+    FROM inserted i
+    INNER JOIN Clients c ON i.ClientName = c.ClientName;
+END;
+GO
+</code></pre>
+            <div class="solution-explanation">
+              <code>INSTEAD OF</code> triggers make non-updatable multi-table views fully writable.
+            </div>
+          </div>
+        </details>
+      </div>
+    </div>
+
+    <!-- ================================================================= -->
+    <!-- PART 6: PERFORMANCE TUNING, LOCKS & DEADLOCKS (Q47 - Q52) -->
+    <!-- ================================================================= -->
+    <h2>Part 6: Performance Tuning, Indexing & Deadlocks (Q47 – Q52)</h2>
+
+    <!-- Q47 -->
+    <div class="exercise-box">
+      <div class="exercise-header">
+        <div class="exercise-title">Q47: Designing an Online Covering Index with Fill Factor</div>
+        <span class="badge badge-hard">Hard</span>
+      </div>
+      <p>Design an index on <code>Orders(AccountID, OrderStatus)</code> that covers <code>OrderTime</code> and <code>Quantity</code> with 85% Fill Factor.</p>
+      <div class="solution-details">
+        <details>
+          <summary class="solution-summary"><span>💡 View Solution & Explanation</span> <span>▼</span></summary>
+          <div class="solution-content">
+<pre><code class="language-sql">CREATE NONCLUSTERED INDEX IX_Orders_Account_Status_Covering
+ON Orders (AccountID, OrderStatus)
+INCLUDE (OrderTime, Quantity, LimitPrice)
+WITH (FILLFACTOR = 85, ONLINE = ON, DATA_COMPRESSION = PAGE);
+</code></pre>
+            <div class="solution-explanation">
+              <code>FILLFACTOR = 85</code> leaves 15% free space on leaf pages to prevent page splits during heavy inserts.
+            </div>
+          </div>
+        </details>
+      </div>
+    </div>
+
+    <!-- Q48 -->
+    <div class="exercise-box">
+      <div class="exercise-header">
+        <div class="exercise-title">Q48: Resolving Conversion Deadlocks with UPDLOCK and ROWLOCK</div>
+        <span class="badge badge-hard">Hard</span>
+      </div>
+      <p>Write an account balance reservation query that prevents two concurrent transactions from deadlocking.</p>
+      <div class="solution-details">
+        <details>
+          <summary class="solution-summary"><span>💡 View Solution & Explanation</span> <span>▼</span></summary>
+          <div class="solution-content">
+<pre><code class="language-sql">BEGIN TRAN;
+    SELECT CashBalance 
+    FROM Accounts WITH (UPDLOCK, ROWLOCK, HOLDLOCK)
+    WHERE AccountID = 1001;
+
+    UPDATE Accounts 
+    SET CashBalance = CashBalance - 25000.00
+    WHERE AccountID = 1001;
+COMMIT TRAN;
+</code></pre>
+            <div class="solution-explanation">
+              <code>UPDLOCK</code> acquires an update lock immediately during read, preventing conversion deadlocks.
+            </div>
+          </div>
+        </details>
+      </div>
+    </div>
+
+    <!-- Q49 -->
+    <div class="exercise-box">
+      <div class="exercise-header">
+        <div class="exercise-title">Q49: Querying sys.dm_exec_query_stats for Top CPU-Consuming Queries</div>
+        <span class="badge badge-hard">Hard</span>
+      </div>
+      <p>Write a DMV query to find the top 5 worst queries by total CPU worker time, displaying the actual SQL text.</p>
+      <div class="solution-details">
+        <details>
+          <summary class="solution-summary"><span>💡 View Solution & Explanation</span> <span>▼</span></summary>
+          <div class="solution-content">
+<pre><code class="language-sql">SELECT TOP (5)
+    qs.total_worker_time / 1000 AS TotalCpuMs,
+    qs.execution_count AS ExecCount,
+    (qs.total_worker_time / qs.execution_count) / 1000 AS AvgCpuMs,
+    qs.total_logical_reads / qs.execution_count AS AvgLogicalReads,
+    SUBSTRING(st.text, (qs.statement_start_offset/2) + 1,
+        ((CASE qs.statement_end_offset 
+            WHEN -1 THEN DATALENGTH(st.text)
+            ELSE qs.statement_end_offset END - qs.statement_start_offset)/2) + 1) AS QueryText
+FROM sys.dm_exec_query_stats qs
+CROSS APPLY sys.dm_exec_sql_text(qs.sql_handle) st
+ORDER BY qs.total_worker_time DESC;
+</code></pre>
+            <div class="solution-explanation">
+              Calculates average CPU and logical reads per execution to locate resource-hogging queries.
+            </div>
+          </div>
+        </details>
+      </div>
+    </div>
+
+    <!-- Q50 -->
+    <div class="exercise-box">
+      <div class="exercise-header">
+        <div class="exercise-title">Q50: Preventing Lock Escalation with ALTER TABLE LOCK_ESCALATION</div>
+        <span class="badge badge-expert">Expert</span>
+      </div>
+      <p>Configure a table to prevent escalating from row locks to exclusive table locks during batch updates.</p>
+      <div class="solution-details">
+        <details>
+          <summary class="solution-summary"><span>💡 View Solution & Explanation</span> <span>▼</span></summary>
+          <div class="solution-content">
+<pre><code class="language-sql">-- Disable lock escalation to prevent table-level exclusive locks
+ALTER TABLE Orders SET (LOCK_ESCALATION = DISABLE);
+
+-- Or in partitioned tables, escalate to partition level:
+-- ALTER TABLE Orders SET (LOCK_ESCALATION = AUTO);
+</code></pre>
+            <div class="solution-explanation">
+              <code>LOCK_ESCALATION = DISABLE</code> forces SQL Server to retain row and page locks, eliminating table-level locking freezes.
+            </div>
+          </div>
+        </details>
+      </div>
+    </div>
+
+    <!-- Q51 -->
+    <div class="exercise-box">
+      <div class="exercise-header">
+        <div class="exercise-title">Q51: Finding Wait Statistics (PAGEIOLATCH_SH vs SOS_SCHEDULER_YIELD)</div>
+        <span class="badge badge-expert">Expert</span>
+      </div>
+      <p>Query <code>sys.dm_os_wait_stats</code> to identify whether the instance bottleneck is Disk I/O or CPU pressure.</p>
+      <div class="solution-details">
+        <details>
+          <summary class="solution-summary"><span>💡 View Solution & Explanation</span> <span>▼</span></summary>
+          <div class="solution-content">
+<pre><code class="language-sql">SELECT TOP (10)
+    wait_type,
+    wait_time_ms / 1000.0 AS WaitTimeSeconds,
+    (wait_time_ms - signal_wait_time_ms) / 1000.0 AS ResourceWaitSeconds,
+    signal_wait_time_ms / 1000.0 AS SignalWaitSeconds -- Signal wait indicates CPU queueing!
+FROM sys.dm_os_wait_stats
+WHERE wait_type NOT IN (
+    'CLR_SEMAPHORE','LAZYWRITER_SLEEP','RESOURCE_QUEUE','SLEEP_TASK','SLEEP_SYSTEMTASK',
+    'SQLTRACE_BUFFER_FLUSH','WAITFOR','LOGMGR_QUEUE','CHECKPOINT_QUEUE','REQUEST_FOR_DEADLOCK_SEARCH'
+)
+ORDER BY wait_time_ms DESC;
+</code></pre>
+            <div class="solution-explanation">
+              <code>PAGEIOLATCH_*</code> signifies storage I/O bottleneck; high <code>SOS_SCHEDULER_YIELD</code> indicates CPU thread starvation.
+            </div>
+          </div>
+        </details>
+      </div>
+    </div>
+
+    <!-- Q52 -->
+    <div class="exercise-box">
+      <div class="exercise-header">
+        <div class="exercise-title">Q52: Comprehensive Financial Settlement Audit Ledger Reconstruction</div>
+        <span class="badge badge-expert">Expert</span>
+      </div>
+      <p>Write an end-to-end reconciliation query that compares opening cash balances, adds all deposits, subtracts all withdrawals and buys, adds sells and fees, and verifies whether the calculated sum matches the current physical <code>CashBalance</code> on every account.</p>
+      <div class="solution-details">
+        <details>
+          <summary class="solution-summary"><span>💡 View Solution & Explanation</span> <span>▼</span></summary>
+          <div class="solution-content">
+<pre><code class="language-sql">WITH LedgerBreakdown AS (
+    SELECT 
+        AccountID,
+        SUM(CASE WHEN TransactionType = 'DEPOSIT' THEN Amount ELSE 0 END) AS TotalDeposits,
+        SUM(CASE WHEN TransactionType = 'WITHDRAWAL' THEN Amount ELSE 0 END) AS TotalWithdrawals,
+        SUM(CASE WHEN TransactionType = 'TRADE_BUY' THEN Amount ELSE 0 END) AS TotalBuySpend,
+        SUM(CASE WHEN TransactionType = 'TRADE_SELL' THEN Amount ELSE 0 END) AS TotalSellProceeds,
+        SUM(CASE WHEN TransactionType = 'FEE' THEN Amount ELSE 0 END) AS TotalFees,
+        SUM(Amount) AS NetLedgerTotal
+    FROM LedgerTransactions
+    GROUP BY AccountID
+)
+SELECT 
+    a.AccountID,
+    a.AccountNumber,
+    a.CashBalance AS CurrentPhysicalBalance,
+    ISNULL(l.NetLedgerTotal, 0.00) AS CalculatedLedgerBalance,
+    (a.CashBalance - ISNULL(l.NetLedgerTotal, 0.00)) AS BalanceDiscrepancy,
+    CASE 
+        WHEN ABS(a.CashBalance - ISNULL(l.NetLedgerTotal, 0.00)) < 0.0001 THEN 'BALANCED_OK'
+        ELSE 'AUDIT_ALERT_UNBALANCED'
+    END AS ReconciliationStatus
+FROM Accounts a
+LEFT JOIN LedgerBreakdown l ON a.AccountID = l.AccountID
+ORDER BY ABS(a.CashBalance - ISNULL(l.NetLedgerTotal, 0.00)) DESC;
+</code></pre>
+            <div class="solution-explanation">
+              <strong>Architectural Masterpiece:</strong> This query performs double-entry accounting reconciliation across the entire ledger. In financial audits, any row with <code>AUDIT_ALERT_UNBALANCED</code> isolates illegal state modifications or unlogged transactions immediately.
+            </div>
+          </div>
+        </details>
+      </div>
+    </div>
+
+    <div class="page-nav" style="margin-top: 3rem;">
+      <a href="transactions-locking.html" class="nav-prev">← Previous: 07 · Transactions & Locking</a>
+      <a href="index.html" class="nav-next">Back to Home: 🏠 SQL Mastery Home →</a>
+    </div>
+
+  </main>
+</div>
+
+<button class="scroll-top" aria-label="Scroll to top">↑</button>
+
+<script src="js/main.js"></script>
+</body>
+</html>

@@ -1,0 +1,519 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>07 · Transactions, Concurrency & Locking — SQL Server Mastery</title>
+  <link rel="stylesheet" href="css/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+</head>
+<body>
+
+<button class="menu-toggle" aria-label="Toggle menu">☰</button>
+
+<div class="page-wrapper">
+  <aside class="sidebar" id="sidebar"></aside>
+
+  <main class="main-content">
+    <div class="platform-switcher">
+      <span>Mastery Portals:</span>
+      <a href="../Architecture/index.html">🏛️ System Design</a>
+      <a href="../CoreJava/index.html">☕ Core Java 21</a>
+      <a href="index.html" class="active">🗄️ MS SQL Server</a>
+    </div>
+
+    <nav class="breadcrumb">
+      <a href="index.html">SQL Mastery</a> &gt; <span>07 · Transactions & Locking</span>
+    </nav>
+
+    <header>
+      <h1>07 · Transactions, Isolation Levels & Deadlock Resolution</h1>
+      <p class="lead">ACID Internals, The 5 Isolation Levels, Read Committed Snapshot Isolation (RCSI), Lock Modes & Escalation, and Production Deadlock Graph Diagnostics.</p>
+    </header>
+
+    <!-- SECTION 1: ACID & ISOLATION PHENOMENA -->
+    <section>
+      <h2>1. The 5 Transaction Isolation Levels & Concurrency Phenomena</h2>
+      <p>SQL Server ensures transactional integrity using either <strong>Pessimistic Locking</strong> (holding Shared/Exclusive locks) or <strong>Optimistic Row Versioning</strong> (maintaining historical row versions in the TempDB Version Store).</p>
+
+      <table border="1" style="width: 100%; border-collapse: collapse; margin: 1.5rem 0;">
+        <thead>
+          <tr style="background: #f1f5f9;">
+            <th>Isolation Level</th>
+            <th>Dirty Read</th>
+            <th>Non-Repeatable Read</th>
+            <th>Phantom Read</th>
+            <th>Concurrency Mechanism</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>READ UNCOMMITTED (NOLOCK)</strong></td>
+            <td><span class="badge badge-hard">Yes</span></td>
+            <td><span class="badge badge-hard">Yes</span></td>
+            <td><span class="badge badge-hard">Yes</span></td>
+            <td>Takes no Shared locks; reads uncommitted dirty memory buffers directly.</td>
+          </tr>
+          <tr>
+            <td><strong>READ COMMITTED (Default)</strong></td>
+            <td><span class="badge badge-easy">No</span></td>
+            <td><span class="badge badge-hard">Yes</span></td>
+            <td><span class="badge badge-hard">Yes</span></td>
+            <td>Pessimistic: Shared (S) locks acquired on read, but <strong>released immediately</strong> after each statement completes!</td>
+          </tr>
+          <tr>
+            <td><strong>REPEATABLE READ</strong></td>
+            <td><span class="badge badge-easy">No</span></td>
+            <td><span class="badge badge-easy">No</span></td>
+            <td><span class="badge badge-hard">Yes</span></td>
+            <td>Pessimistic: Shared (S) locks are held until the <strong>entire transaction completes</strong> (COMMIT or ROLLBACK).</td>
+          </tr>
+          <tr>
+            <td><strong>SERIALIZABLE</strong></td>
+            <td><span class="badge badge-easy">No</span></td>
+            <td><span class="badge badge-easy">No</span></td>
+            <td><span class="badge badge-easy">No</span></td>
+            <td>Pessimistic: Key-Range locks prevent other transactions from inserting new rows within queried ranges.</td>
+          </tr>
+          <tr>
+            <td><strong>SNAPSHOT / RCSI</strong></td>
+            <td><span class="badge badge-easy">No</span></td>
+            <td><span class="badge badge-easy">No</span></td>
+            <td><span class="badge badge-easy">No</span></td>
+            <td>Optimistic: Reads committed versions from TempDB. <strong>Readers do NOT block Writers; Writers do NOT block Readers!</strong></td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="card" style="border-left: 4px solid var(--danger);">
+        <h4>☠️ The Dangers of WITH (NOLOCK) in Financial Systems</h4>
+        <p>Developers often sprinkle <code>WITH (NOLOCK)</code> across queries thinking it is a free performance boost. In reality:</p>
+        <ul>
+          <li><strong>Torn Reads:</strong> You can read a row half-updated (e.g., account balance updated, but currency code not yet written).</li>
+          <li><strong>Duplicate Rows:</strong> An index page split caused by a concurrent insert can cause your scan to read the same physical row twice!</li>
+          <li><strong>Missing Rows:</strong> Rows that move to an earlier page during a split will be skipped entirely.</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- SECTION 2: LOCK MODES & ESCALATION -->
+    <section>
+      <h2>2. Lock Hierarchy, Modes & Lock Escalation</h2>
+
+      <div class="mermaid">
+flowchart TD
+    DB["Database Lock (DB)"] --> Table["Table Lock (TAB)"]
+    Table --> Page["Page Lock (PAG - 8 KB)"]
+    Page --> Row["Row / Key Lock (KEY / RID)"]
+      </div>
+
+      <p><strong>Key Lock Modes:</strong></p>
+      <ul>
+        <li><strong>Shared (S):</strong> Acquired during read operations. Multiple transactions can hold Shared locks concurrently.</li>
+        <li><strong>Exclusive (X):</strong> Acquired during write operations (INSERT, UPDATE, DELETE). Incompatible with all other locks.</li>
+        <li><strong>Update (U):</strong> Acquired when a transaction intends to update a row. Prevents conversion deadlocks when two transactions read with intent to update.</li>
+        <li><strong>Intent Locks (IS, IX, SIX):</strong> Established at higher hierarchy tiers (Table/Page) to signal that lower-level child resources (Rows) are locked. Prevents another transaction from acquiring an exclusive table lock.</li>
+      </ul>
+
+      <div class="card" style="border-left: 4px solid var(--accent); margin-top: 1rem;">
+        <h4>⚠️ Lock Escalation Threshold</h4>
+        <p>When a single query or statement acquires more than <strong>5,000 individual row or key locks</strong> on a single table, SQL Server automatically escalates those individual locks directly into a single <strong>Exclusive Table Lock (TAB-X)</strong>! This completely blocks all concurrent queries on that table until the transaction finishes.</p>
+        <p><em>Mitigation:</em> Process bulk updates in smaller batches (e.g. 2,000 rows per loop), or configure <code>ALTER TABLE TableName SET (LOCK_ESCALATION = AUTO / DISABLE)</code>.</p>
+      </div>
+    </section>
+
+    <!-- SECTION 3: DEADLOCK MECHANICS -->
+    <section>
+      <h2>3. Deadlock Detection & Graph Diagnostics</h2>
+      <p>A <strong>Deadlock</strong> occurs when two or more transactions have a mutual cyclic dependency on locked resources, such that neither can proceed.</p>
+
+      <div class="mermaid">
+sequenceDiagram
+    participant T1 as Transaction 1
+    participant DB as SQL Server Engine
+    participant T2 as Transaction 2
+
+    T1->>DB: Locks Account 1001 (Exclusive)
+    T2->>DB: Locks Account 2002 (Exclusive)
+    T1->>DB: Requests Lock on Account 2002 (BLOCKED by T2)
+    T2->>DB: Requests Lock on Account 1001 (BLOCKED by T1)
+    Note over DB: DEADLOCK DETECTED! Lock Monitor kills victim.
+    DB-->>T2: Error 1205: Deadlock Victim (Rolled Back)
+    DB-->>T1: Lock Granted on Account 2002 (Transaction Completes)
+      </div>
+    </section>
+
+    <!-- SECTION 4: EXERCISES -->
+    <section>
+      <h2>🏋️ Module 07 Exercises (With Toggleable Solutions)</h2>
+
+      <!-- Exercise 1 -->
+      <div class="exercise-box">
+        <div class="exercise-header">
+          <div class="exercise-title">Exercise 7.1: Enabling Read Committed Snapshot Isolation (RCSI) Zero-Lock Reads</div>
+          <span class="badge badge-medium">Medium</span>
+        </div>
+        <div class="schema-context">
+          <strong>Context:</strong> Production database suffering from reader-writer blocking during daytime reporting
+        </div>
+        <p><strong>Requirement:</strong> Write the exact administrative T-SQL commands to enable Read Committed Snapshot Isolation (RCSI) on the database without leaving uncommitted transaction locks hung.</p>
+
+        <div class="solution-details">
+          <details>
+            <summary class="solution-summary"><span>💡 View Solution & Explanation</span> <span>▼</span></summary>
+            <div class="solution-content">
+<pre><code class="language-sql">USE master;
+GO
+
+-- Terminate active connections immediately to permit ALTER DATABASE
+ALTER DATABASE FinancialTradingDB 
+SET SINGLE_USER 
+WITH ROLLBACK IMMEDIATE;
+GO
+
+-- Enable Read Committed Snapshot Isolation
+ALTER DATABASE FinancialTradingDB 
+SET READ_COMMITTED_SNAPSHOT ON;
+GO
+
+-- Restore to Multi-User mode
+ALTER DATABASE FinancialTradingDB 
+SET MULTI_USER;
+GO
+
+-- Verify setting status:
+SELECT name, is_read_committed_snapshot_on 
+FROM sys.databases 
+WHERE name = 'FinancialTradingDB';
+</code></pre>
+              <div class="solution-explanation">
+                <strong>Why RCSI is an Industry Standard:</strong> Under RCSI, queries running under the default READ COMMITTED level no longer acquire Shared (S) locks. Instead, they read row versions from TempDB. Writers never block readers, and readers never block writers!
+              </div>
+            </div>
+          </details>
+        </div>
+      </div>
+
+      <!-- Exercise 2 -->
+      <div class="exercise-box">
+        <div class="exercise-header">
+          <div class="exercise-title">Exercise 7.2: Preventing Deadlocks using UPDLOCK and HOLDLOCK</div>
+          <span class="badge badge-hard">Hard</span>
+        </div>
+        <div class="schema-context">
+          <strong>Context:</strong> Two concurrent processes check an account balance before placing an order.
+        </div>
+        <p><strong>Requirement:</strong> Demonstrate the classic conversion deadlock where two transactions read with Shared locks, then attempt to upgrade to Exclusive locks simultaneously. Show how adding <code>WITH (UPDLOCK, HOLDLOCK)</code> eliminates the deadlock completely.</p>
+
+        <div class="solution-details">
+          <details>
+            <summary class="solution-summary"><span>💡 View Solution & Explanation</span> <span>▼</span></summary>
+            <div class="solution-content">
+<pre><code class="language-sql">-- DEADLOCK-IMMUNE SELECT FOR UPDATE PATTERN:
+BEGIN TRANSACTION;
+
+-- UPDLOCK forces an Update lock on read (incompatible with another UPDLOCK).
+-- HOLDLOCK keeps the lock until the transaction commits (SERIALIZABLE behavior on the row).
+SELECT CashBalance 
+FROM Accounts WITH (UPDLOCK, HOLDLOCK)
+WHERE AccountID = 1001;
+
+-- Now safe to execute update without deadlock risk:
+UPDATE Accounts 
+SET CashBalance = CashBalance - 50000.00
+WHERE AccountID = 1001;
+
+COMMIT TRANSACTION;
+</code></pre>
+              <div class="solution-explanation">
+                <strong>Why UPDLOCK Eliminates Deadlocks:</strong> If two transactions read with Shared locks, both obtain (S). When both attempt to update, both request (X) locks on the same row, waiting for each other's (S) lock to release—an instant deadlock! <code>UPDLOCK</code> ensures only <em>one</em> transaction can obtain read-to-update intent, serializing the operations safely.
+              </div>
+            </div>
+          </details>
+        </div>
+      </div>
+
+      <!-- Exercise 3 -->
+      <div class="exercise-box">
+        <div class="exercise-header">
+          <div class="exercise-title">Exercise 7.3: Controlling Deadlock Victim Selection with DEADLOCK_PRIORITY</div>
+          <span class="badge badge-medium">Medium</span>
+        </div>
+        <div class="schema-context">
+          <strong>Context:</strong> A high-priority order routing engine vs a background low-priority report
+        </div>
+        <p><strong>Requirement:</strong> Write a transaction script setting <code>DEADLOCK_PRIORITY LOW</code> for the reporting query and <code>DEADLOCK_PRIORITY HIGH</code> for the trade execution procedure.</p>
+
+        <div class="solution-details">
+          <details>
+            <summary class="solution-summary"><span>💡 View Solution & Explanation</span> <span>▼</span></summary>
+            <div class="solution-content">
+<pre><code class="language-sql">-- In the Background Reporting Stored Procedure:
+SET DEADLOCK_PRIORITY LOW; -- If a deadlock occurs, this session is sacrificed first!
+
+BEGIN TRANSACTION;
+    SELECT SUM(Amount) FROM LedgerTransactions WHERE TransactionType = 'FEE';
+    -- Simulating heavy work...
+COMMIT TRANSACTION;
+
+-- In the Core Trading Execution Stored Procedure:
+SET DEADLOCK_PRIORITY HIGH; -- Engine will sacrifice other sessions before this one!
+
+BEGIN TRANSACTION;
+    UPDATE Accounts SET CashBalance = CashBalance - 1000 WHERE AccountID = 1001;
+COMMIT TRANSACTION;
+</code></pre>
+              <div class="solution-explanation">
+                <strong>Victim Algorithm:</strong> By default (<code>NORMAL</code>), SQL Server chooses the session with the lowest transaction rollback cost (fewest log records written). Explicitly setting <code>DEADLOCK_PRIORITY</code> protects mission-critical transactions from being chosen as victims.
+              </div>
+            </div>
+          </details>
+        </div>
+      </div>
+
+      <!-- Exercise 4 -->
+      <div class="exercise-box">
+        <div class="exercise-header">
+          <div class="exercise-title">Exercise 7.4: Preventing Lock Escalation during Massive Batch Deletions</div>
+          <span class="badge badge-hard">Hard</span>
+        </div>
+        <div class="schema-context">
+          <strong>Context:</strong> Archiving 5,000,000 historical audit logs without freezing live trading
+        </div>
+        <p><strong>Requirement:</strong> Write a looping batch purge script that deletes records in chunks of 4,000 rows (below the 5,000 escalation threshold), releasing locks between batches and pausing briefly to yield CPU resources.</p>
+
+        <div class="solution-details">
+          <details>
+            <summary class="solution-summary"><span>💡 View Solution & Explanation</span> <span>▼</span></summary>
+            <div class="solution-content">
+<pre><code class="language-sql">DECLARE @BatchSize INT = 4000;
+DECLARE @RowsDeleted INT = 1;
+DECLARE @CutoffDate DATETIME2(3) = DATEADD(YEAR, -1, SYSUTCDATETIME());
+
+WHILE @RowsDeleted > 0
+BEGIN
+    DELETE TOP (@BatchSize)
+    FROM AuditLogs
+    WHERE LoggedAt < @CutoffDate;
+
+    SET @RowsDeleted = @@ROWCOUNT;
+
+    -- Yield CPU and allow concurrent transactions to acquire row locks
+    WAITFOR DELAY '00:00:00.100'; -- 100ms pause
+END;
+</code></pre>
+              <div class="solution-explanation">
+                <strong>Sub-Escalation Chunking:</strong> Keeping <code>@BatchSize</code> strictly below 5,000 ensures SQL Server never escalates row locks to an exclusive table lock. Concurrent trading operations continue uninterrupted.
+              </div>
+            </div>
+          </details>
+        </div>
+      </div>
+
+      <!-- Exercise 5 -->
+      <div class="exercise-box">
+        <div class="exercise-header">
+          <div class="exercise-title">Exercise 7.5: Capturing Active Blocking and Locking via DMVs</div>
+          <span class="badge badge-medium">Medium</span>
+        </div>
+        <div class="schema-context">
+          <strong>Context:</strong> An alert fires: queries are hanging across the trading desk.
+        </div>
+        <p><strong>Requirement:</strong> Write a live diagnostic DMV query joining <code>sys.dm_exec_requests</code> and <code>sys.dm_os_waiting_tasks</code> that displays: Blocking Session ID, Blocked Session ID, Wait Time (ms), Wait Type (<code>LCK_M_...</code>), and the exact SQL text being blocked.</p>
+
+        <div class="solution-details">
+          <details>
+            <summary class="solution-summary"><span>💡 View Solution & Explanation</span> <span>▼</span></summary>
+            <div class="solution-content">
+<pre><code class="language-sql">SELECT 
+    w.blocking_session_id AS LeadBlockerSPID,
+    r.session_id AS BlockedSPID,
+    w.wait_duration_ms AS WaitDurationMs,
+    w.wait_type AS LockWaitType,
+    w.resource_description AS LockedResource,
+    t.text AS BlockedSQLStatement
+FROM sys.dm_exec_requests r
+INNER JOIN sys.dm_os_waiting_tasks w ON r.session_id = w.session_id
+CROSS APPLY sys.dm_exec_sql_text(r.sql_handle) t
+WHERE w.blocking_session_id IS NOT NULL 
+  AND w.blocking_session_id <> 0;
+</code></pre>
+              <div class="solution-explanation">
+                <strong>Instant Diagnostic:</strong> This DMV query pinpoints the exact head of the blocking chain (Lead Blocker) and the SQL statement waiting for resource release.
+              </div>
+            </div>
+          </details>
+        </div>
+      </div>
+
+      <!-- Exercise 6 -->
+      <div class="exercise-box">
+        <div class="exercise-header">
+          <div class="exercise-title">Exercise 7.6: Optimistic Concurrency with ROWVERSION / TIMESTAMP</div>
+          <span class="badge badge-hard">Hard</span>
+        </div>
+        <div class="schema-context">
+          <strong>Context:</strong> Preventing lost updates in high-concurrency order modifications
+        </div>
+        <p><strong>Requirement:</strong> Demonstrate how the <code>ROWVERSION</code> binary column on the <code>Orders</code> table is checked during an <code>UPDATE</code> to detect if another thread modified the order while the user was editing it.</p>
+
+        <div class="solution-details">
+          <details>
+            <summary class="solution-summary"><span>💡 View Solution & Explanation</span> <span>▼</span></summary>
+            <div class="solution-content">
+<pre><code class="language-sql">-- Step 1: User reads order and stores its version
+DECLARE @ReadOrderID BIGINT = 100001;
+DECLARE @StoredVersion ROWVERSION;
+
+SELECT @StoredVersion = VersionRowChange 
+FROM Orders 
+WHERE OrderID = @ReadOrderID;
+
+-- Step 2: User attempts update verifying version hasn't changed
+UPDATE Orders
+SET Quantity = 2500,
+    LimitPrice = 182.25
+WHERE OrderID = @ReadOrderID 
+  AND VersionRowChange = @StoredVersion;
+
+IF @@ROWCOUNT = 0
+BEGIN
+    THROW 50005, 'Concurrency conflict: Order was updated by another process. Please refresh.', 1;
+END;
+</code></pre>
+              <div class="solution-explanation">
+                <strong>Zero Lock Contention:</strong> <code>ROWVERSION</code> is a monotonically increasing 8-byte binary automatically incremented by SQL Server on every row update. This enables lock-free optimistic concurrency patterns across web and API architectures.
+              </div>
+            </div>
+          </details>
+        </div>
+      </div>
+
+      <!-- Exercise 7 -->
+      <div class="exercise-box">
+        <div class="exercise-header">
+          <div class="exercise-title">Exercise 7.7: Analyzing Deadlock Graphs from the System Health Extended Event</div>
+          <span class="badge badge-hard">Hard</span>
+        </div>
+        <div class="schema-context">
+          <strong>Context:</strong> Extracting deadlocks that occurred overnight without manual profiler traces
+        </div>
+        <p><strong>Requirement:</strong> Write an XQuery query against the default <code>system_health</code> ring buffer to extract the deadlocks that occurred in the last 24 hours.</p>
+
+        <div class="solution-details">
+          <details>
+            <summary class="solution-summary"><span>💡 View Solution & Explanation</span> <span>▼</span></summary>
+            <div class="solution-content">
+<pre><code class="language-sql">SELECT 
+    XEvent.value('(@timestamp)[1]', 'DATETIME2') AS DeadlockTime,
+    XEvent.query('.') AS DeadlockGraphXML
+FROM (
+    SELECT CAST(target_data AS XML) AS TargetData
+    FROM sys.dm_xe_session_targets st
+    INNER JOIN sys.dm_xe_sessions s ON s.address = st.event_session_address
+    WHERE s.name = 'system_health' 
+      AND st.target_name = 'ring_buffer'
+) AS Data
+CROSS APPLY TargetData.nodes('RingBufferTarget/event[@name="xml_deadlock_report"]') AS XEventTree(XEvent)
+ORDER BY DeadlockTime DESC;
+</code></pre>
+              <div class="solution-explanation">
+                <strong>Always-On Telemetry:</strong> The <code>system_health</code> extended events session runs continuously by default on all SQL Server instances with minimal CPU impact, preserving deadlock graphs for post-mortem analysis.
+              </div>
+            </div>
+          </details>
+        </div>
+      </div>
+
+      <!-- Exercise 8 -->
+      <div class="exercise-box">
+        <div class="exercise-header">
+          <div class="exercise-title">Exercise 7.8: Consistent Resource Access Ordering to Eliminate Deadlocks</div>
+          <span class="badge badge-medium">Medium</span>
+        </div>
+        <div class="schema-context">
+          <strong>Context:</strong> Multi-leg currency transfers between Account A and Account B
+        </div>
+        <p><strong>Requirement:</strong> Write a transaction that transfers funds between two account IDs passed as parameters. Guarantee that no deadlock can ever occur regardless of the order the parameters are passed in.</p>
+
+        <div class="solution-details">
+          <details>
+            <summary class="solution-summary"><span>💡 View Solution & Explanation</span> <span>▼</span></summary>
+            <div class="solution-content">
+<pre><code class="language-sql">CREATE OR ALTER PROCEDURE usp_TransferFundsDeadlockFree
+    @Account1 INT,
+    @Account2 INT,
+    @Amount DECIMAL(18,4)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SET XACT_ABORT ON;
+
+    -- Enforce deterministic ordering of resource acquisition!
+    DECLARE @FirstAccount INT = IIF(@Account1 < @Account2, @Account1, @Account2);
+    DECLARE @SecondAccount INT = IIF(@Account1 < @Account2, @Account2, @Account1);
+
+    BEGIN TRY
+        BEGIN TRANSACTION;
+
+        -- Always lock lower AccountID first, then higher AccountID!
+        UPDATE Accounts SET CashBalance = CashBalance WHERE AccountID = @FirstAccount;
+        UPDATE Accounts SET CashBalance = CashBalance WHERE AccountID = @SecondAccount;
+
+        -- Perform actual transfer logic...
+        UPDATE Accounts SET CashBalance = CashBalance - @Amount WHERE AccountID = @Account1;
+        UPDATE Accounts SET CashBalance = CashBalance + @Amount WHERE AccountID = @Account2;
+
+        COMMIT TRANSACTION;
+    END TRY
+    BEGIN CATCH
+        IF @@TRANCOUNT > 0 ROLLBACK TRANSACTION;
+        THROW;
+    END CATCH
+END;
+GO
+</code></pre>
+              <div class="solution-explanation">
+                <strong>Universal Deadlock Prevention Law:</strong> If all concurrent transactions acquire locks on multiple resources in the <strong>exact same deterministic order</strong> (e.g. sorted by primary key ID), a circular wait condition is mathematically impossible!
+              </div>
+            </div>
+          </details>
+        </div>
+      </div>
+    </section>
+
+    <!-- SECTION 5: INTERVIEW SCRIPT -->
+    <section>
+      <h2>📋 How to Answer This in an Interview</h2>
+      <div class="card" style="background: #f8fafc; border-left: 5px solid var(--purple);">
+        <h4>Interviewer Question: "Explain Read Committed Snapshot Isolation (RCSI) versus standard READ COMMITTED, and why would you enable it?"</h4>
+        <p><strong>Staff Engineer Response:</strong></p>
+        <blockquote style="font-style: italic; color: #334155; margin: 0.5rem 0;">
+          "In default <strong>READ COMMITTED</strong>, SQL Server uses pessimistic locking. When a reader queries a table, it acquires Shared (S) locks on rows or pages. If a concurrent writer has acquired an Exclusive (X) lock to modify a row, the reader is completely blocked until the writer commits. Conversely, an active reader holding Shared locks blocks any writer trying to update those rows. In high-concurrency systems, this causes severe reader-writer blocking chains and timeouts.
+          <br><br>
+          When you enable <strong>Read Committed Snapshot Isolation (RCSI)</strong> at the database level, the locking behavior transforms fundamentally:
+          <br>
+          1. Writers continue to acquire Exclusive locks as normal.
+          <br>
+          2. When a row is modified, SQL Server copies the previous committed version of that row into the <strong>TempDB Version Store</strong>.
+          <br>
+          3. When readers query data, they take <strong>no Shared locks</strong>. Instead, they read the pre-update version of the row directly from TempDB.
+          <br><br>
+          The architectural outcome is profound: <strong>Readers never block Writers, and Writers never block Readers.</strong> You eliminate 90% of deadlock and blocking issues without modifying any application code. The trade-off is additional storage and I/O overhead on TempDB to maintain the version store, and a 14-byte pointer added to each table row."
+        </blockquote>
+      </div>
+    </section>
+
+    <div class="page-nav" style="margin-top: 3rem;">
+      <a href="indexing-performance.html" class="nav-prev">← Previous: 06 · Indexing & Performance</a>
+      <a href="exercises.html" class="nav-next">Next: 🏋️ 50+ Interview Exercises →</a>
+    </div>
+
+  </main>
+</div>
+
+<button class="scroll-top" aria-label="Scroll to top">↑</button>
+
+<script src="js/main.js"></script>
+</body>
+</html>

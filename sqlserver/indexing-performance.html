@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>06 · Indexing Internals & Query Tuning — SQL Server Mastery</title>
+  <link rel="stylesheet" href="css/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+</head>
+<body>
+
+<button class="menu-toggle" aria-label="Toggle menu">☰</button>
+
+<div class="page-wrapper">
+  <aside class="sidebar" id="sidebar"></aside>
+
+  <main class="main-content">
+    <div class="platform-switcher">
+      <span>Mastery Portals:</span>
+      <a href="../Architecture/index.html">🏛️ System Design</a>
+      <a href="../CoreJava/index.html">☕ Core Java 21</a>
+      <a href="index.html" class="active">🗄️ MS SQL Server</a>
+    </div>
+
+    <nav class="breadcrumb">
+      <a href="index.html">SQL Mastery</a> &gt; <span>06 · Indexing & Performance</span>
+    </nav>
+
+    <header>
+      <h1>06 · Indexing Internals, Execution Plans & Performance Tuning</h1>
+      <p class="lead">B-Tree Page Mechanics, Clustered vs Non-Clustered Indexes, Covering Indexes with INCLUDE, Eliminating Key Lookups, Filtered Indexes, and DMV Deep Dives.</p>
+    </header>
+
+    <!-- SECTION 1: B-TREE ARCHITECTURE -->
+    <section>
+      <h2>1. Physical B-Tree Architecture</h2>
+      <p>SQL Server stores data in <strong>8 KB pages</strong>. An index is structured as a balanced B-Tree (B+ Tree in relational terminology), organizing data pages into Root, Intermediate, and Leaf levels.</p>
+
+      <div class="mermaid">
+flowchart TD
+    Root["Root Page (8 KB)<br/>Pointers to intermediate range keys"] --> Int1["Intermediate Page A"]
+    Root --> Int2["Intermediate Page B"]
+    Int1 --> Leaf1["Leaf Page 1"]
+    Int1 --> Leaf2["Leaf Page 2"]
+    Int2 --> Leaf3["Leaf Page 3"]
+    Int2 --> Leaf4["Leaf Page 4"]
+      </div>
+
+      <div class="grid grid-2" style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-top: 1.5rem;">
+        <div class="card" style="border-left: 4px solid var(--primary);">
+          <h4>Clustered Index</h4>
+          <ul>
+            <li>The <strong>Leaf Level IS the physical table data</strong>! The table rows are stored in the sorted order of the clustered index key.</li>
+            <li>A table can have <strong>only one</strong> clustered index because physical rows can only be sorted in one order.</li>
+            <li>Best clustered keys are: <strong>Unique, Narrow, Static, and Ever-Increasing</strong> (e.g. <code>BIGINT IDENTITY</code>).</li>
+          </ul>
+        </div>
+        <div class="card" style="border-left: 4px solid var(--purple);">
+          <h4>Non-Clustered Index</h4>
+          <ul>
+            <li>The Leaf Level contains <strong>index key columns + a Row Locator</strong>.</li>
+            <li>If table has a Clustered Index, Row Locator = <em>Clustered Key</em>.</li>
+            <li>If table is a Heap (no clustered index), Row Locator = <em>RID (File:Page:Slot)</em>.</li>
+            <li>A table can have up to 999 non-clustered indexes.</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- SECTION 2: COVERING INDEXES & THE INCLUDE CLAUSE -->
+    <section>
+      <h2>2. Covering Indexes & The INCLUDE Clause</h2>
+      <p>When a query references columns not present in a Non-Clustered Index, the engine must perform a <strong>Key Lookup</strong> (or Bookmark Lookup) back into the Clustered Index for every matching row.</p>
+
+      <div class="card" style="border-left: 4px solid var(--danger);">
+        <h4>The Tipping Point & The Key Lookup Cliff</h4>
+        <p>If a query returns more than ~1-3% of total table rows, the cumulative cost of performing thousands of random I/O Key Lookups exceeds the cost of a full table scan. The optimizer will abandon your non-clustered index and execute a <strong>Clustered Index Scan</strong>!</p>
+      </div>
+
+      <div class="card" style="border-left: 4px solid var(--success); margin-top: 1rem;">
+        <h4>The Solution: Covering Index via INCLUDE</h4>
+<pre><code class="language-sql">-- Non-covering: Forces Key Lookup to fetch FillPrice and ExecutedAt
+CREATE NONCLUSTERED INDEX IX_Executions_Order 
+ON Executions (OrderID);
+
+-- 100% COVERING INDEX: Eliminates Key Lookups completely!
+CREATE NONCLUSTERED INDEX IX_Executions_Order_Covering
+ON Executions (OrderID)
+INCLUDE (FillPrice, FillQuantity, ExecutedAt);
+</code></pre>
+        <p><strong>Why INCLUDE is better than adding columns to the index key:</strong> Columns in the <code>INCLUDE</code> clause are stored <strong>strictly at the leaf level</strong>. They do not increase the size of intermediate B-tree index pages, preserving a high fan-out and shallow tree depth.</p>
+      </div>
+    </section>
+
+    <!-- SECTION 3: EXECUTION PLAN ANATOMY -->
+    <section>
+      <h2>3. Reading Execution Plans: Key Operators & Warnings</h2>
+      <table border="1" style="width: 100%; border-collapse: collapse; margin: 1rem 0;">
+        <thead>
+          <tr style="background: #f1f5f9;">
+            <th>Operator</th>
+            <th>Severity</th>
+            <th>What it Means in Production</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Index Seek</strong></td>
+            <td><span class="badge badge-easy">Optimal</span></td>
+            <td>Navigates down the B-tree using SARGable predicates. Touches only relevant pages.</td>
+          </tr>
+          <tr>
+            <td><strong>Clustered Index Scan</strong></td>
+            <td><span class="badge badge-medium">Warning</span></td>
+            <td>Reads every single page in the entire table from beginning to end.</td>
+          </tr>
+          <tr>
+            <td><strong>Key Lookup</strong></td>
+            <td><span class="badge badge-medium">Costly</span></td>
+            <td>Random I/O lookups to retrieve non-indexed columns. Eliminate with <code>INCLUDE</code>.</td>
+          </tr>
+          <tr>
+            <td><strong>Sort / Hash Spill</strong> (Yellow Warning ⚠️)</td>
+            <td><span class="badge badge-hard">Critical</span></td>
+            <td>Memory Grant was too small; query ran out of RAM and spilled intermediate data onto TempDB disk! Fix statistics or memory grant.</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <!-- SECTION 4: EXERCISES -->
+    <section>
+      <h2>🏋️ Module 06 Exercises (With Toggleable Solutions)</h2>
+
+      <!-- Exercise 1 -->
+      <div class="exercise-box">
+        <div class="exercise-header">
+          <div class="exercise-title">Exercise 6.1: Designing a Covering Index to Eliminate a Critical Key Lookup</div>
+          <span class="badge badge-easy">Easy</span>
+        </div>
+        <div class="schema-context">
+          <strong>Context:</strong> Querying order fills: <code>SELECT OrderID, FillQuantity, FillPrice FROM Executions WHERE OrderID = 100001;</code>
+        </div>
+        <p><strong>Requirement:</strong> Inspect the current index on <code>Executions(OrderID)</code>. Write the exact DDL to replace it with a 100% covering index with optimal key ordering and leaf-level columns.</p>
+
+        <div class="solution-details">
+          <details>
+            <summary class="solution-summary"><span>💡 View Solution & Explanation</span> <span>▼</span></summary>
+            <div class="solution-content">
+<pre><code class="language-sql">-- Drop existing underperforming index
+DROP INDEX IF EXISTS IX_Executions_OrderID ON Executions;
+
+-- Create optimal covering index with leaf-level INCLUDE columns
+CREATE NONCLUSTERED INDEX IX_Executions_OrderID_Covering
+ON Executions (OrderID)
+INCLUDE (FillQuantity, FillPrice, ExecutedAt)
+WITH (FILLFACTOR = 90, ONLINE = ON);
+</code></pre>
+              <div class="solution-explanation">
+                <strong>Why ONLINE = ON:</strong> In production 24/7 trading systems, creating an index with <code>ONLINE = ON</code> keeps the underlying table accessible for concurrent SELECT, INSERT, and UPDATE queries without taking an exclusive table lock.
+              </div>
+            </div>
+          </details>
+        </div>
+      </div>
+
+      <!-- Exercise 2 -->
+      <div class="exercise-box">
+        <div class="exercise-header">
+          <div class="exercise-title">Exercise 6.2: Filtered Index for High-Volume Status Skew</div>
+          <span class="badge badge-medium">Medium</span>
+        </div>
+        <div class="schema-context">
+          <strong>Context:</strong> 99% of Orders are 'FILLED' (50M rows), 1% are 'PENDING' (50k rows).
+        </div>
+        <p><strong>Requirement:</strong> Order-matching engines frequently query <code>WHERE OrderStatus = 'PENDING'</code>. Creating a full index on <code>OrderStatus</code> wastes gigabytes of RAM. Create a Filtered Index that indexes strictly the pending orders.</p>
+
+        <div class="solution-details">
+          <details>
+            <summary class="solution-summary"><span>💡 View Solution & Explanation</span> <span>▼</span></summary>
+            <div class="solution-content">
+<pre><code class="language-sql">CREATE NONCLUSTERED INDEX FIX_Orders_Pending
+ON Orders (SecurityID, OrderTime)
+INCLUDE (Quantity, LimitPrice, AccountID)
+WHERE OrderStatus = 'PENDING';
+</code></pre>
+              <div class="solution-explanation">
+                <strong>Dramatic Benefits:</strong> This filtered index is 99% smaller than a full index, occupies only a few megabytes in the buffer pool, and costs zero maintenance when historical 'FILLED' records are queried or updated.
+              </div>
+            </div>
+          </details>
+        </div>
+      </div>
+
+      <!-- Exercise 3 -->
+      <div class="exercise-box">
+        <div class="exercise-header">
+          <div class="exercise-title">Exercise 6.3: Composite Index Column Ordering Rule (Equality Before Inequality)</div>
+          <span class="badge badge-medium">Medium</span>
+        </div>
+        <div class="schema-context">
+          <strong>Context:</strong> Query: <code>WHERE AccountID = 1001 AND OrderTime >= '2024-01-01'</code>
+        </div>
+        <p><strong>Requirement:</strong> Evaluate two proposed composite indexes: (A) <code>(OrderTime, AccountID)</code> vs (B) <code>(AccountID, OrderTime)</code>. Explain why only one enables a true B-Tree Seek across both predicates.</p>
+
+        <div class="solution-details">
+          <details>
+            <summary class="solution-summary"><span>💡 View Solution & Explanation</span> <span>▼</span></summary>
+            <div class="solution-content">
+<pre><code class="language-sql">-- Optimal Composite Index:
+CREATE NONCLUSTERED INDEX IX_Orders_Account_OrderTime
+ON Orders (AccountID, OrderTime)
+INCLUDE (Quantity, LimitPrice);
+</code></pre>
+              <div class="solution-explanation">
+                <strong>The Golden Rule of Index Column Ordering:</strong> Always place <strong>Equality columns first</strong>, followed by <strong>Range/Inequality columns</strong>. If <code>OrderTime</code> were first, the engine would seek to the date boundary and then be forced to scan all accounts within that date range. With <code>AccountID</code> first, it seeks directly to Account 1001 and then scans only that account's specific date slice!
+              </div>
+            </div>
+          </details>
+        </div>
+      </div>
+
+      <!-- Exercise 4 -->
+      <div class="exercise-box">
+        <div class="exercise-header">
+          <div class="exercise-title">Exercise 6.4: Uncovering Missing Indexes via DMVs</div>
+          <span class="badge badge-medium">Medium</span>
+        </div>
+        <div class="schema-context">
+          <strong>Context:</strong> Production database health audit
+        </div>
+        <p><strong>Requirement:</strong> Write a DMV query joining <code>sys.dm_db_missing_index_details</code>, <code>sys.dm_db_missing_index_groups</code>, and <code>sys.dm_db_missing_index_group_stats</code> to identify the top 5 highest-impact missing indexes across the database.</p>
+
+        <div class="solution-details">
+          <details>
+            <summary class="solution-summary"><span>💡 View Solution & Explanation</span> <span>▼</span></summary>
+            <div class="solution-content">
+<pre><code class="language-sql">SELECT TOP (5)
+    CAST(s.avg_total_user_cost * s.avg_user_impact * (s.user_seeks + s.user_scans) AS BIGINT) AS ImprovementScore,
+    d.statement AS TableName,
+    d.equality_columns AS EqualityCols,
+    d.inequality_columns AS InequalityCols,
+    d.included_columns AS IncludedCols,
+    s.user_seeks,
+    s.last_user_seek
+FROM sys.dm_db_missing_index_group_stats s
+INNER JOIN sys.dm_db_missing_index_groups g ON s.group_handle = g.index_group_handle
+INNER JOIN sys.dm_db_missing_index_details d ON g.index_handle = d.index_handle
+ORDER BY ImprovementScore DESC;
+</code></pre>
+              <div class="solution-explanation">
+                <strong>DMV Metric:</strong> <code>ImprovementScore</code> calculates the aggregate estimated query cost reduction multiplied by execution frequency. It isolates indexes that will provide immediate system-wide relief.
+              </div>
+            </div>
+          </details>
+        </div>
+      </div>
+
+      <!-- Exercise 5 -->
+      <div class="exercise-box">
+        <div class="exercise-header">
+          <div class="exercise-title">Exercise 6.5: Detecting Unused and Write-Heavy Indexes</div>
+          <span class="badge badge-medium">Medium</span>
+        </div>
+        <div class="schema-context">
+          <strong>Context:</strong> Indexes slow down INSERT, UPDATE, and DELETE operations.
+        </div>
+        <p><strong>Requirement:</strong> Query <code>sys.dm_db_index_usage_stats</code> to find indexes where maintenance writes (<code>user_updates</code>) vastly exceed user reads (<code>user_seeks + user_scans</code>).</p>
+
+        <div class="solution-details">
+          <details>
+            <summary class="solution-summary"><span>💡 View Solution & Explanation</span> <span>▼</span></summary>
+            <div class="solution-content">
+<pre><code class="language-sql">SELECT 
+    OBJECT_NAME(i.object_id) AS TableName,
+    i.name AS IndexName,
+    u.user_updates AS TotalWrites,
+    (u.user_seeks + u.user_scans + u.user_lookups) AS TotalReads,
+    (u.user_updates - (u.user_seeks + u.user_scans + u.user_lookups)) AS WritePenaltyScore
+FROM sys.indexes i
+LEFT JOIN sys.dm_db_index_usage_stats u 
+       ON i.object_id = u.object_id 
+      AND i.index_id = u.index_id 
+      AND u.database_id = DB_ID()
+WHERE OBJECTPROPERTY(i.object_id, 'IsUserTable') = 1
+  AND i.is_primary_key = 0
+  AND i.is_unique = 0
+  AND u.user_updates > 50000
+  AND (u.user_seeks + u.user_scans + u.user_lookups) = 0
+ORDER BY WritePenaltyScore DESC;
+</code></pre>
+              <div class="solution-explanation">
+                <strong>Index Bloat Removal:</strong> Unused non-clustered indexes on write-intensive tables (like <code>Orders</code> or <code>Executions</code>) waste storage, bloat backups, and introduce insert lock contention. Dropping zero-read indexes yields free write throughput.
+              </div>
+            </div>
+          </details>
+        </div>
+      </div>
+
+      <!-- Exercise 6 -->
+      <div class="exercise-box">
+        <div class="exercise-header">
+          <div class="exercise-title">Exercise 6.6: Index Fragmentation Analysis & Maintenance (REORGANIZE vs REBUILD)</div>
+          <span class="badge badge-medium">Medium</span>
+        </div>
+        <div class="schema-context">
+          <strong>Context:</strong> Page splits causing logical order fragmentation
+        </div>
+        <p><strong>Requirement:</strong> Write a query against <code>sys.dm_db_index_physical_stats</code> to identify fragmented indexes and dynamically execute either <code>REORGANIZE</code> (if fragmentation is between 10% and 30%) or <code>REBUILD</code> (if > 30%).</p>
+
+        <div class="solution-details">
+          <details>
+            <summary class="solution-summary"><span>💡 View Solution & Explanation</span> <span>▼</span></summary>
+            <div class="solution-content">
+<pre><code class="language-sql">SELECT 
+    OBJECT_NAME(ips.object_id) AS TableName,
+    i.name AS IndexName,
+    ips.avg_fragmentation_in_percent,
+    ips.page_count,
+    CASE 
+        WHEN ips.avg_fragmentation_in_percent > 30 THEN 'ALTER INDEX ' + i.name + ' ON ' + OBJECT_NAME(ips.object_id) + ' REBUILD WITH (ONLINE = ON);'
+        WHEN ips.avg_fragmentation_in_percent BETWEEN 10 AND 30 THEN 'ALTER INDEX ' + i.name + ' ON ' + OBJECT_NAME(ips.object_id) + ' REORGANIZE;'
+        ELSE 'OPTIMAL'
+    END AS MaintenanceCommand
+FROM sys.dm_db_index_physical_stats(DB_ID(), NULL, NULL, NULL, 'LIMITED') ips
+INNER JOIN sys.indexes i ON ips.object_id = i.object_id AND ips.index_id = i.index_id
+WHERE ips.page_count > 1000 -- Ignore small tables
+ORDER BY ips.avg_fragmentation_in_percent DESC;
+</code></pre>
+              <div class="solution-explanation">
+                <strong>REBUILD vs REORGANIZE:</strong> <code>REORGANIZE</code> defragments leaf pages in-place and is always an online, non-blocking operation. <code>REBUILD</code> drops and recreates the index B-tree from scratch, updating statistics with a full scan.
+              </div>
+            </div>
+          </details>
+        </div>
+      </div>
+
+      <!-- Exercise 7 -->
+      <div class="exercise-box">
+        <div class="exercise-header">
+          <div class="exercise-title">Exercise 6.7: Columnstore Index for Aggregating 100 Million Execution Rows</div>
+          <span class="badge badge-hard">Hard</span>
+        </div>
+        <div class="schema-context">
+          <strong>Context:</strong> End-of-quarter risk calculations across 100 million execution records
+        </div>
+        <p><strong>Requirement:</strong> Create a Non-Clustered Columnstore Index on the historical trading table to accelerate analytical aggregation queries (<code>SUM</code>, <code>AVG</code>) while preserving the underlying rowstore clustered index for OLTP transactions.</p>
+
+        <div class="solution-details">
+          <details>
+            <summary class="solution-summary"><span>💡 View Solution & Explanation</span> <span>▼</span></summary>
+            <div class="solution-content">
+<pre><code class="language-sql">-- Non-Clustered Columnstore Index on OLTP table
+CREATE NONCLUSTERED COLUMNSTORE INDEX NCCI_Executions_Analytics
+ON Executions (OrderID, FillQuantity, FillPrice, LiquidityFlag, ExecutionFee, ExecutedAt);
+
+-- Query executed in Batch Mode with 10x-100x speedup:
+SELECT 
+    LiquidityFlag,
+    COUNT(*) AS FillCount,
+    SUM(CAST(FillQuantity AS BIGINT)) AS TotalUnits,
+    SUM(FillQuantity * FillPrice) AS GrossValue
+FROM Executions
+GROUP BY LiquidityFlag;
+</code></pre>
+              <div class="solution-explanation">
+                <strong>Batch Mode Execution:</strong> Columnstore indexes store data column-by-column in compressed 1-million-row rowgroups. Queries process 900 rows per CPU instruction vector (Batch Mode) instead of one row at a time, achieving up to a 100x performance leap on aggregations.
+              </div>
+            </div>
+          </details>
+        </div>
+      </div>
+
+      <!-- Exercise 8 -->
+      <div class="exercise-box">
+        <div class="exercise-header">
+          <div class="exercise-title">Exercise 6.8: Resolving a Memory Grant / Sort Spill Warning in an Execution Plan</div>
+          <span class="badge badge-hard">Hard</span>
+        </div>
+        <div class="schema-context">
+          <strong>Context:</strong> A complex settlement query triggers a yellow warning icon in SSMS: <em>"Operator used TempDB to spill data during execution with spill level 1"</em>.
+        </div>
+        <p><strong>Requirement:</strong> Identify the cause of the spill (stale statistics leading to underestimated cardinality) and demonstrate how updating statistics or using query hints eliminates the TempDB spill.</p>
+
+        <div class="solution-details">
+          <details>
+            <summary class="solution-summary"><span>💡 View Solution & Explanation</span> <span>▼</span></summary>
+            <div class="solution-content">
+<pre><code class="language-sql">-- 1. Identify stale statistics
+DBCC SHOW_STATISTICS ('Orders', 'IX_Orders_Account_OrderTime');
+
+-- 2. Update statistics with FULLSCAN to fix cardinality histogram
+UPDATE STATISTICS Orders IX_Orders_Account_OrderTime WITH FULLSCAN;
+
+-- 3. Alternatively, grant additional memory buffer via query hint:
+SELECT o.AccountID, e.FillPrice
+FROM Orders o
+INNER JOIN Executions e ON o.OrderID = e.OrderID
+ORDER BY e.FillPrice DESC
+OPTION (MIN_GRANT_PERCENT = 10);
+</code></pre>
+              <div class="solution-explanation">
+                <strong>Spill Root Cause:</strong> When statistics are out of date, the optimizer underestimates the row count (e.g. expects 100 rows, but receives 1,000,000). The assigned RAM memory grant is insufficient, forcing the engine to spill unsorted pages to physical TempDB disk.
+              </div>
+            </div>
+          </details>
+        </div>
+      </div>
+    </section>
+
+    <!-- SECTION 5: INTERVIEW SCRIPT -->
+    <section>
+      <h2>📋 How to Answer This in an Interview</h2>
+      <div class="card" style="background: #f8fafc; border-left: 5px solid var(--purple);">
+        <h4>Interviewer Question: "What is a Key Lookup, why is it dangerous for high-throughput systems, and how do you resolve it?"</h4>
+        <p><strong>Staff Engineer Response:</strong></p>
+        <blockquote style="font-style: italic; color: #334155; margin: 0.5rem 0;">
+          "A <strong>Key Lookup</strong> occurs when a query uses a Non-Clustered Index to evaluate a filter predicate, but the query's <code>SELECT</code>, <code>JOIN</code>, or <code>WHERE</code> clauses require additional columns that do not exist in that non-clustered index. To retrieve those missing columns, SQL Server must use the row locator (the clustered index key) stored at the leaf level of the non-clustered index to perform a secondary B-Tree seek into the clustered index.
+          <br><br>
+          For a single row, a Key Lookup costs less than a millisecond. But in high-throughput systems returning thousands of rows, Key Lookups convert sequential scanning into thousands of random, synchronous I/O page reads. Once the result set exceeds roughly 2-3% of the table's total rows—known as the <strong>Tipping Point</strong>—the optimizer abandons the index entirely and falls back to an expensive Clustered Index Scan.
+          <br><br>
+          The definitive architectural solution is to create a <strong>Covering Index</strong> using the <code>INCLUDE</code> clause. By appending the required payload columns to <code>INCLUDE</code>, they are stored exclusively at the leaf level of the non-clustered index. The query engine can satisfy the query 100% from the index without touching the clustered index, completely eliminating the Key Lookup."
+        </blockquote>
+      </div>
+    </section>
+
+    <div class="page-nav" style="margin-top: 3rem;">
+      <a href="stored-procedures.html" class="nav-prev">← Previous: 05 · Stored Procedures & Functions</a>
+      <a href="transactions-locking.html" class="nav-next">Next: 07 · Transactions & Locking →</a>
+    </div>
+
+  </main>
+</div>
+
+<button class="scroll-top" aria-label="Scroll to top">↑</button>
+
+<script src="js/main.js"></script>
+</body>
+</html>

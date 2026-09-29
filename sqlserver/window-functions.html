@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>03 · Window Functions Mastery — SQL Server Mastery</title>
+  <link rel="stylesheet" href="css/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+</head>
+<body>
+
+<button class="menu-toggle" aria-label="Toggle menu">☰</button>
+
+<div class="page-wrapper">
+  <aside class="sidebar" id="sidebar"></aside>
+
+  <main class="main-content">
+    <div class="platform-switcher">
+      <span>Mastery Portals:</span>
+      <a href="../Architecture/index.html">🏛️ System Design</a>
+      <a href="../CoreJava/index.html">☕ Core Java 21</a>
+      <a href="index.html" class="active">🗄️ MS SQL Server</a>
+    </div>
+
+    <nav class="breadcrumb">
+      <a href="index.html">SQL Mastery</a> &gt; <span>03 · Window Functions</span>
+    </nav>
+
+    <header>
+      <h1>03 · Window Functions & Analytical Framing</h1>
+      <p class="lead">Ranking Functions, Value Offset Functions (LAG/LEAD), The Fatal LAST_VALUE Framing Trap, and ROWS vs RANGE Engine Performance.</p>
+    </header>
+
+    <!-- SECTION 1: ARCHITECTURE OF WINDOW FUNCTIONS -->
+    <section>
+      <h2>1. The OVER() Clause Architecture</h2>
+      <p>Unlike standard <code>GROUP BY</code> aggregations which collapse rows into summary buckets, <strong>Window Functions</strong> compute values across a set of table rows while <strong>preserving individual row identity</strong>.</p>
+
+      <div class="card" style="background: #f8fafc; border-left: 4px solid var(--primary);">
+        <h4>The Full Anatomy of a Window Function:</h4>
+        <pre><code class="language-sql">FUNCTION_NAME(expression) OVER (
+    [PARTITION BY partition_column_1, ...]
+    [ORDER BY sort_column_1 [ASC|DESC], ...]
+    [ROWS | RANGE frame_specification]
+)</code></pre>
+      </div>
+
+      <div class="mermaid">
+flowchart LR
+    Dataset["Input Dataset (Orders)"] --> Part["PARTITION BY SecurityID<br/>(Divides into independent windows)"]
+    Part --> Order["ORDER BY OrderTime<br/>(Sorts rows within partition)"]
+    Order --> Frame["ROWS BETWEEN...<br/>(Defines physical sliding frame)"]
+    Frame --> Calc["Compute Window Metric<br/>(Running Sum, Rank, Delta)"]
+      </div>
+    </section>
+
+    <!-- SECTION 2: RANKING FUNCTIONS -->
+    <section>
+      <h2>2. Ranking Functions Comparison</h2>
+      <p>SQL Server provides four distinct ranking functions. Understanding how they handle ties is a universal senior engineering interview test.</p>
+
+      <table border="1" style="width: 100%; border-collapse: collapse; margin: 1rem 0;">
+        <thead>
+          <tr style="background: #f1f5f9;">
+            <th>Value</th>
+            <th><code>ROW_NUMBER()</code></th>
+            <th><code>RANK()</code></th>
+            <th><code>DENSE_RANK()</code></th>
+            <th><code>NTILE(3)</code></th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td>$1,000</td><td>1</td><td>1</td><td>1</td><td>1 (Bucket 1)</td></tr>
+          <tr><td>$800 (Tie)</td><td>2</td><td>2</td><td>2</td><td>1 (Bucket 1)</td></tr>
+          <tr><td>$800 (Tie)</td><td>3</td><td>2</td><td>2</td><td>2 (Bucket 2)</td></tr>
+          <tr><td>$500</td><td>4</td><td>4 (Skips 3!)</td><td>3 (Continuous)</td><td>2 (Bucket 2)</td></tr>
+          <tr><td>$300</td><td>5</td><td>5</td><td>4</td><td>3 (Bucket 3)</td></tr>
+        </tbody>
+      </table>
+
+      <ul>
+        <li><code>ROW_NUMBER()</code>: Assigns a strictly unique, contiguous integer to every row. If values tie, ordering is non-deterministic unless unique tie-breaking columns are added to <code>ORDER BY</code>.</li>
+        <li><code>RANK()</code>: Assigns identical ranks to ties, then <strong>skips</strong> subsequent rank numbers by the count of tied rows.</li>
+        <li><code>DENSE_RANK()</code>: Assigns identical ranks to ties, but does <strong>not</strong> skip any rank numbers (ideal for "Find the 2nd highest salary/execution price").</li>
+        <li><code>NTILE(n)</code>: Divides the partition as equally as possible into <em>n</em> buckets (e.g. quintiles for credit risk scoring).</li>
+      </ul>
+    </section>
+
+    <!-- SECTION 3: THE DEADLY LAST_VALUE TRAP & ROWS VS RANGE -->
+    <section>
+      <h2>3. The Deadly LAST_VALUE Trap & ROWS vs RANGE</h2>
+
+      <div class="card" style="border-left: 4px solid var(--danger);">
+        <h4>⚠️ The Fatal LAST_VALUE Default Framing Bug</h4>
+        <p>Developers routinely run:
+        <br><code>SELECT LAST_VALUE(FillPrice) OVER (PARTITION BY SecurityID ORDER BY ExecutedAt) FROM Executions;</code>
+        <br>...and wonder why <code>LAST_VALUE()</code> returns the <strong>current row's price</strong> instead of the last price in the partition!</p>
+        <p><strong>The Reason:</strong> When an <code>ORDER BY</code> is supplied without an explicit framing clause, ANSI SQL mandates the default frame:
+        <br><code>RANGE BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW</code>.
+        <br>Therefore, the "last value" in a frame that ends at the <em>CURRENT ROW</em> is always the current row itself!</p>
+        <p><strong>The Fix:</strong> Explicitly expand the frame to the end of the partition:
+        <br><code>LAST_VALUE(FillPrice) OVER (PARTITION BY SecurityID ORDER BY ExecutedAt ROWS BETWEEN CURRENT ROW AND UNBOUNDED FOLLOWING)</code></p>
+      </div>
+
+      <h3>Engine Mechanics: ROWS vs RANGE Performance</h3>
+      <table border="1" style="width: 100%; border-collapse: collapse; margin: 1rem 0;">
+        <thead>
+          <tr style="background: #f1f5f9;">
+            <th>Frame Mode</th>
+            <th>Execution Engine Operator</th>
+            <th>Performance Impact</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>ROWS BETWEEN...</code></td>
+            <td><strong>Stream Aggregate</strong> (In-Memory pointer arithmetic)</td>
+            <td><strong>Ultra-Fast:</strong> Processed in-place row-by-row in CPU registers.</td>
+          </tr>
+          <tr>
+            <td><code>RANGE BETWEEN...</code></td>
+            <td><strong>Segment / On-Disk Spool</strong> (TempDB worktable)</td>
+            <td><strong>50x-100x Slower:</strong> SQL Server must spool duplicate values into TempDB to evaluate tie boundaries. Always specify <code>ROWS</code>!</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <!-- SECTION 4: EXERCISES -->
+    <section>
+      <h2>🏋️ Module 03 Exercises (With Toggleable Solutions)</h2>
+
+      <!-- Exercise 1 -->
+      <div class="exercise-box">
+        <div class="exercise-header">
+          <div class="exercise-title">Exercise 3.1: Finding the N-th Highest Executed Order Without Subquery Aggregation</div>
+          <span class="badge badge-easy">Easy</span>
+        </div>
+        <div class="schema-context">
+          <strong>Context:</strong> Table <code>Executions (ExecutionID, OrderID, FillPrice)</code>
+        </div>
+        <p><strong>Requirement:</strong> Write a query to find the 3rd highest distinct execution price across all equity trades. Ensure ties share the same ranking and do not distort the 3rd rank.</p>
+
+        <div class="solution-details">
+          <details>
+            <summary class="solution-summary"><span>💡 View Solution & Explanation</span> <span>▼</span></summary>
+            <div class="solution-content">
+<pre><code class="language-sql">WITH PriceRankings AS (
+    SELECT 
+        FillPrice,
+        DENSE_RANK() OVER (ORDER BY FillPrice DESC) AS PriceRank
+    FROM Executions
+)
+SELECT DISTINCT FillPrice
+FROM PriceRankings
+WHERE PriceRank = 3;
+</code></pre>
+              <div class="solution-explanation">
+                <strong>Why DENSE_RANK:</strong> If the two highest prices are $500, $500, and the next is $450, <code>RANK()</code> would assign 1, 1, 3. <code>DENSE_RANK()</code> assigns 1, 1, 2, ensuring $450 is correctly identified as the 2nd distinct tier.
+              </div>
+            </div>
+          </details>
+        </div>
+      </div>
+
+      <!-- Exercise 2 -->
+      <div class="exercise-box">
+        <div class="exercise-header">
+          <div class="exercise-title">Exercise 3.2: Account Ledger Running Balance (Cumulative Sum)</div>
+          <span class="badge badge-medium">Medium</span>
+        </div>
+        <div class="schema-context">
+          <strong>Context:</strong> <code>LedgerTransactions (TransactionID, AccountID, Amount, TransactionTimestamp)</code>
+        </div>
+        <p><strong>Requirement:</strong> Calculate the real-time running cash balance for each account ordered by transaction timestamp. Ensure maximum performance by using an in-memory stream operator instead of TempDB spools.</p>
+
+        <div class="solution-details">
+          <details>
+            <summary class="solution-summary"><span>💡 View Solution & Explanation</span> <span>▼</span></summary>
+            <div class="solution-content">
+<pre><code class="language-sql">SELECT 
+    AccountID,
+    TransactionID,
+    TransactionTimestamp,
+    TransactionType,
+    Amount,
+    -- Running Cumulative Balance with explicit ROWS framing
+    SUM(Amount) OVER (
+        PARTITION BY AccountID 
+        ORDER BY TransactionTimestamp, TransactionID
+        ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+    ) AS RunningBalance
+FROM LedgerTransactions
+ORDER BY AccountID, TransactionTimestamp;
+</code></pre>
+              <div class="solution-explanation">
+                <strong>Crucial Best Practice:</strong> Adding <code>TransactionID</code> as a secondary sort key guarantees deterministic ordering. Explicitly writing <code>ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW</code> prevents SQL Server from defaulting to <code>RANGE</code>, slashing execution time by 90%+.
+              </div>
+            </div>
+          </details>
+        </div>
+      </div>
+
+      <!-- Exercise 3 -->
+      <div class="exercise-box">
+        <div class="exercise-header">
+          <div class="exercise-title">Exercise 3.3: Trade Slippage Detection using LAG and LEAD</div>
+          <span class="badge badge-medium">Medium</span>
+        </div>
+        <div class="schema-context">
+          <strong>Context:</strong> Table <code>Executions</code> for a given security
+        </div>
+        <p><strong>Requirement:</strong> For every execution of Apple (<code>Ticker = 'AAPL'</code>), calculate: (1) The fill price of the immediately preceding execution, (2) The absolute price delta, and (3) The percentage slippage compared to the prior trade.</p>
+
+        <div class="solution-details">
+          <details>
+            <summary class="solution-summary"><span>💡 View Solution & Explanation</span> <span>▼</span></summary>
+            <div class="solution-content">
+<pre><code class="language-sql">SELECT 
+    e.ExecutionID,
+    e.ExecutedAt,
+    e.FillPrice,
+    LAG(e.FillPrice, 1, e.FillPrice) OVER (
+        ORDER BY e.ExecutedAt, e.ExecutionID
+    ) AS PreviousFillPrice,
+    CAST(e.FillPrice - LAG(e.FillPrice, 1, e.FillPrice) OVER (
+        ORDER BY e.ExecutedAt, e.ExecutionID
+    ) AS DECIMAL(18,4)) AS PriceDelta,
+    CAST((e.FillPrice - LAG(e.FillPrice, 1, e.FillPrice) OVER (
+        ORDER BY e.ExecutedAt, e.ExecutionID
+    )) * 100.0 / LAG(e.FillPrice, 1, e.FillPrice) OVER (
+        ORDER BY e.ExecutedAt, e.ExecutionID
+    ) AS DECIMAL(6,3)) AS PctSlippage
+FROM Executions e
+INNER JOIN Orders o ON e.OrderID = o.OrderID
+INNER JOIN Securities s ON o.SecurityID = s.SecurityID
+WHERE s.Ticker = 'AAPL'
+ORDER BY e.ExecutedAt;
+</code></pre>
+              <div class="solution-explanation">
+                <strong>Third Parameter of LAG:</strong> <code>LAG(column, offset, default_value)</code>. Providing <code>e.FillPrice</code> as the third argument avoids generating a NULL for the very first trade of the day, eliminating divide-by-zero errors in the percentage formula.
+              </div>
+            </div>
+          </details>
+        </div>
+      </div>
+
+      <!-- Exercise 4 -->
+      <div class="exercise-box">
+        <div class="exercise-header">
+          <div class="exercise-title">Exercise 3.4: 5-Day Moving Average of Trading Volume (Sliding Window)</div>
+          <span class="badge badge-medium">Medium</span>
+        </div>
+        <div class="schema-context">
+          <strong>Context:</strong> Daily aggregated trading volume per security
+        </div>
+        <p><strong>Requirement:</strong> Write a query calculating the 5-day rolling simple moving average (SMA) of trading volume for each security, covering the current day and the previous 4 trading days.</p>
+
+        <div class="solution-details">
+          <details>
+            <summary class="solution-summary"><span>💡 View Solution & Explanation</span> <span>▼</span></summary>
+            <div class="solution-content">
+<pre><code class="language-sql">WITH DailySecurityVolume AS (
+    SELECT 
+        o.SecurityID,
+        CAST(e.ExecutedAt AS DATE) AS TradeDate,
+        SUM(CAST(e.FillQuantity AS BIGINT)) AS DailyShares
+    FROM Executions e
+    INNER JOIN Orders o ON e.OrderID = o.OrderID
+    GROUP BY o.SecurityID, CAST(e.ExecutedAt AS DATE)
+)
+SELECT 
+    SecurityID,
+    TradeDate,
+    DailyShares,
+    AVG(CAST(DailyShares AS FLOAT)) OVER (
+        PARTITION BY SecurityID 
+        ORDER BY TradeDate
+        ROWS BETWEEN 4 PRECEDING AND CURRENT ROW
+    ) AS MovingAvg5DayVolume
+FROM DailySecurityVolume
+ORDER BY SecurityID, TradeDate;
+</code></pre>
+              <div class="solution-explanation">
+                <strong>Sliding Frame:</strong> <code>ROWS BETWEEN 4 PRECEDING AND CURRENT ROW</code> specifies a physical window of up to 5 rows (the current row plus up to 4 predecessors). For the first row, SQL Server dynamically averages whatever rows exist in the boundary without errors.
+              </div>
+            </div>
+          </details>
+        </div>
+      </div>
+
+      <!-- Exercise 5 -->
+      <div class="exercise-box">
+        <div class="exercise-header">
+          <div class="exercise-title">Exercise 3.5: Identifying Islands and Gaps in Settlement Statuses</div>
+          <span class="badge badge-hard">Hard</span>
+        </div>
+        <div class="schema-context">
+          <strong>Context:</strong> Table <code>Orders (OrderID, OrderStatus, OrderTime)</code>
+        </div>
+        <p><strong>Requirement:</strong> An order can transition through states. Detect consecutive "streaks" of <code>FILLED</code> orders (Gaps & Islands problem). Return the streak ID, start OrderID, end OrderID, and total count of orders in each uninterrupted filled streak.</p>
+
+        <div class="solution-details">
+          <details>
+            <summary class="solution-summary"><span>💡 View Solution & Explanation</span> <span>▼</span></summary>
+            <div class="solution-content">
+<pre><code class="language-sql">WITH NumberedOrders AS (
+    SELECT 
+        OrderID,
+        OrderStatus,
+        OrderTime,
+        ROW_NUMBER() OVER (ORDER BY OrderTime, OrderID) AS OverallRow,
+        ROW_NUMBER() OVER (PARTITION BY OrderStatus ORDER BY OrderTime, OrderID) AS StatusRow
+    FROM Orders
+),
+Islands AS (
+    SELECT 
+        OrderID,
+        OrderStatus,
+        OrderTime,
+        (OverallRow - StatusRow) AS IslandID
+    FROM NumberedOrders
+    WHERE OrderStatus = 'FILLED'
+)
+SELECT 
+    IslandID,
+    MIN(OrderID) AS StreakStartOrderID,
+    MAX(OrderID) AS StreakEndOrderID,
+    MIN(OrderTime) AS StreakStartTime,
+    MAX(OrderTime) AS StreakEndTime,
+    COUNT(*) AS ConsecutiveFilledOrders
+FROM Islands
+GROUP BY IslandID
+ORDER BY StreakStartTime;
+</code></pre>
+              <div class="solution-explanation">
+                <strong>The Classic ROW_NUMBER() - ROW_NUMBER() Trick:</strong> Subtracting a partitioned sequence from an unpartitioned sequence yields a constant integer for any contiguous streak of identical values. This is the gold-standard algorithm for Islands problems.
+              </div>
+            </div>
+          </details>
+        </div>
+      </div>
+
+      <!-- Exercise 6 -->
+      <div class="exercise-box">
+        <div class="exercise-header">
+          <div class="exercise-title">Exercise 3.6: Correcting the LAST_VALUE Frame for Market Open vs Close Comparison</div>
+          <span class="badge badge-medium">Medium</span>
+        </div>
+        <div class="schema-context">
+          <strong>Context:</strong> Table <code>Executions</code> with <code>FillPrice</code>, <code>ExecutedAt</code>
+        </div>
+        <p><strong>Requirement:</strong> For each security, compare the day's opening trade price (first execution of the day) and the day's closing trade price (last execution of the day) side-by-side on every execution row.</p>
+
+        <div class="solution-details">
+          <details>
+            <summary class="solution-summary"><span>💡 View Solution & Explanation</span> <span>▼</span></summary>
+            <div class="solution-content">
+<pre><code class="language-sql">SELECT 
+    o.SecurityID,
+    e.ExecutionID,
+    e.ExecutedAt,
+    e.FillPrice,
+    -- First value (Opening price)
+    FIRST_VALUE(e.FillPrice) OVER (
+        PARTITION BY o.SecurityID, CAST(e.ExecutedAt AS DATE)
+        ORDER BY e.ExecutedAt, e.ExecutionID
+        ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+    ) AS DayOpenPrice,
+    -- Corrected Last value (Closing price) with expanded frame
+    LAST_VALUE(e.FillPrice) OVER (
+        PARTITION BY o.SecurityID, CAST(e.ExecutedAt AS DATE)
+        ORDER BY e.ExecutedAt, e.ExecutionID
+        ROWS BETWEEN CURRENT ROW AND UNBOUNDED FOLLOWING
+    ) AS DayClosePrice
+FROM Executions e
+INNER JOIN Orders o ON e.OrderID = o.OrderID;
+</code></pre>
+              <div class="solution-explanation">
+                <strong>Frame Comparison:</strong> <code>FIRST_VALUE</code> naturally works with the default frame because the first row is always in the frame. <code>LAST_VALUE</code> requires <code>ROWS BETWEEN CURRENT ROW AND UNBOUNDED FOLLOWING</code> to look ahead to the partition's ultimate record.
+              </div>
+            </div>
+          </details>
+        </div>
+      </div>
+
+      <!-- Exercise 7 -->
+      <div class="exercise-box">
+        <div class="exercise-header">
+          <div class="exercise-title">Exercise 3.7: Portfolio Risk Percentiles with NTILE vs CUME_DIST</div>
+          <span class="badge badge-hard">Hard</span>
+        </div>
+        <div class="schema-context">
+          <strong>Context:</strong> <code>PortfolioPositions (AccountID, SecurityID, PositionUnits, CurrentMarketPrice)</code>
+        </div>
+        <p><strong>Requirement:</strong> Calculate the gross position value (<code>Units * Price</code>) for each holding and assign: (1) Decile bucket (1-10) using <code>NTILE</code>, (2) Relative cumulative distribution rank using <code>CUME_DIST()</code>, and (3) Exact percentile rank using <code>PERCENT_RANK()</code>.</p>
+
+        <div class="solution-details">
+          <details>
+            <summary class="solution-summary"><span>💡 View Solution & Explanation</span> <span>▼</span></summary>
+            <div class="solution-content">
+<pre><code class="language-sql">WITH PositionValues AS (
+    SELECT 
+        AccountID,
+        SecurityID,
+        CAST(PositionUnits * CurrentMarketPrice AS DECIMAL(18,2)) AS PositionVal
+    FROM PortfolioPositions
+)
+SELECT 
+    AccountID,
+    SecurityID,
+    PositionVal,
+    NTILE(10) OVER (ORDER BY PositionVal DESC) AS RiskDecile,
+    CAST(CUME_DIST() OVER (ORDER BY PositionVal ASC) AS DECIMAL(5,4)) AS CumulativeDist,
+    CAST(PERCENT_RANK() OVER (ORDER BY PositionVal ASC) AS DECIMAL(5,4)) AS PercentileRank
+FROM PositionValues
+ORDER BY PositionVal DESC;
+</code></pre>
+              <div class="solution-explanation">
+                <strong>Statistical Difference:</strong> <code>CUME_DIST</code> returns the proportion of rows with values less than or equal to the current row (between 0.0 and 1.0). <code>PERCENT_RANK</code> computes <code>(Rank - 1) / (Total Rows - 1)</code>.
+              </div>
+            </div>
+          </details>
+        </div>
+      </div>
+
+      <!-- Exercise 8 -->
+      <div class="exercise-box">
+        <div class="exercise-header">
+          <div class="exercise-title">Exercise 3.8: High-Performance Deduplication Pattern via CTE and ROW_NUMBER</div>
+          <span class="badge badge-hard">Hard</span>
+        </div>
+        <div class="schema-context">
+          <strong>Context:</strong> Data cleansing on duplicate incoming order audit feeds
+        </div>
+        <p><strong>Requirement:</strong> Write a production-safe query that deletes all duplicate records in a staging table, retaining strictly the single most recent record based on <code>LoggedAt</code>.</p>
+
+        <div class="solution-details">
+          <details>
+            <summary class="solution-summary"><span>💡 View Solution & Explanation</span> <span>▼</span></summary>
+            <div class="solution-content">
+<pre><code class="language-sql">-- Atomic In-Place CTE Deletion
+WITH DeduplicationCTE AS (
+    SELECT 
+        LogID,
+        TableName,
+        RecordID,
+        LoggedAt,
+        ROW_NUMBER() OVER (
+            PARTITION BY TableName, RecordID 
+            ORDER BY LoggedAt DESC, LogID DESC
+        ) AS RowNum
+    FROM AuditLogs
+)
+DELETE FROM DeduplicationCTE
+WHERE RowNum > 1;
+</code></pre>
+              <div class="solution-explanation">
+                <strong>T-SQL Power Feature:</strong> You can execute <code>DELETE FROM CTE</code>! SQL Server translates the deletion through the CTE directly onto the underlying physical table rows without needing temporary tables or join lookups.
+              </div>
+            </div>
+          </details>
+        </div>
+      </div>
+    </section>
+
+    <!-- SECTION 5: INTERVIEW SCRIPT -->
+    <section>
+      <h2>📋 How to Answer This in an Interview</h2>
+      <div class="card" style="background: #f8fafc; border-left: 5px solid var(--purple);">
+        <h4>Interviewer Question: "What is the difference between ROWS and RANGE in a window frame, and why does it impact query latency?"</h4>
+        <p><strong>Staff Engineer Response:</strong></p>
+        <blockquote style="font-style: italic; color: #334155; margin: 0.5rem 0;">
+          "The difference lies in how rows are framed physically versus logically, which fundamentally dictates the execution engine operator used.
+          <br><br>
+          <code>ROWS</code> specifies an explicit, physical count of rows relative to the current position (e.g. <code>ROWS BETWEEN 3 PRECEDING AND CURRENT ROW</code>). Because the boundary is deterministic by row offset, SQL Server evaluates it using an in-memory <strong>Stream Aggregate</strong> operator. It simply maintains running variables in CPU registers, consuming zero additional memory and executing in linear O(N) time.
+          <br><br>
+          In contrast, <code>RANGE</code> specifies a logical value range based on the values in the <code>ORDER BY</code> clause. Because multiple rows might have duplicate values (ties), SQL Server cannot simply advance a pointer; it must materialize the rows into a <strong>Segment / On-Disk Spool</strong> in TempDB to examine peers before advancing.
+          <br><br>
+          Furthermore, when an <code>ORDER BY</code> is present without an explicit frame, SQL Server defaults to <code>RANGE BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW</code>. In production queries over millions of rows, this default causes severe TempDB contention and spills. Replacing it with explicit <code>ROWS</code> framing commonly yields a 10x to 50x query speedup."
+        </blockquote>
+      </div>
+    </section>
+
+    <div class="page-nav" style="margin-top: 3rem;">
+      <a href="joins-subqueries.html" class="nav-prev">← Previous: 02 · JOINs & Subqueries</a>
+      <a href="views-cte-temp.html" class="nav-next">Next: 04 · Views, CTEs & Temp Tables →</a>
+    </div>
+
+  </main>
+</div>
+
+<button class="scroll-top" aria-label="Scroll to top">↑</button>
+
+<script src="js/main.js"></script>
+</body>
+</html>

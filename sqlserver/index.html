@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MS SQL Server Mastery — High-Performance Database Engineering</title>
+  <link rel="stylesheet" href="css/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+</head>
+<body>
+
+<button class="menu-toggle" aria-label="Toggle menu">☰</button>
+
+<div class="page-wrapper">
+  <aside class="sidebar" id="sidebar"></aside>
+
+  <main class="main-content">
+    <div class="platform-switcher">
+      <span>Mastery Portals:</span>
+      <a href="../Architecture/index.html">🏛️ System Design</a>
+      <a href="../CoreJava/index.html">☕ Core Java 21</a>
+      <a href="index.html" class="active">🗄️ MS SQL Server</a>
+    </div>
+
+    <header>
+      <h1>🗄️ MS SQL Server Mastery</h1>
+      <p class="lead">From T-SQL Foundations to Ultra-Low Latency Database Engineering, Complex Analytical Queries, and 50+ Real-World Interview Scenarios.</p>
+    </header>
+
+    <div class="card" style="border-left: 5px solid #2563eb; margin-bottom: 2rem;">
+      <h3>🎯 Track Overview & Engineering Focus</h3>
+      <p>This track is engineered specifically for backend software engineers, database developers, and data architects working with <strong>Microsoft SQL Server (T-SQL)</strong> in high-throughput enterprise and fintech environments. Unlike generic SQL tutorials, this course emphasizes:</p>
+      <ul>
+        <li><strong>Heavily Exercise-Focused:</strong> Every single module features live, runnable problem statements with collapsible complete solutions and execution rationales.</li>
+        <li><strong>Enterprise Domain Schema:</strong> All problems run against a unified Wall Street Institutional Trading & Settlement schema (Orders, Executions, Portfolios, Accounts, Audit Logs).</li>
+        <li><strong>50+ Interview Questions:</strong> Dedicated question bank with collapsible answers, query plans, and edge-case handling.</li>
+        <li><strong>Internal Engine Mechanics:</strong> SARGability, index key lookups, memory grants, transaction isolation latches, and deadlock graphs.</li>
+      </ul>
+    </div>
+
+    <h2>🗺️ Complete Curriculum Modules</h2>
+    <div class="grid grid-2" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 1.5rem; margin-top: 1rem;">
+
+      <div class="card">
+        <h3><a href="fundamentals.html">01 · Fundamentals, DML & All Aggregates</a></h3>
+        <p>T-SQL execution phases, SARGable predicates, 3-valued boolean logic (NULLs), and all aggregate functions including <code>STRING_AGG</code>, <code>CHECKSUM_AGG</code>, <code>COUNT_BIG</code>, <code>GROUPING_ID</code>, and <code>ROLLUP/CUBE</code>.</p>
+        <span class="badge badge-easy">8 Exercises + Solutions</span>
+      </div>
+
+      <div class="card">
+        <h3><a href="joins-subqueries.html">02 · JOINs Deep Dive & Subqueries</a></h3>
+        <p>INNER, LEFT, RIGHT, FULL OUTER, CROSS, and SELF JOINs. Correlated vs Non-Correlated subqueries, <code>CROSS APPLY</code> vs <code>OUTER APPLY</code>, anti-joins with <code>NOT EXISTS</code> vs <code>NOT IN</code> traps.</p>
+        <span class="badge badge-medium">8 Exercises + Solutions</span>
+      </div>
+
+      <div class="card">
+        <h3><a href="window-functions.html">03 · Window Functions Mastery</a></h3>
+        <p>Ranking (<code>ROW_NUMBER</code>, <code>RANK</code>, <code>DENSE_RANK</code>, <code>NTILE</code>), Value offset functions (<code>LAG</code>, <code>LEAD</code>, <code>FIRST_VALUE</code>), and physical frame clauses (<code>ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW</code>).</p>
+        <span class="badge badge-medium">8 Exercises + Solutions</span>
+      </div>
+
+      <div class="card">
+        <h3><a href="views-cte-temp.html">04 · Views, CTEs & Temporary Tables</a></h3>
+        <p>Standard vs Indexed/Materialized Views (<code>SCHEMABINDING</code>), recursive CTEs for hierarchical tree traversal, <code>#temp</code> tables vs <code>##global</code> tables vs <code>@table</code> variables, and <code>PIVOT/UNPIVOT</code>.</p>
+        <span class="badge badge-hard">8 Exercises + Solutions</span>
+      </div>
+
+      <div class="card">
+        <h3><a href="stored-procedures.html">05 · Stored Procedures, Functions & Triggers</a></h3>
+        <p>Compiled procedures, Table-Valued Parameters (TVPs), Scalar vs Inline TVFs vs Multi-Statement TVF performance traps, <code>INSTEAD OF</code> triggers, <code>TRY...CATCH</code>, <code>THROW</code>, and <code>sp_executesql</code>.</p>
+        <span class="badge badge-hard">8 Exercises + Solutions</span>
+      </div>
+
+      <div class="card">
+        <h3><a href="indexing-performance.html">06 · Indexing Internals & Query Tuning</a></h3>
+        <p>B-Trees, Clustered vs Non-Clustered Indexes, <code>INCLUDE</code> covering columns, filtered indexes, Key Lookups, Index Spills, Cardinality Estimation, Query Store, and DMV execution telemetry.</p>
+        <span class="badge badge-expert">8 Exercises + Solutions</span>
+      </div>
+
+      <div class="card">
+        <h3><a href="transactions-locking.html">07 · Transactions, Concurrency & Locking</a></h3>
+        <p>ACID internals, all 5 Isolation levels (READ UNCOMMITTED up to SERIALIZABLE and SNAPSHOT/RCSI), Lock Escalation, Deadlock detection, Lock hints (<code>NOLOCK</code>, <code>UPDLOCK</code>, <code>ROWLOCK</code>).</p>
+        <span class="badge badge-expert">8 Exercises + Solutions</span>
+      </div>
+
+      <div class="card" style="border: 2px solid #8b5cf6; background: #faf5ff;">
+        <h3><a href="exercises.html" style="color: #6b21a8;">🏋️ 50+ Interview Coding Questions</a></h3>
+        <p>The definitive interview preparation bank with complete DDL/DML test harnesses, step-by-step solutions, alternative approaches, and complexity analysis for L3/L4/L5/L6 tech rounds.</p>
+        <span class="badge badge-expert">50+ Challenges + Solutions</span>
+      </div>
+
+    </div>
+
+    <hr style="margin: 3rem 0; border: none; border-top: 1px solid var(--border);">
+
+    <h2>🏛️ The Unified Financial Database Schema</h2>
+    <p>All examples, scripts, and interview exercises in this platform run against this institutional trading and settlement relational model. You can paste this setup script directly into SQL Server Management Studio (SSMS) or Azure Data Studio.</p>
+
+    <div class="mermaid">
+erDiagram
+    CLIENTS ||--o{ ACCOUNTS : owns
+    ACCOUNTS ||--o{ ORDERS : places
+    ACCOUNTS ||--o{ TRANSACTIONS : executes
+    SECURITIES ||--o{ ORDERS : references
+    ORDERS ||--o{ EXECUTIONS : generates
+    ACCOUNTS ||--o{ PORTFOLIO_POSITIONS : holds
+    SECURITIES ||--o{ PORTFOLIO_POSITIONS : contains
+    ACCOUNTS ||--o{ AUDIT_LOGS : records
+    </div>
+
+    <div class="solution-details" style="margin-top: 1.5rem;">
+      <details>
+        <summary class="solution-summary"><span>📜 Click to View / Copy Complete Schema Setup DDL Script (T-SQL)</span> <span>▼</span></summary>
+        <div class="solution-content">
+<pre><code class="language-sql">-- ============================================================================
+-- SQL SERVER MASTERY — UNIFIED TRADING SCHEMA (T-SQL)
+-- Target: SQL Server 2016+ / Azure SQL Database
+-- ============================================================================
+
+CREATE DATABASE FinancialTradingDB;
+GO
+USE FinancialTradingDB;
+GO
+
+-- 1. Clients Table (Institutional / Retail)
+CREATE TABLE Clients (
+    ClientID INT IDENTITY(1,1) PRIMARY KEY,
+    ClientName NVARCHAR(150) NOT NULL,
+    ClientType VARCHAR(20) NOT NULL CHECK (ClientType IN ('INSTITUTIONAL', 'HEDGE_FUND', 'RETAIL', 'MARKET_MAKER')),
+    CountryCode CHAR(2) NOT NULL DEFAULT 'US',
+    KYCStatus VARCHAR(20) NOT NULL DEFAULT 'VERIFIED',
+    CreatedAt DATETIME2(3) NOT NULL DEFAULT SYSUTCDATETIME()
+);
+
+-- 2. Trading Accounts
+CREATE TABLE Accounts (
+    AccountID INT IDENTITY(1001,1) PRIMARY KEY,
+    ClientID INT NOT NULL FOREIGN KEY REFERENCES Clients(ClientID),
+    AccountNumber VARCHAR(30) NOT NULL UNIQUE,
+    AccountType VARCHAR(20) NOT NULL CHECK (AccountType IN ('CASH', 'MARGIN', 'DVP_SETTLEMENT')),
+    Currency CHAR(3) NOT NULL DEFAULT 'USD',
+    CashBalance DECIMAL(18,4) NOT NULL DEFAULT 0.0000,
+    MarginLimit DECIMAL(18,4) NOT NULL DEFAULT 0.0000,
+    Status VARCHAR(20) NOT NULL DEFAULT 'ACTIVE',
+    UpdatedAt DATETIME2(3) NOT NULL DEFAULT SYSUTCDATETIME()
+);
+
+-- 3. Securities Master
+CREATE TABLE Securities (
+    SecurityID INT IDENTITY(5001,1) PRIMARY KEY,
+    Ticker VARCHAR(10) NOT NULL UNIQUE,
+    SecurityName NVARCHAR(100) NOT NULL,
+    AssetClass VARCHAR(20) NOT NULL CHECK (AssetClass IN ('EQUITY', 'BOND', 'FX', 'COMMODITY', 'CRYPTO')),
+    Sector VARCHAR(50) NULL,
+    LotSize INT NOT NULL DEFAULT 1,
+    IsActive BIT NOT NULL DEFAULT 1
+);
+
+-- 4. Orders
+CREATE TABLE Orders (
+    OrderID BIGINT IDENTITY(100001,1) PRIMARY KEY,
+    AccountID INT NOT NULL FOREIGN KEY REFERENCES Accounts(AccountID),
+    SecurityID INT NOT NULL FOREIGN KEY REFERENCES Securities(SecurityID),
+    OrderSide VARCHAR(4) NOT NULL CHECK (OrderSide IN ('BUY', 'SELL')),
+    OrderType VARCHAR(10) NOT NULL CHECK (OrderType IN ('LIMIT', 'MARKET', 'STOP_LOSS')),
+    Quantity INT NOT NULL CHECK (Quantity > 0),
+    LimitPrice DECIMAL(18,4) NULL,
+    FilledQuantity INT NOT NULL DEFAULT 0,
+    OrderStatus VARCHAR(20) NOT NULL DEFAULT 'PENDING' 
+        CHECK (OrderStatus IN ('PENDING', 'PARTIAL', 'FILLED', 'CANCELLED', 'REJECTED')),
+    OrderTime DATETIME2(3) NOT NULL DEFAULT SYSUTCDATETIME(),
+    VersionRowChange ROWVERSION -- For optimistic locking
+);
+
+-- 5. Executions / Fills
+CREATE TABLE Executions (
+    ExecutionID BIGINT IDENTITY(500001,1) PRIMARY KEY,
+    OrderID BIGINT NOT NULL FOREIGN KEY REFERENCES Orders(OrderID),
+    ExecutionVenue VARCHAR(20) NOT NULL DEFAULT 'NYSE',
+    FillQuantity INT NOT NULL CHECK (FillQuantity > 0),
+    FillPrice DECIMAL(18,4) NOT NULL,
+    LiquidityFlag CHAR(1) NOT NULL CHECK (LiquidityFlag IN ('A', 'R')), -- Added / Removed
+    ExecutionFee DECIMAL(10,4) NOT NULL DEFAULT 0.0000,
+    ExecutedAt DATETIME2(3) NOT NULL DEFAULT SYSUTCDATETIME()
+);
+
+-- 6. Current Portfolio Positions
+CREATE TABLE PortfolioPositions (
+    PositionID INT IDENTITY(1,1) PRIMARY KEY,
+    AccountID INT NOT NULL FOREIGN KEY REFERENCES Accounts(AccountID),
+    SecurityID INT NOT NULL FOREIGN KEY REFERENCES Securities(SecurityID),
+    PositionUnits INT NOT NULL,
+    AverageEntryPrice DECIMAL(18,4) NOT NULL,
+    CurrentMarketPrice DECIMAL(18,4) NOT NULL,
+    LastValuationTime DATETIME2(3) NOT NULL DEFAULT SYSUTCDATETIME(),
+    CONSTRAINT UQ_Account_Security UNIQUE (AccountID, SecurityID)
+);
+
+-- 7. Ledger Transactions (Double-entry Cash / Stock Transfer)
+CREATE TABLE LedgerTransactions (
+    TransactionID BIGINT IDENTITY(800001,1) PRIMARY KEY,
+    AccountID INT NOT NULL FOREIGN KEY REFERENCES Accounts(AccountID),
+    TransactionType VARCHAR(20) NOT NULL CHECK (TransactionType IN ('DEPOSIT', 'WITHDRAWAL', 'TRADE_BUY', 'TRADE_SELL', 'DIVIDEND', 'FEE')),
+    Amount DECIMAL(18,4) NOT NULL,
+    TransactionTimestamp DATETIME2(3) NOT NULL DEFAULT SYSUTCDATETIME(),
+    ReferenceNote NVARCHAR(250) NULL
+);
+
+-- 8. Audit Trail
+CREATE TABLE AuditLogs (
+    LogID BIGINT IDENTITY(1,1) PRIMARY KEY,
+    TableName VARCHAR(50) NOT NULL,
+    OperationType CHAR(6) NOT NULL CHECK (OperationType IN ('INSERT', 'UPDATE', 'DELETE')),
+    RecordID VARCHAR(50) NOT NULL,
+    ChangedBy NVARCHAR(100) NOT NULL DEFAULT SUSER_SNAME(),
+    ChangePayload NVARCHAR(MAX) NULL,
+    LoggedAt DATETIME2(3) NOT NULL DEFAULT SYSUTCDATETIME()
+);
+
+-- Populate Initial Reference Data
+INSERT INTO Clients (ClientName, ClientType, CountryCode) VALUES
+('Blackstone Capital Management', 'INSTITUTIONAL', 'US'),
+('Citadel Global Execution', 'MARKET_MAKER', 'US'),
+('Renaissance Algorithmic Fund', 'HEDGE_FUND', 'US'),
+('Sudhanshu Wealth Fund', 'INSTITUTIONAL', 'IN'),
+('Vanguard Core Indexing', 'INSTITUTIONAL', 'US');
+
+INSERT INTO Accounts (ClientID, AccountNumber, AccountType, CashBalance, MarginLimit) VALUES
+(1, 'ACC-NYC-8821', 'MARGIN', 4500000.00, 20000000.00),
+(2, 'ACC-CHI-9912', 'MARGIN', 12000000.00, 50000000.00),
+(3, 'ACC-LON-4431', 'MARGIN', 8500000.00, 35000000.00),
+(4, 'ACC-MUM-1024', 'CASH', 750000.00, 0.00),
+(5, 'ACC-PA-3321', 'CASH', 25000000.00, 0.00);
+
+INSERT INTO Securities (Ticker, SecurityName, AssetClass, Sector) VALUES
+('AAPL', 'Apple Inc.', 'EQUITY', 'Technology'),
+('MSFT', 'Microsoft Corporation', 'EQUITY', 'Technology'),
+('NVDA', 'Nvidia Corporation', 'EQUITY', 'Semiconductors'),
+('JPM', 'JPMorgan Chase & Co.', 'EQUITY', 'Financials'),
+('GS', 'Goldman Sachs Group Inc.', 'EQUITY', 'Financials'),
+('TSLA', 'Tesla Inc.', 'EQUITY', 'Consumer Discretionary');
+</code></pre>
+        </div>
+      </details>
+    </div>
+
+    <div class="page-nav" style="margin-top: 3rem;">
+      <span></span>
+      <a href="fundamentals.html" class="nav-next">Next: 01 · Fundamentals & Aggregates →</a>
+    </div>
+
+  </main>
+</div>
+
+<button class="scroll-top" aria-label="Scroll to top">↑</button>
+
+<script src="js/main.js"></script>
+</body>
+</html>
