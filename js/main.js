@@ -264,9 +264,98 @@ function initMermaid() {
   }
 }
 
+// --- Notes Widget (localStorage-based, per-page) ---
+function setupNotesWidget() {
+  const pageKey = 'sdm-notes::' + window.location.pathname;
+
+  // Create toggle button
+  const toggle = document.createElement('button');
+  toggle.className = 'notes-toggle';
+  toggle.setAttribute('aria-label', 'Toggle notes');
+  toggle.textContent = '📝';
+  toggle.title = 'My Notes for this page';
+  document.body.appendChild(toggle);
+
+  // Create panel
+  const panel = document.createElement('div');
+  panel.className = 'notes-panel';
+  panel.innerHTML = `
+    <div class="notes-header">
+      <span>📝 My Notes</span>
+      <span class="notes-status"></span>
+      <button class="notes-close" title="Close">✕</button>
+    </div>
+    <div class="notes-body">
+      <textarea placeholder="Type your notes here for this page...\n\nYour notes are saved automatically in your browser and will persist forever (per page)."
+        spellcheck="true"></textarea>
+    </div>
+    <div class="notes-footer">
+      <span class="notes-info">Saved in your browser (localStorage)</span>
+      <button class="notes-clear" title="Delete notes for this page">🗑️ Clear</button>
+    </div>
+  `;
+  document.body.appendChild(panel);
+
+  const textarea = panel.querySelector('textarea');
+  const status = panel.querySelector('.notes-status');
+  const closeBtn = panel.querySelector('.notes-close');
+  const clearBtn = panel.querySelector('.notes-clear');
+
+  // Load saved notes
+  const saved = localStorage.getItem(pageKey);
+  if (saved) {
+    textarea.value = saved;
+    toggle.classList.add('has-notes');
+    status.textContent = '✓ Loaded';
+  }
+
+  // Toggle panel
+  toggle.addEventListener('click', () => {
+    panel.classList.toggle('open');
+    if (panel.classList.contains('open')) textarea.focus();
+  });
+
+  closeBtn.addEventListener('click', () => panel.classList.remove('open'));
+
+  // Auto-save with debounce
+  let saveTimer;
+  textarea.addEventListener('input', () => {
+    status.textContent = 'Typing...';
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(() => {
+      const val = textarea.value.trim();
+      if (val) {
+        localStorage.setItem(pageKey, textarea.value);
+        toggle.classList.add('has-notes');
+        status.textContent = '✓ Saved';
+      } else {
+        localStorage.removeItem(pageKey);
+        toggle.classList.remove('has-notes');
+        status.textContent = 'Empty';
+      }
+    }, 400);
+  });
+
+  // Clear notes
+  clearBtn.addEventListener('click', () => {
+    if (confirm('Delete your notes for this page?')) {
+      textarea.value = '';
+      localStorage.removeItem(pageKey);
+      toggle.classList.remove('has-notes');
+      status.textContent = 'Cleared';
+    }
+  });
+
+  // Close on Escape
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && panel.classList.contains('open')) panel.classList.remove('open');
+  });
+}
+
 document.addEventListener('DOMContentLoaded', () => {
   buildSidebar();
   setupMenuToggle();
   setupScrollTop();
   initMermaid();
+  setupNotesWidget();
 });
