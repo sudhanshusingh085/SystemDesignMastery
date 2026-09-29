@@ -125,40 +125,133 @@ flowchart TD
 
     <!-- SECTION 3: ALL AGGREGATE FUNCTIONS -->
     <section>
-      <h2>3. Deep Dive: All SQL Server Aggregate Functions</h2>
-      <p>SQL Server provides standard, statistical, and advanced modern aggregate functions. Aggregate functions ignore <code>NULL</code> values in their calculations (except for <code>COUNT(*)</code>).</p>
+      <h2>3. Deep Dive: All SQL Server Aggregate Functions Explained from First Principles</h2>
+      <p>An <strong>Aggregate Function</strong> performs a calculation across a set of values in a column and collapses them into a single scalar value. In relational theory, aggregate functions ignore <code>NULL</code> values in their calculations (with the single exception of <code>COUNT(*)</code>).</p>
 
-      <h3>A. Standard Aggregates</h3>
+      <!-- COUNT VARIANTS -->
+      <h3>A. The COUNT Family: COUNT(*) vs COUNT(col) vs COUNT(DISTINCT) vs COUNT_BIG</h3>
+      <table border="1" style="width: 100%; border-collapse: collapse; margin: 1rem 0;">
+        <thead>
+          <tr style="background: #f1f5f9;">
+            <th>Function</th>
+            <th>What It Evaluates</th>
+            <th>NULL Behavior</th>
+            <th>Engine Optimization & Memory Cost</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>COUNT(*)</code></td>
+            <td>Total number of rows in the table or group.</td>
+            <td><strong>Counts NULLs!</strong> Even if every column in a row is NULL, the row is counted.</td>
+            <td><strong>Zero Memory Grant:</strong> The optimizer picks the <em>narrowest non-clustered index</em> on the table to count leaf pages rapidly without reading the clustered index!</td>
+          </tr>
+          <tr>
+            <td><code>COUNT(col)</code></td>
+            <td>Number of non-null occurrences in that specific column.</td>
+            <td><strong>Ignores NULLs.</strong> Rows where <code>col IS NULL</code> are excluded.</td>
+            <td>Must scan the specific column's B-tree pages to verify non-null values.</td>
+          </tr>
+          <tr>
+            <td><code>COUNT(DISTINCT col)</code></td>
+            <td>Number of unique, non-null values.</td>
+            <td>Ignores NULLs.</td>
+            <td><strong>High Memory Grant:</strong> Forces SQL Server to sort or hash all values into a TempDB worktable to eliminate duplicates.</td>
+          </tr>
+          <tr>
+            <td><code>COUNT_BIG(*)</code></td>
+            <td>Total row count returning a 64-bit <code>BIGINT</code>.</td>
+            <td>Counts NULLs.</td>
+            <td>Mandatory when tables exceed 2,147,483,647 rows (which throws integer overflow on <code>COUNT(*)</code>), and <strong>strictly required</strong> when creating Indexed Views.</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <!-- SUM AND AVG -->
+      <h3>B. SUM() and AVG(): Integer Truncation & Overflow Traps</h3>
+      
+      <div class="card" style="border-left: 4px solid var(--danger); background: #fef2f2;">
+        <h4>☠️ Trap 1: Integer Division Truncation in AVG()</h4>
+        <p>Suppose you have order quantities 5 and 4. What is <code>AVG(Quantity)</code> if Quantity is an <code>INT</code>?</p>
+        <p>In T-SQL, <code>(5 + 4) / 2 = 4</code>, <strong>NOT 4.5</strong>! T-SQL performs integer division and truncates the decimal portion silently!</p>
+        <p><strong>The Fix:</strong> Always cast integer arguments to float or decimal: <code>AVG(CAST(Quantity AS DECIMAL(18,4)))</code>.</p>
+      </div>
+
+      <div class="card" style="border-left: 4px solid var(--accent); background: #fffbeb; margin-top: 1rem;">
+        <h4>⚠️ Trap 2: Arithmetic Overflow in SUM()</h4>
+        <p>If you run <code>SUM(Quantity)</code> on a table with 50 million trades where Quantity is stored as <code>INT</code>, the sum will quickly exceed the maximum 32-bit signed integer value ($2,147,483,647$), triggering fatal <em>Error 8115: Arithmetic overflow error converting expression to data type int</em>.</p>
+        <p><strong>The Fix:</strong> Cast the column to <code>BIGINT</code> inside the aggregate: <code>SUM(CAST(Quantity AS BIGINT))</code>.</p>
+      </div>
+
+      <!-- STATISTICAL AGGREGATES -->
+      <h3>C. Statistical Aggregates: STDEV, STDEVP, VAR, VARP</h3>
+      <p>Financial risk modeling and quantitative trading rely on variance and standard deviation to compute volatility and Sharpe ratios:</p>
       <ul>
-        <li><code>COUNT(*)</code>: Counts every row in the partition or table, including rows where all columns are NULL.</li>
-        <li><code>COUNT(column)</code>: Counts non-null values in that specific column.</li>
-        <li><code>COUNT(DISTINCT column)</code>: Counts unique non-null values.</li>
-        <li><code>COUNT_BIG(*)</code>: Returns an <code>BIGINT</code> (int64) instead of <code>INT</code>. Mandatory for partitioned tables or tables with over 2.14 billion rows, and required in indexed views with aggregation.</li>
-        <li><code>SUM(column)</code>: Calculates total. Throws arithmetic overflow if sum exceeds column datatype range (e.g. use <code>SUM(CAST(Amount AS BIGINT))</code>).</li>
-        <li><code>AVG(column)</code>: Calculates arithmetic mean. <em>Trap:</em> In integer columns, <code>AVG(5 + 4) = 4</code> (integer division truncation). Must cast to <code>DECIMAL</code>: <code>AVG(CAST(Qty AS FLOAT))</code>.</li>
-        <li><code>MIN(column)</code> / <code>MAX(column)</code>: Returns smallest / greatest value. Works on numbers, strings (alphabetical collations), and dates.</li>
+        <li><code>STDEV(col)</code>: Computes the <strong>Sample Standard Deviation</strong> using $N-1$ degrees of freedom ($\sqrt{\frac{\sum (x - \bar{x})^2}{N - 1}}$). Use this when calculating volatility from a sample of trade ticks.</li>
+        <li><code>STDEVP(col)</code>: Computes the <strong>Population Standard Deviation</strong> using $N$ ($\sqrt{\frac{\sum (x - \bar{x})^2}{N}}$). Use this when evaluating the entire population of records.</li>
+        <li><code>VAR(col)</code> / <code>VARP(col)</code>: Computes statistical Sample Variance vs Population Variance.</li>
       </ul>
 
-      <h3>B. Statistical Aggregates</h3>
+      <!-- ADVANCED MODERN AGGREGATES -->
+      <h3>D. Advanced Modern Aggregates (SQL Server 2017+)</h3>
+
+      <h4>1. STRING_AGG(expression, separator) WITHIN GROUP (ORDER BY ...)</h4>
+      <p>Prior to SQL Server 2017, concatenating row values into a single delimited string required the infamous <code>FOR XML PATH('')</code> black-magic hack. <code>STRING_AGG</code> replaces this with a clean ANSI-compliant aggregate function.</p>
+<pre><code class="language-sql">-- Produces: "AAPL, MSFT, NVDA" sorted alphabetically:
+SELECT 
+    AccountID,
+    STRING_AGG(Ticker, ', ') WITHIN GROUP (ORDER BY Ticker ASC) AS PortfolioTickers
+FROM PortfolioPositions p
+INNER JOIN Securities s ON p.SecurityID = s.SecurityID
+GROUP BY AccountID;
+</code></pre>
+
+      <h4>2. CHECKSUM_AGG(column)</h4>
+      <p>Computes an integer hash checksum across an entire column. Ideal for high-speed cache invalidation: an in-memory trading engine calculates <code>CHECKSUM_AGG(BINARY_CHECKSUM(*))</code> on a reference table. If the returned integer changes, the engine knows data was modified and refreshes its cache, without scanning millions of rows!</p>
+
+      <h4>3. APPROX_COUNT_DISTINCT(column)</h4>
+      <p>Standard <code>COUNT(DISTINCT col)</code> on a table with 500,000,000 rows requires gigabytes of memory to sort and deduplicate distinct values, often spilling to TempDB. <code>APPROX_COUNT_DISTINCT</code> utilizes the <strong>HyperLogLog (HLL)</strong> probabilistic algorithm: it hashes column values into 64-bit binaries and tracks leading zero patterns across internal registers.</p>
       <ul>
-        <li><code>STDEV(column)</code> / <code>STDEVP(column)</code>: Statistical sample standard deviation vs population standard deviation.</li>
-        <li><code>VAR(column)</code> / <code>VARP(column)</code>: Statistical sample variance vs population variance.</li>
+        <li><strong>Memory Footprint:</strong> Consumes only ~1.5 KB of fixed memory regardless of table size!</li>
+        <li><strong>Accuracy Guarantee:</strong> Provides 97% accuracy within a 2% standard error rate.</li>
+        <li><strong>Speedup:</strong> Up to 50x faster than <code>COUNT(DISTINCT)</code> for multi-billion row tables.</li>
       </ul>
 
-      <h3>C. Modern & Advanced Aggregates (SQL Server 2017+)</h3>
-      <ul>
-        <li><code>STRING_AGG(expression, separator) WITHIN GROUP (ORDER BY sort_column)</code>: Concatenates string values from multiple rows into a single delimited string with explicit sorting. Eliminates legacy <code>FOR XML PATH('')</code> hacks!</li>
-        <li><code>CHECKSUM_AGG(column)</code>: Generates an integer checksum across a column. Ideal for detecting whether any record in a large table changed without scanning column by column.</li>
-        <li><code>APPROX_COUNT_DISTINCT(column)</code>: HyperLogLog-based probabilistic distinct counting. Consumes negligible memory compared to <code>COUNT(DISTINCT)</code>, offering 97% accuracy with up to 50x speedups on multi-billion row tables.</li>
-      </ul>
+      <!-- MULTI-DIMENSIONAL GROUPING -->
+      <h3>E. Multi-Dimensional Super-Aggregates: ROLLUP, CUBE & GROUPING SETS</h3>
+      <p>In business intelligence, management requests reports with subtotals across multiple dimensions. The naive approach is writing 4 separate queries and stitching them together with <code>UNION ALL</code>, scanning the table 4 times. SQL Server super-aggregates do this in a single scan:</p>
 
-      <h3>D. Multi-Dimensional Aggregation: ROLLUP, CUBE & GROUPING SETS</h3>
-      <p>Instead of running multiple <code>GROUP BY</code> queries combined with <code>UNION ALL</code>, SQL Server provides super-aggregate operators:</p>
-      <ul>
-        <li><code>GROUP BY ROLLUP (Sector, AssetClass)</code>: Produces hierarchical subtotals: (Sector, AssetClass), (Sector), and Grand Total ().</li>
-        <li><code>GROUP BY CUBE (Sector, AssetClass)</code>: Produces all 2^N combinations: (Sector, AssetClass), (Sector), (AssetClass), and Grand Total ().</li>
-        <li><code>GROUPING_ID(Sector, AssetClass)</code>: Returns an integer bitmask indicating which columns are aggregated in the subtotal row, allowing you to label summary rows cleanly.</li>
-      </ul>
+      <table border="1" style="width: 100%; border-collapse: collapse; margin: 1rem 0;">
+        <thead>
+          <tr style="background: #f1f5f9;">
+            <th>Super-Aggregate</th>
+            <th>Combinations Generated</th>
+            <th>Best Suited For</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>GROUP BY ROLLUP (A, B)</code></td>
+            <td>Hierarchical subtotals: <code>(A, B)</code>, <code>(A)</code>, and Grand Total <code>()</code>.</td>
+            <td>Hierarchical data: Year &rarr; Quarter &rarr; Month, or Sector &rarr; Industry.</td>
+          </tr>
+          <tr>
+            <td><code>GROUP BY CUBE (A, B)</code></td>
+            <td>All $2^N$ combinations: <code>(A, B)</code>, <code>(A)</code>, <code>(B)</code>, and Grand Total <code>()</code>.</td>
+            <td>Cross-dimensional OLAP analysis (Sector vs AssetClass).</td>
+          </tr>
+          <tr>
+            <td><code>GROUPING SETS (...)</code></td>
+            <td>Strictly the custom grouping combinations you explicitly declare.</td>
+            <td>Precise customized reporting layouts.</td>
+          </tr>
+          <tr>
+            <td><code>GROUPING_ID(A, B)</code></td>
+            <td>Returns a bitmask integer (0, 1, 2, 3) indicating which columns are aggregated into subtotals.</td>
+            <td>Distinguishing real NULL values in data from subtotal summary NULL rows.</td>
+          </tr>
+        </tbody>
+      </table>
     </section>
 
     <!-- SECTION 4: SARGABILITY -->

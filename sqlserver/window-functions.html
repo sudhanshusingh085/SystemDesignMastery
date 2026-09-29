@@ -28,458 +28,310 @@
 
     <header>
       <h1>03 · Window Functions & Analytical Framing</h1>
-      <p class="lead">Ranking Functions, Value Offset Functions (LAG/LEAD), The Fatal LAST_VALUE Framing Trap, and ROWS vs RANGE Engine Performance.</p>
+      <p class="lead">The Definitive Guide to OVER(), PARTITION BY, Ranking, Value Offsets, The Fatal LAST_VALUE Framing Trap, and ROWS vs RANGE Engine Performance.</p>
     </header>
 
-    <!-- SECTION 1: ARCHITECTURE OF WINDOW FUNCTIONS -->
+    <!-- ================================================================= -->
+    <!-- PILLAR 1: GROUND-ZERO THEORY: WHY DO WINDOW FUNCTIONS EXIST? -->
+    <!-- ================================================================= -->
     <section>
-      <h2>1. The OVER() Clause Architecture</h2>
-      <p>Unlike standard <code>GROUP BY</code> aggregations which collapse rows into summary buckets, <strong>Window Functions</strong> compute values across a set of table rows while <strong>preserving individual row identity</strong>.</p>
+      <h2>1. Ground-Zero First Principles: Why Did ANSI Invent Window Functions?</h2>
+      
+      <h3>The Pain Point: The Agony of GROUP BY Before the OVER() Clause</h3>
+      <p>Suppose you are an engineer at an investment bank. Your manager asks for a simple report:</p>
+      <blockquote style="font-style: italic; color: #1e3a8a; background: #eff6ff; padding: 0.75rem 1rem; border-left: 4px solid var(--primary); border-radius: 4px;">
+        "Show every individual trade placed today, including the TradeID, Stock Ticker, and Quantity. And next to each trade, display that Account's total daily trading volume so we can see what percentage of the account's daily volume this single trade represented."
+      </blockquote>
 
-      <div class="card" style="background: #f8fafc; border-left: 4px solid var(--primary);">
-        <h4>The Full Anatomy of a Window Function:</h4>
-        <pre><code class="language-sql">FUNCTION_NAME(expression) OVER (
-    [PARTITION BY partition_column_1, ...]
-    [ORDER BY sort_column_1 [ASC|DESC], ...]
-    [ROWS | RANGE frame_specification]
-)</code></pre>
+      <p>Before Window Functions were introduced to SQL, this simple request required an expensive, convoluted nightmare. Because <code>GROUP BY</code> <strong>collapses rows</strong> into summary buckets, individual trade identities are lost. To retain individual trades, you were forced to calculate the aggregate in a subquery and perform a self-join back to the main table:</p>
+
+<pre><code class="language-sql">-- THE PAINFUL LEGACY WAY (Pre-Window Functions):
+-- Requires scanning the Orders table TWICE, creating an intermediate temp table, and joining!
+SELECT 
+    o.OrderID,
+    o.AccountID,
+    o.Quantity,
+    agg.TotalAccountVolume,
+    (o.Quantity * 100.0) / agg.TotalAccountVolume AS PctOfDailyTotal
+FROM Orders o
+INNER JOIN (
+    SELECT AccountID, SUM(Quantity) AS TotalAccountVolume
+    FROM Orders
+    GROUP BY AccountID
+) agg ON o.AccountID = agg.AccountID;
+</code></pre>
+
+      <p><strong>The Performance Cost:</strong> On a table with 50,000,000 orders, this legacy query scans 50M rows to compute the group totals, materializes an intermediate hash table, and then performs 50,000,000 join lookups. It saturates the buffer cache and takes minutes to finish.</p>
+
+      <div class="card" style="border-left: 5px solid var(--success); background: #f0fdf4;">
+        <h4>💡 The Window Function Revolution: OVER()</h4>
+        <p>A <strong>Window Function</strong> calculates aggregate or analytical metrics across a partition of rows <strong>WITHOUT collapsing individual rows</strong>. If 1,000 rows enter the query, exactly 1,000 rows exit the query, each enriched with the partition's calculated metric in a single sequential pass!</p>
       </div>
 
-      <div class="mermaid">
-flowchart LR
-    Dataset["Input Dataset (Orders)"] --> Part["PARTITION BY SecurityID<br/>(Divides into independent windows)"]
-    Part --> Order["ORDER BY OrderTime<br/>(Sorts rows within partition)"]
-    Order --> Frame["ROWS BETWEEN...<br/>(Defines physical sliding frame)"]
-    Frame --> Calc["Compute Window Metric<br/>(Running Sum, Rank, Delta)"]
-      </div>
+<pre><code class="language-sql">-- THE MODERN WINDOW FUNCTION WAY:
+-- Scans the Orders table ONCE! Zero self-joins!
+SELECT 
+    OrderID,
+    AccountID,
+    Quantity,
+    SUM(Quantity) OVER (PARTITION BY AccountID) AS TotalAccountVolume,
+    (Quantity * 100.0) / SUM(Quantity) OVER (PARTITION BY AccountID) AS PctOfDailyTotal
+FROM Orders;
+</code></pre>
     </section>
 
-    <!-- SECTION 2: RANKING FUNCTIONS -->
+    <!-- ================================================================= -->
+    <!-- PILLAR 2: GROUP BY VS PARTITION BY: THE CORE DISTINCTION -->
+    <!-- ================================================================= -->
     <section>
-      <h2>2. Ranking Functions Comparison</h2>
-      <p>SQL Server provides four distinct ranking functions. Understanding how they handle ties is a universal senior engineering interview test.</p>
-
-      <table border="1" style="width: 100%; border-collapse: collapse; margin: 1rem 0;">
+      <h2>2. GROUP BY vs PARTITION BY: The Fundamental Difference</h2>
+      
+      <table border="1" style="width: 100%; border-collapse: collapse; margin: 1.5rem 0;">
         <thead>
           <tr style="background: #f1f5f9;">
-            <th>Value</th>
-            <th><code>ROW_NUMBER()</code></th>
-            <th><code>RANK()</code></th>
-            <th><code>DENSE_RANK()</code></th>
-            <th><code>NTILE(3)</code></th>
+            <th>Feature</th>
+            <th><code>GROUP BY</code> Clause</th>
+            <th><code>PARTITION BY</code> in OVER()</th>
           </tr>
         </thead>
         <tbody>
-          <tr><td>$1,000</td><td>1</td><td>1</td><td>1</td><td>1 (Bucket 1)</td></tr>
-          <tr><td>$800 (Tie)</td><td>2</td><td>2</td><td>2</td><td>1 (Bucket 1)</td></tr>
-          <tr><td>$800 (Tie)</td><td>3</td><td>2</td><td>2</td><td>2 (Bucket 2)</td></tr>
-          <tr><td>$500</td><td>4</td><td>4 (Skips 3!)</td><td>3 (Continuous)</td><td>2 (Bucket 2)</td></tr>
-          <tr><td>$300</td><td>5</td><td>5</td><td>4</td><td>3 (Bucket 3)</td></tr>
+          <tr>
+            <td><strong>Row Cardinality</strong></td>
+            <td><strong>Collapses rows:</strong> Reduces many rows into exactly one single summary row per group.</td>
+            <td><strong>Preserves rows:</strong> Retains every original row. If input is 10,000 rows, output is 10,000 rows.</td>
+          </tr>
+          <tr>
+            <td><strong>Column Accessibility</strong></td>
+            <td>Can only project grouped columns or aggregated columns. You <em>cannot</em> select individual row attributes (like OrderID).</td>
+            <td>Full access to every individual column in the row alongside the calculated window aggregate.</td>
+          </tr>
+          <tr>
+            <td><strong>Multiple Partitions</strong></td>
+            <td>The entire query must share a single, fixed grouping granularity.</td>
+            <td>Can compute across <strong>multiple independent partitions</strong> in the same SELECT statement (e.g. <code>OVER(PARTITION BY AccountID)</code> and <code>OVER(PARTITION BY SecurityID)</code> simultaneously!).</td>
+          </tr>
+          <tr>
+            <td><strong>Sorting & Framing</strong></td>
+            <td>Cannot specify moving frames or chronological row ordering within the group.</td>
+            <td>Supports full physical sliding window frames (<code>ROWS BETWEEN ...</code>) and ranking.</td>
+          </tr>
         </tbody>
       </table>
 
-      <ul>
-        <li><code>ROW_NUMBER()</code>: Assigns a strictly unique, contiguous integer to every row. If values tie, ordering is non-deterministic unless unique tie-breaking columns are added to <code>ORDER BY</code>.</li>
-        <li><code>RANK()</code>: Assigns identical ranks to ties, then <strong>skips</strong> subsequent rank numbers by the count of tied rows.</li>
-        <li><code>DENSE_RANK()</code>: Assigns identical ranks to ties, but does <strong>not</strong> skip any rank numbers (ideal for "Find the 2nd highest salary/execution price").</li>
-        <li><code>NTILE(n)</code>: Divides the partition as equally as possible into <em>n</em> buckets (e.g. quintiles for credit risk scoring).</li>
-      </ul>
+      <div class="mermaid">
+flowchart TD
+    subgraph GroupByPattern [GROUP BY AccountID]
+        R1["Row 1: Acc 101, $500"] --> Agg["SUM()"]
+        R2["Row 2: Acc 101, $300"] --> Agg
+        R3["Row 3: Acc 101, $200"] --> Agg
+        Agg --> Out1["Output: Exactly 1 row (Acc 101, $1000)"]
+    end
+    subgraph PartitionByPattern [SUM() OVER (PARTITION BY AccountID)]
+        P1["Row 1: Acc 101, $500"] --> W1["Output Row 1: Acc 101, $500 | AccTotal: $1000"]
+        P2["Row 2: Acc 101, $300"] --> W2["Output Row 2: Acc 101, $300 | AccTotal: $1000"]
+        P3["Row 3: Acc 101, $200"] --> W3["Output Row 3: Acc 101, $200 | AccTotal: $1000"]
+    end
+      </div>
     </section>
 
-    <!-- SECTION 3: THE DEADLY LAST_VALUE TRAP & ROWS VS RANGE -->
+    <!-- ================================================================= -->
+    <!-- PILLAR 3: THE ANATOMY OF THE OVER() CLAUSE -->
+    <!-- ================================================================= -->
     <section>
-      <h2>3. The Deadly LAST_VALUE Trap & ROWS vs RANGE</h2>
+      <h2>3. The Anatomy of the OVER() Clause: Partition, Order & Frame</h2>
+      <p>The <code>OVER()</code> clause is composed of three optional elements:</p>
+      <pre><code class="language-sql">FUNCTION() OVER (
+    PARTITION BY <columns>   -- 1. Defines the boundaries (independent calculation buckets)
+    ORDER BY <columns>       -- 2. Defines sorting within each boundary (mandatory for ranking & running totals)
+    ROWS | RANGE <frame>    -- 3. Defines the physical sliding window of rows evaluated
+)</code></pre>
 
-      <div class="card" style="border-left: 4px solid var(--danger);">
-        <h4>⚠️ The Fatal LAST_VALUE Default Framing Bug</h4>
-        <p>Developers routinely run:
-        <br><code>SELECT LAST_VALUE(FillPrice) OVER (PARTITION BY SecurityID ORDER BY ExecutedAt) FROM Executions;</code>
-        <br>...and wonder why <code>LAST_VALUE()</code> returns the <strong>current row's price</strong> instead of the last price in the partition!</p>
-        <p><strong>The Reason:</strong> When an <code>ORDER BY</code> is supplied without an explicit framing clause, ANSI SQL mandates the default frame:
-        <br><code>RANGE BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW</code>.
-        <br>Therefore, the "last value" in a frame that ends at the <em>CURRENT ROW</em> is always the current row itself!</p>
-        <p><strong>The Fix:</strong> Explicitly expand the frame to the end of the partition:
-        <br><code>LAST_VALUE(FillPrice) OVER (PARTITION BY SecurityID ORDER BY ExecutedAt ROWS BETWEEN CURRENT ROW AND UNBOUNDED FOLLOWING)</code></p>
-      </div>
+      <h3>A. PARTITION BY (The Calculation Boundaries)</h3>
+      <p>Divides the result set into distinct partitions. The window function calculates independently for each partition, resetting the calculation when the partition boundary changes.</p>
+      <p><em>What happens if you omit PARTITION BY?</em> The entire result set is treated as a single massive partition! E.g. <code>SUM(Amount) OVER ()</code> computes the grand total of the entire table and displays it on every row.</p>
 
-      <h3>Engine Mechanics: ROWS vs RANGE Performance</h3>
-      <table border="1" style="width: 100%; border-collapse: collapse; margin: 1rem 0;">
+      <h3>B. ORDER BY (Logical Sequence Inside Partition)</h3>
+      <p>Determines the chronological or ordinal sequence in which rows are processed within each partition. Essential for ranking functions (who came 1st, 2nd) and running cumulative calculations.</p>
+
+      <h3>C. The Framing Clause: ROWS vs RANGE (The Critical Performance Difference)</h3>
+      <p>The framing clause defines which subset of rows within the partition are evaluated for the current row. This is where 90% of production performance disasters occur.</p>
+
+      <table border="1" style="width: 100%; border-collapse: collapse; margin: 1.5rem 0;">
         <thead>
           <tr style="background: #f1f5f9;">
             <th>Frame Mode</th>
-            <th>Execution Engine Operator</th>
+            <th>How It Works Under the Hood</th>
+            <th>Engine Operator</th>
             <th>Performance Impact</th>
           </tr>
         </thead>
         <tbody>
           <tr>
-            <td><code>ROWS BETWEEN...</code></td>
-            <td><strong>Stream Aggregate</strong> (In-Memory pointer arithmetic)</td>
-            <td><strong>Ultra-Fast:</strong> Processed in-place row-by-row in CPU registers.</td>
+            <td><code>ROWS BETWEEN ...</code></td>
+            <td>Defines a <strong>physical count of rows</strong> relative to the current row pointer (e.g. current row plus 3 preceding rows).</td>
+            <td><strong>Stream Aggregate:</strong> In-memory register pointer arithmetic in CPU.</td>
+            <td><strong>Ultra-Fast (Linear $O(N)$):</strong> Zero memory allocation, zero disk I/O.</td>
           </tr>
           <tr>
-            <td><code>RANGE BETWEEN...</code></td>
-            <td><strong>Segment / On-Disk Spool</strong> (TempDB worktable)</td>
-            <td><strong>50x-100x Slower:</strong> SQL Server must spool duplicate values into TempDB to evaluate tie boundaries. Always specify <code>ROWS</code>!</td>
+            <td><code>RANGE BETWEEN ...</code></td>
+            <td>Defines a <strong>logical value range</strong> based on the values in the <code>ORDER BY</code> column (includes all peer rows that tie in value).</td>
+            <td><strong>Segment / On-Disk Spool:</strong> SQL Server must spool duplicate values into TempDB worktables.</td>
+            <td><strong>Disastrously Slow (up to 100x slower!):</strong> Triggers high TempDB latch contention and disk spills.</td>
           </tr>
         </tbody>
       </table>
-    </section>
 
-    <!-- SECTION 4: EXERCISES -->
-    <section>
-      <h2>🏋️ Module 03 Exercises (With Toggleable Solutions)</h2>
-
-      <!-- Exercise 1 -->
-      <div class="exercise-box">
-        <div class="exercise-header">
-          <div class="exercise-title">Exercise 3.1: Finding the N-th Highest Executed Order Without Subquery Aggregation</div>
-          <span class="badge badge-easy">Easy</span>
-        </div>
-        <div class="schema-context">
-          <strong>Context:</strong> Table <code>Executions (ExecutionID, OrderID, FillPrice)</code>
-        </div>
-        <p><strong>Requirement:</strong> Write a query to find the 3rd highest distinct execution price across all equity trades. Ensure ties share the same ranking and do not distort the 3rd rank.</p>
-
-        <div class="solution-details">
-          <details>
-            <summary class="solution-summary"><span>💡 View Solution & Explanation</span> <span>▼</span></summary>
-            <div class="solution-content">
-<pre><code class="language-sql">WITH PriceRankings AS (
-    SELECT 
-        FillPrice,
-        DENSE_RANK() OVER (ORDER BY FillPrice DESC) AS PriceRank
-    FROM Executions
-)
-SELECT DISTINCT FillPrice
-FROM PriceRankings
-WHERE PriceRank = 3;
-</code></pre>
-              <div class="solution-explanation">
-                <strong>Why DENSE_RANK:</strong> If the two highest prices are $500, $500, and the next is $450, <code>RANK()</code> would assign 1, 1, 3. <code>DENSE_RANK()</code> assigns 1, 1, 2, ensuring $450 is correctly identified as the 2nd distinct tier.
-              </div>
-            </div>
-          </details>
-        </div>
+      <div class="card" style="border-left: 4px solid var(--danger);">
+        <h4>⚠️ The Fatal Default Frame Trap in SQL Server</h4>
+        <p>If you specify an <code>ORDER BY</code> inside <code>OVER()</code> but omit the explicit framing clause, ANSI SQL mandates this default:</p>
+        <pre><code class="language-sql">RANGE BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW  -- DEFAULT! SLOW!</code></pre>
+        <p>Because the default is <code>RANGE</code>, SQL Server routes the calculation through a TempDB spool! On large tables, this slows down your query by orders of magnitude.</p>
+        <p><strong>The Production Rule:</strong> Whenever writing a running total or cumulative calculation, <strong>always explicitly specify <code>ROWS</code></strong>:</p>
+        <pre><code class="language-sql">SUM(Amount) OVER (
+    PARTITION BY AccountID 
+    ORDER BY TransactionTime 
+    ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW  -- 50x FASTER!
+)</code></pre>
       </div>
 
-      <!-- Exercise 2 -->
-      <div class="exercise-box">
-        <div class="exercise-header">
-          <div class="exercise-title">Exercise 3.2: Account Ledger Running Balance (Cumulative Sum)</div>
-          <span class="badge badge-medium">Medium</span>
-        </div>
-        <div class="schema-context">
-          <strong>Context:</strong> <code>LedgerTransactions (TransactionID, AccountID, Amount, TransactionTimestamp)</code>
-        </div>
-        <p><strong>Requirement:</strong> Calculate the real-time running cash balance for each account ordered by transaction timestamp. Ensure maximum performance by using an in-memory stream operator instead of TempDB spools.</p>
-
-        <div class="solution-details">
-          <details>
-            <summary class="solution-summary"><span>💡 View Solution & Explanation</span> <span>▼</span></summary>
-            <div class="solution-content">
-<pre><code class="language-sql">SELECT 
-    AccountID,
-    TransactionID,
-    TransactionTimestamp,
-    TransactionType,
-    Amount,
-    -- Running Cumulative Balance with explicit ROWS framing
-    SUM(Amount) OVER (
-        PARTITION BY AccountID 
-        ORDER BY TransactionTimestamp, TransactionID
-        ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
-    ) AS RunningBalance
-FROM LedgerTransactions
-ORDER BY AccountID, TransactionTimestamp;
-</code></pre>
-              <div class="solution-explanation">
-                <strong>Crucial Best Practice:</strong> Adding <code>TransactionID</code> as a secondary sort key guarantees deterministic ordering. Explicitly writing <code>ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW</code> prevents SQL Server from defaulting to <code>RANGE</code>, slashing execution time by 90%+.
-              </div>
-            </div>
-          </details>
-        </div>
-      </div>
-
-      <!-- Exercise 3 -->
-      <div class="exercise-box">
-        <div class="exercise-header">
-          <div class="exercise-title">Exercise 3.3: Trade Slippage Detection using LAG and LEAD</div>
-          <span class="badge badge-medium">Medium</span>
-        </div>
-        <div class="schema-context">
-          <strong>Context:</strong> Table <code>Executions</code> for a given security
-        </div>
-        <p><strong>Requirement:</strong> For every execution of Apple (<code>Ticker = 'AAPL'</code>), calculate: (1) The fill price of the immediately preceding execution, (2) The absolute price delta, and (3) The percentage slippage compared to the prior trade.</p>
-
-        <div class="solution-details">
-          <details>
-            <summary class="solution-summary"><span>💡 View Solution & Explanation</span> <span>▼</span></summary>
-            <div class="solution-content">
-<pre><code class="language-sql">SELECT 
-    e.ExecutionID,
-    e.ExecutedAt,
-    e.FillPrice,
-    LAG(e.FillPrice, 1, e.FillPrice) OVER (
-        ORDER BY e.ExecutedAt, e.ExecutionID
-    ) AS PreviousFillPrice,
-    CAST(e.FillPrice - LAG(e.FillPrice, 1, e.FillPrice) OVER (
-        ORDER BY e.ExecutedAt, e.ExecutionID
-    ) AS DECIMAL(18,4)) AS PriceDelta,
-    CAST((e.FillPrice - LAG(e.FillPrice, 1, e.FillPrice) OVER (
-        ORDER BY e.ExecutedAt, e.ExecutionID
-    )) * 100.0 / LAG(e.FillPrice, 1, e.FillPrice) OVER (
-        ORDER BY e.ExecutedAt, e.ExecutionID
-    ) AS DECIMAL(6,3)) AS PctSlippage
-FROM Executions e
-INNER JOIN Orders o ON e.OrderID = o.OrderID
-INNER JOIN Securities s ON o.SecurityID = s.SecurityID
-WHERE s.Ticker = 'AAPL'
-ORDER BY e.ExecutedAt;
-</code></pre>
-              <div class="solution-explanation">
-                <strong>Third Parameter of LAG:</strong> <code>LAG(column, offset, default_value)</code>. Providing <code>e.FillPrice</code> as the third argument avoids generating a NULL for the very first trade of the day, eliminating divide-by-zero errors in the percentage formula.
-              </div>
-            </div>
-          </details>
-        </div>
-      </div>
-
-      <!-- Exercise 4 -->
-      <div class="exercise-box">
-        <div class="exercise-header">
-          <div class="exercise-title">Exercise 3.4: 5-Day Moving Average of Trading Volume (Sliding Window)</div>
-          <span class="badge badge-medium">Medium</span>
-        </div>
-        <div class="schema-context">
-          <strong>Context:</strong> Daily aggregated trading volume per security
-        </div>
-        <p><strong>Requirement:</strong> Write a query calculating the 5-day rolling simple moving average (SMA) of trading volume for each security, covering the current day and the previous 4 trading days.</p>
-
-        <div class="solution-details">
-          <details>
-            <summary class="solution-summary"><span>💡 View Solution & Explanation</span> <span>▼</span></summary>
-            <div class="solution-content">
-<pre><code class="language-sql">WITH DailySecurityVolume AS (
-    SELECT 
-        o.SecurityID,
-        CAST(e.ExecutedAt AS DATE) AS TradeDate,
-        SUM(CAST(e.FillQuantity AS BIGINT)) AS DailyShares
-    FROM Executions e
-    INNER JOIN Orders o ON e.OrderID = o.OrderID
-    GROUP BY o.SecurityID, CAST(e.ExecutedAt AS DATE)
-)
-SELECT 
-    SecurityID,
-    TradeDate,
-    DailyShares,
-    AVG(CAST(DailyShares AS FLOAT)) OVER (
-        PARTITION BY SecurityID 
-        ORDER BY TradeDate
-        ROWS BETWEEN 4 PRECEDING AND CURRENT ROW
-    ) AS MovingAvg5DayVolume
-FROM DailySecurityVolume
-ORDER BY SecurityID, TradeDate;
-</code></pre>
-              <div class="solution-explanation">
-                <strong>Sliding Frame:</strong> <code>ROWS BETWEEN 4 PRECEDING AND CURRENT ROW</code> specifies a physical window of up to 5 rows (the current row plus up to 4 predecessors). For the first row, SQL Server dynamically averages whatever rows exist in the boundary without errors.
-              </div>
-            </div>
-          </details>
-        </div>
-      </div>
-
-      <!-- Exercise 5 -->
-      <div class="exercise-box">
-        <div class="exercise-header">
-          <div class="exercise-title">Exercise 3.5: Identifying Islands and Gaps in Settlement Statuses</div>
-          <span class="badge badge-hard">Hard</span>
-        </div>
-        <div class="schema-context">
-          <strong>Context:</strong> Table <code>Orders (OrderID, OrderStatus, OrderTime)</code>
-        </div>
-        <p><strong>Requirement:</strong> An order can transition through states. Detect consecutive "streaks" of <code>FILLED</code> orders (Gaps & Islands problem). Return the streak ID, start OrderID, end OrderID, and total count of orders in each uninterrupted filled streak.</p>
-
-        <div class="solution-details">
-          <details>
-            <summary class="solution-summary"><span>💡 View Solution & Explanation</span> <span>▼</span></summary>
-            <div class="solution-content">
-<pre><code class="language-sql">WITH NumberedOrders AS (
-    SELECT 
-        OrderID,
-        OrderStatus,
-        OrderTime,
-        ROW_NUMBER() OVER (ORDER BY OrderTime, OrderID) AS OverallRow,
-        ROW_NUMBER() OVER (PARTITION BY OrderStatus ORDER BY OrderTime, OrderID) AS StatusRow
-    FROM Orders
-),
-Islands AS (
-    SELECT 
-        OrderID,
-        OrderStatus,
-        OrderTime,
-        (OverallRow - StatusRow) AS IslandID
-    FROM NumberedOrders
-    WHERE OrderStatus = 'FILLED'
-)
-SELECT 
-    IslandID,
-    MIN(OrderID) AS StreakStartOrderID,
-    MAX(OrderID) AS StreakEndOrderID,
-    MIN(OrderTime) AS StreakStartTime,
-    MAX(OrderTime) AS StreakEndTime,
-    COUNT(*) AS ConsecutiveFilledOrders
-FROM Islands
-GROUP BY IslandID
-ORDER BY StreakStartTime;
-</code></pre>
-              <div class="solution-explanation">
-                <strong>The Classic ROW_NUMBER() - ROW_NUMBER() Trick:</strong> Subtracting a partitioned sequence from an unpartitioned sequence yields a constant integer for any contiguous streak of identical values. This is the gold-standard algorithm for Islands problems.
-              </div>
-            </div>
-          </details>
-        </div>
-      </div>
-
-      <!-- Exercise 6 -->
-      <div class="exercise-box">
-        <div class="exercise-header">
-          <div class="exercise-title">Exercise 3.6: Correcting the LAST_VALUE Frame for Market Open vs Close Comparison</div>
-          <span class="badge badge-medium">Medium</span>
-        </div>
-        <div class="schema-context">
-          <strong>Context:</strong> Table <code>Executions</code> with <code>FillPrice</code>, <code>ExecutedAt</code>
-        </div>
-        <p><strong>Requirement:</strong> For each security, compare the day's opening trade price (first execution of the day) and the day's closing trade price (last execution of the day) side-by-side on every execution row.</p>
-
-        <div class="solution-details">
-          <details>
-            <summary class="solution-summary"><span>💡 View Solution & Explanation</span> <span>▼</span></summary>
-            <div class="solution-content">
-<pre><code class="language-sql">SELECT 
-    o.SecurityID,
-    e.ExecutionID,
-    e.ExecutedAt,
-    e.FillPrice,
-    -- First value (Opening price)
-    FIRST_VALUE(e.FillPrice) OVER (
-        PARTITION BY o.SecurityID, CAST(e.ExecutedAt AS DATE)
-        ORDER BY e.ExecutedAt, e.ExecutionID
-        ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
-    ) AS DayOpenPrice,
-    -- Corrected Last value (Closing price) with expanded frame
-    LAST_VALUE(e.FillPrice) OVER (
-        PARTITION BY o.SecurityID, CAST(e.ExecutedAt AS DATE)
-        ORDER BY e.ExecutedAt, e.ExecutionID
-        ROWS BETWEEN CURRENT ROW AND UNBOUNDED FOLLOWING
-    ) AS DayClosePrice
-FROM Executions e
-INNER JOIN Orders o ON e.OrderID = o.OrderID;
-</code></pre>
-              <div class="solution-explanation">
-                <strong>Frame Comparison:</strong> <code>FIRST_VALUE</code> naturally works with the default frame because the first row is always in the frame. <code>LAST_VALUE</code> requires <code>ROWS BETWEEN CURRENT ROW AND UNBOUNDED FOLLOWING</code> to look ahead to the partition's ultimate record.
-              </div>
-            </div>
-          </details>
-        </div>
-      </div>
-
-      <!-- Exercise 7 -->
-      <div class="exercise-box">
-        <div class="exercise-header">
-          <div class="exercise-title">Exercise 3.7: Portfolio Risk Percentiles with NTILE vs CUME_DIST</div>
-          <span class="badge badge-hard">Hard</span>
-        </div>
-        <div class="schema-context">
-          <strong>Context:</strong> <code>PortfolioPositions (AccountID, SecurityID, PositionUnits, CurrentMarketPrice)</code>
-        </div>
-        <p><strong>Requirement:</strong> Calculate the gross position value (<code>Units * Price</code>) for each holding and assign: (1) Decile bucket (1-10) using <code>NTILE</code>, (2) Relative cumulative distribution rank using <code>CUME_DIST()</code>, and (3) Exact percentile rank using <code>PERCENT_RANK()</code>.</p>
-
-        <div class="solution-details">
-          <details>
-            <summary class="solution-summary"><span>💡 View Solution & Explanation</span> <span>▼</span></summary>
-            <div class="solution-content">
-<pre><code class="language-sql">WITH PositionValues AS (
-    SELECT 
-        AccountID,
-        SecurityID,
-        CAST(PositionUnits * CurrentMarketPrice AS DECIMAL(18,2)) AS PositionVal
-    FROM PortfolioPositions
-)
-SELECT 
-    AccountID,
-    SecurityID,
-    PositionVal,
-    NTILE(10) OVER (ORDER BY PositionVal DESC) AS RiskDecile,
-    CAST(CUME_DIST() OVER (ORDER BY PositionVal ASC) AS DECIMAL(5,4)) AS CumulativeDist,
-    CAST(PERCENT_RANK() OVER (ORDER BY PositionVal ASC) AS DECIMAL(5,4)) AS PercentileRank
-FROM PositionValues
-ORDER BY PositionVal DESC;
-</code></pre>
-              <div class="solution-explanation">
-                <strong>Statistical Difference:</strong> <code>CUME_DIST</code> returns the proportion of rows with values less than or equal to the current row (between 0.0 and 1.0). <code>PERCENT_RANK</code> computes <code>(Rank - 1) / (Total Rows - 1)</code>.
-              </div>
-            </div>
-          </details>
-        </div>
-      </div>
-
-      <!-- Exercise 8 -->
-      <div class="exercise-box">
-        <div class="exercise-header">
-          <div class="exercise-title">Exercise 3.8: High-Performance Deduplication Pattern via CTE and ROW_NUMBER</div>
-          <span class="badge badge-hard">Hard</span>
-        </div>
-        <div class="schema-context">
-          <strong>Context:</strong> Data cleansing on duplicate incoming order audit feeds
-        </div>
-        <p><strong>Requirement:</strong> Write a production-safe query that deletes all duplicate records in a staging table, retaining strictly the single most recent record based on <code>LoggedAt</code>.</p>
-
-        <div class="solution-details">
-          <details>
-            <summary class="solution-summary"><span>💡 View Solution & Explanation</span> <span>▼</span></summary>
-            <div class="solution-content">
-<pre><code class="language-sql">-- Atomic In-Place CTE Deletion
-WITH DeduplicationCTE AS (
-    SELECT 
-        LogID,
-        TableName,
-        RecordID,
-        LoggedAt,
-        ROW_NUMBER() OVER (
-            PARTITION BY TableName, RecordID 
-            ORDER BY LoggedAt DESC, LogID DESC
-        ) AS RowNum
-    FROM AuditLogs
-)
-DELETE FROM DeduplicationCTE
-WHERE RowNum > 1;
-</code></pre>
-              <div class="solution-explanation">
-                <strong>T-SQL Power Feature:</strong> You can execute <code>DELETE FROM CTE</code>! SQL Server translates the deletion through the CTE directly onto the underlying physical table rows without needing temporary tables or join lookups.
-              </div>
-            </div>
-          </details>
-        </div>
+      <div class="card" style="border-left: 4px solid var(--purple); margin-top: 1rem;">
+        <h4>☠️ The Fatal LAST_VALUE() Bug Explained</h4>
+        <p>Why does <code>LAST_VALUE(FillPrice) OVER (PARTITION BY SecurityID ORDER BY ExecutedAt)</code> return the <strong>current row's value</strong> instead of the last value in the partition?</p>
+        <p><strong>The Mathematical Proof:</strong> Because the default frame is <code>RANGE BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW</code>, the window frame <strong>ends at the current row</strong>! The "last value" in a frame that terminates at the current row is, by definition, the current row itself!</p>
+        <p><strong>The Solution:</strong> You must explicitly instruct the frame to look forward to the very end of the partition:</p>
+        <pre><code class="language-sql">LAST_VALUE(FillPrice) OVER (
+    PARTITION BY SecurityID 
+    ORDER BY ExecutedAt 
+    ROWS BETWEEN CURRENT ROW AND UNBOUNDED FOLLOWING  -- FIXED!
+)</code></pre>
       </div>
     </section>
 
-    <!-- SECTION 5: INTERVIEW SCRIPT -->
+    <!-- ================================================================= -->
+    <!-- PILLAR 4: COMPLETE RANKING FUNCTIONS COMPARISON -->
+    <!-- ================================================================= -->
     <section>
-      <h2>📋 How to Answer This in an Interview</h2>
-      <div class="card" style="background: #f8fafc; border-left: 5px solid var(--purple);">
-        <h4>Interviewer Question: "What is the difference between ROWS and RANGE in a window frame, and why does it impact query latency?"</h4>
-        <p><strong>Staff Engineer Response:</strong></p>
+      <h2>4. Ranking Functions: ROW_NUMBER vs RANK vs DENSE_RANK vs NTILE</h2>
+      
+      <p>Consider four trades placed with fill prices: <strong>$100, $100 (Tie), $90, $80</strong>. Here is exactly how the four ranking functions evaluate them:</p>
+
+      <table border="1" style="width: 100%; border-collapse: collapse; margin: 1rem 0;">
+        <thead>
+          <tr style="background: #f1f5f9;">
+            <th>Trade Price</th>
+            <th><code>ROW_NUMBER()</code></th>
+            <th><code>RANK()</code></th>
+            <th><code>DENSE_RANK()</code></th>
+            <th><code>NTILE(2)</code></th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>$100</td>
+            <td>1</td>
+            <td>1</td>
+            <td>1</td>
+            <td>1 (Bucket 1)</td>
+          </tr>
+          <tr>
+            <td>$100 (Tie)</td>
+            <td>2 (Arbitrary order)</td>
+            <td>1 (Shares rank)</td>
+            <td>1 (Shares rank)</td>
+            <td>1 (Bucket 1)</td>
+          </tr>
+          <tr>
+            <td>$90</td>
+            <td>3</td>
+            <td><strong>3 (Skips 2!)</strong></td>
+            <td><strong>2 (Continuous!)</strong></td>
+            <td>2 (Bucket 2)</td>
+          </tr>
+          <tr>
+            <td>$80</td>
+            <td>4</td>
+            <td>4</td>
+            <td>3</td>
+            <td>2 (Bucket 2)</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <ul>
+        <li><code>ROW_NUMBER()</code>: Strictly unique sequence (1, 2, 3, 4). If prices tie, the assignment between them is non-deterministic unless tie-breaker columns are added to <code>ORDER BY</code>. Ideal for pagination.</li>
+        <li><code>RANK()</code>: Tied rows get the same rank, and subsequent ranks are <strong>skipped</strong> (1, 1, 3). Like an Olympic podium: two gold medalists means the next athlete receives bronze (3rd place), with no silver medal.</li>
+        <li><code>DENSE_RANK()</code>: Tied rows get the same rank, but subsequent ranks are <strong>not skipped</strong> (1, 1, 2). Essential for finding the <em>"N-th highest salary or execution price"</em>.</li>
+        <li><code>NTILE(n)</code>: Divides rows as equally as possible into $n$ ranked buckets (e.g. <code>NTILE(4)</code> for quartiles, <code>NTILE(10)</code> for credit risk deciles).</li>
+      </ul>
+    </section>
+
+    <!-- ================================================================= -->
+    <!-- PILLAR 5: VALUE OFFSET FUNCTIONS -->
+    <!-- ================================================================= -->
+    <section>
+      <h2>5. Value Offset Functions: LAG, LEAD & FIRST_VALUE</h2>
+      
+      <h3>A. LAG() and LEAD()</h3>
+      <p>Allows accessing data from a preceding (<code>LAG</code>) or succeeding (<code>LEAD</code>) row without performing a self-join.</p>
+      <ul>
+        <li><strong>Syntax:</strong> <code>LAG(column, offset, default_value) OVER (...)</code></li>
+        <li><code>offset</code>: How many rows backward/forward to look (defaults to 1).</li>
+        <li><code>default_value</code>: What to return if the offset falls outside the partition (defaults to <code>NULL</code>). Specifying a default like <code>0</code> or the current column prevents divide-by-zero errors.</li>
+      </ul>
+
+<pre><code class="language-sql">-- Calculate trade price slippage compared to the immediately preceding execution:
+SELECT 
+    ExecutionID,
+    SecurityID,
+    FillPrice,
+    LAG(FillPrice, 1, FillPrice) OVER (
+        PARTITION BY SecurityID ORDER BY ExecutedAt
+    ) AS PriorFillPrice,
+    (FillPrice - LAG(FillPrice, 1, FillPrice) OVER (
+        PARTITION BY SecurityID ORDER BY ExecutedAt
+    )) AS SlippageDollarAmount
+FROM Executions;
+</code></pre>
+    </section>
+
+    <!-- ================================================================= -->
+    <!-- PILLAR 6: INTERVIEW SCRIPT & FOLLOW-UP GRILL ROUND -->
+    <!-- ================================================================= -->
+    <section>
+      <h2>📋 How to Master This in an Interview</h2>
+      
+      <div class="card" style="background: #f8fafc; border-left: 5px solid var(--purple); margin-bottom: 1.5rem;">
+        <h4>Interviewer Question: "What is the difference between GROUP BY and the PARTITION BY clause inside OVER()?"</h4>
+        <p><strong>Staff Engineer Model Response:</strong></p>
         <blockquote style="font-style: italic; color: #334155; margin: 0.5rem 0;">
-          "The difference lies in how rows are framed physically versus logically, which fundamentally dictates the execution engine operator used.
+          "The fundamental difference is in <strong>row cardinality and identity preservation</strong>.
           <br><br>
-          <code>ROWS</code> specifies an explicit, physical count of rows relative to the current position (e.g. <code>ROWS BETWEEN 3 PRECEDING AND CURRENT ROW</code>). Because the boundary is deterministic by row offset, SQL Server evaluates it using an in-memory <strong>Stream Aggregate</strong> operator. It simply maintains running variables in CPU registers, consuming zero additional memory and executing in linear O(N) time.
+          A <code>GROUP BY</code> clause collapses multiple rows into a single summary record per unique group key. Once grouped, individual row identities (like primary keys or timestamps) are lost and cannot be projected in the SELECT list unless wrapped in an aggregate function.
           <br><br>
-          In contrast, <code>RANGE</code> specifies a logical value range based on the values in the <code>ORDER BY</code> clause. Because multiple rows might have duplicate values (ties), SQL Server cannot simply advance a pointer; it must materialize the rows into a <strong>Segment / On-Disk Spool</strong> in TempDB to examine peers before advancing.
+          In contrast, <code>PARTITION BY</code> inside the <code>OVER()</code> clause defines an analytical window for calculation while <strong>strictly preserving the individual identity of every incoming row</strong>. If 10,000 rows enter, exactly 10,000 rows exit. Furthermore, a single SELECT query can define multiple independent <code>PARTITION BY</code> windows at different granularities—such as calculating an account-level running sum and a security-level average simultaneously—which is impossible with a single GROUP BY clause.
           <br><br>
-          Furthermore, when an <code>ORDER BY</code> is present without an explicit frame, SQL Server defaults to <code>RANGE BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW</code>. In production queries over millions of rows, this default causes severe TempDB contention and spills. Replacing it with explicit <code>ROWS</code> framing commonly yields a 10x to 50x query speedup."
+          Under the hood, when combined with an explicit <code>ROWS BETWEEN ...</code> framing clause, SQL Server calculates window aggregates using an in-memory <strong>Stream Aggregate</strong> operator in linear $O(N)$ time with zero TempDB memory grant."
         </blockquote>
       </div>
+
+      <div class="card" style="background: #fffbeb; border-left: 5px solid var(--accent);">
+        <h4>🎯 The Interviewer Grill Round (Trap Follow-Ups)</h4>
+        <ul>
+          <li><strong>Trap:</strong> <em>"Can you use a Window Function in the WHERE clause or HAVING clause?"</em><br>
+          <strong>Answer:</strong> "No! Because in the Logical Query Processing order, <code>WHERE</code> (Phase 4) and <code>HAVING</code> (Phase 7) execute long before the <code>SELECT</code> phase (Phase 8) where window functions are evaluated. To filter on a window function result (like <code>RowNumber = 1</code>), you must wrap the query in a Common Table Expression (CTE) or derived table and filter in the outer WHERE clause."</li>
+          <li><strong>Trap:</strong> <em>"Why does omitting the framing clause in a running total destroy performance on large datasets?"</em><br>
+          <strong>Answer:</strong> "Because ANSI SQL mandates the default frame <code>RANGE BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW</code>. In <code>RANGE</code> mode, SQL Server cannot use simple pointer arithmetic; it must materialize a worktable in TempDB (Segment/On-Disk Spool) to inspect potential tie values, causing massive TempDB latching and slowing down queries by 50x to 100x."</li>
+          <li><strong>Trap:</strong> <em>"How do you solve the Gaps & Islands problem using window functions?"</em><br>
+          <strong>Answer:</strong> "By using the classic <code>ROW_NUMBER() - ROW_NUMBER()</code> technique. We compute an overall chronological row number and subtract a second row number partitioned by the status attribute. For any contiguous streak ('island') of identical statuses, both sequences increment at the exact same pace, making the difference constant. Grouping by that difference identifies the island's start, end, and duration."</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- SECTION: EXERCISES LINK -->
+    <section style="margin-top: 3rem;">
+      <h2>🏋️ Ready for Hands-On Practice?</h2>
+      <p>Test your knowledge with 8 real-world production exercises on Dense Ranking, Cumulative Running Sums, Slippage Detection, 5-Day Rolling Moving Averages, and Islands & Gaps algorithms in the Exercises module.</p>
+      <a href="exercises.html" class="nav-next" style="display: inline-block; margin-top: 0.5rem;">👉 View All 50+ Exercises & Solutions →</a>
     </section>
 
     <div class="page-nav" style="margin-top: 3rem;">

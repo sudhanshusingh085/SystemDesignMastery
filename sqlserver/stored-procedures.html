@@ -28,580 +28,321 @@
 
     <header>
       <h1>05 · Stored Procedures, Functions, Triggers & Dynamic SQL</h1>
-      <p class="lead">Parameter Sniffing Mitigation, Table-Valued Parameters (TVPs), The Scalar UDF RBAR Trap, Multi-Row Triggers, Enterprise Error Handling (THROW & XACT_ABORT), and sp_executesql.</p>
+      <p class="lead">Execution Plan Compilation & Parameter Sniffing, Stored Procedures vs Functions Comparison, The Scalar UDF RBAR Trap, Table-Valued Parameters (TVPs), and Multi-Row Triggers.</p>
     </header>
 
-    <!-- SECTION 1: STORED PROCEDURES & PARAMETER SNIFFING -->
+    <!-- ================================================================= -->
+    <!-- PILLAR 1: STORED PROCEDURES ARCHITECTURE & LIFECYCLE -->
+    <!-- ================================================================= -->
     <section>
-      <h2>1. Stored Procedures & The Parameter Sniffing Trap</h2>
-      <p>When a Stored Procedure executes for the first time, SQL Server inspects ("sniffs") the parameter values passed in by the caller and compiles an execution plan optimized specifically for that exact value. That compiled plan is cached in memory (Plan Cache) and reused for all subsequent calls.</p>
+      <h2>1. Stored Procedures: Architecture, Lifecycle & Parameter Sniffing</h2>
 
-      <div class="card" style="border-left: 4px solid var(--danger);">
-        <h4>🔥 The Disaster: Parameter Sniffing Asymmetry</h4>
-        <p>Suppose <code>AccountID = 1001</code> has <strong>2 trades</strong>, but <code>AccountID = 2002</code> has <strong>5,000,000 trades</strong>.</p>
+      <h3>A. Ground-Zero First Principles: Why Use Stored Procedures?</h3>
+      <p>In application engineering, you could execute SQL by constructing raw string queries in Java or C# (e.g. <code>"SELECT * FROM Orders WHERE AccountID = " + id</code>) and sending them over a JDBC/ODBC connection. Why did enterprise database architecture introduce <strong>Stored Procedures</strong>?</p>
+
+      <ol>
+        <li><strong>Pre-Compilation & Plan Cache Reuse:</strong> When an ad-hoc query arrives, SQL Server must parse the syntax, resolve object names, normalize, optimize, and compile an execution plan. A Stored Procedure compiles once, and its compiled binary execution plan is cached in memory (Plan Cache) for subsequent instant execution.</li>
+        <li><strong>Security & Privilege Segregation (Ownership Chaining):</strong> You can grant your backend Java application service account permission to <code>EXECUTE dbo.usp_TransferFunds</code>, while completely <strong>revoking</strong> direct <code>SELECT</code>, <code>INSERT</code>, <code>UPDATE</code>, and <code>DELETE</code> permissions on the underlying <code>Accounts</code> and <code>LedgerTransactions</code> tables! This guarantees that users cannot bypass business logic or tamper with data via SQL injection.</li>
+        <li><strong>Network Roundtrip Minimization:</strong> A complex trade settlement might require 15 database operations: validate margin, lock account, debit cash, credit security, update positions, log audit. Executing this in application code requires 15 separate network roundtrips over TCP/IP. A stored procedure executes all 15 operations locally on the database server in a single network roundtrip.</li>
+      </ol>
+
+      <!-- PARAMETER SNIFFING -->
+      <hr style="margin: 2rem 0; border: none; border-top: 1px dashed var(--border);">
+      <h3>B. The Parameter Sniffing Trap: How Cached Plans Poison Performance</h3>
+      <p>When a Stored Procedure executes for the very first time after creation or server restart, SQL Server inspects ("sniffs") the exact parameter values passed in by the caller. It builds an execution plan optimized specifically for that parameter's data distribution and stores it in the Plan Cache.</p>
+
+      <div class="card" style="border-left: 5px solid var(--danger); background: #fef2f2;">
+        <h4>🔥 The Skew Disaster: How Parameter Sniffing Freezes Servers</h4>
+        <p>Suppose you have a procedure <code>usp_GetClientTrades @ClientID INT</code>:</p>
         <ul>
-          <li>If the procedure compiles first with <code>AccountID = 1001</code>, SQL Server generates an <strong>Index Seek + Key Lookup</strong> plan.</li>
-          <li>When <code>AccountID = 2002</code> subsequently calls the procedure, SQL Server reuses that plan, attempting <strong>5,000,000 Key Lookups</strong>! The server CPU hits 100% and queries time out.</li>
-          <li>Conversely, if it compiles with <code>2002</code> first, it generates an <strong>Index Scan</strong>, penalizing all small accounts with table scans!</li>
+          <li><strong>Client A (Retail User):</strong> Has placed only <strong>2 trades</strong> in history.</li>
+          <li><strong>Client B (Institutional Hedge Fund):</strong> Has placed <strong>5,000,000 trades</strong>.</li>
         </ul>
+        <p><strong>The Incident:</strong></p>
+        <ol>
+          <li>At 8:00 AM, the server restarts. Client A happens to log in first and calls <code>EXEC usp_GetClientTrades @ClientID = 'Retail_Client_A'</code>.</li>
+          <li>SQL Server sniffs the parameter, sees 2 rows, and compiles an <strong>Index Seek + Key Lookup</strong> plan (optimal for 2 rows). This plan is cached.</li>
+          <li>At 8:05 AM, Client B calls the procedure. SQL Server pulls the cached plan and attempts to execute <strong>5,000,000 Key Lookups</strong>!</li>
+          <li>The database storage subsystem is battered with 5 million random I/O reads, CPU spikes to 100%, query timeouts cascade across the bank, and the application halts!</li>
+        </ol>
       </div>
 
-      <h3>Architectural Solutions for Parameter Sniffing:</h3>
+      <div class="mermaid">
+sequenceDiagram
+    participant ClientA as Retail Client (2 Rows)
+    participant Engine as SQL Server Engine & Optimizer
+    participant ClientB as Hedge Fund (5M Rows)
+
+    ClientA->>Engine: EXEC usp_GetTrades @ID = 1 (First call)
+    Engine->>Engine: SNIFF parameter! Compile Index Seek + Key Lookup
+    Engine->>Engine: Cache plan in memory
+    Engine-->>ClientA: Returns in 2ms
+    ClientB->>Engine: EXEC usp_GetTrades @ID = 2 (Second call)
+    Engine->>Engine: REUSE cached plan! Executes 5,000,000 Key Lookups!
+    Engine-->>ClientB: Server CPU 100% - Query Timeouts!
+      </div>
+
+      <h4>The 4 Engineering Solutions for Parameter Sniffing:</h4>
       <table border="1" style="width: 100%; border-collapse: collapse; margin: 1rem 0;">
         <thead>
           <tr style="background: #f1f5f9;">
-            <th>Solution Technique</th>
-            <th>Implementation Syntax</th>
-            <th>Trade-Off</th>
+            <th>Remediation Technique</th>
+            <th>Implementation Code</th>
+            <th>Trade-Off / When to Use</th>
           </tr>
         </thead>
         <tbody>
           <tr>
-            <td><strong>Query Recompile Hint</strong></td>
-            <td><code>OPTION (RECOMPILE)</code> at query level</td>
-            <td>Generates the perfect plan every time; adds slight CPU compilation overhead per execution. Best for non-sub-millisecond queries.</td>
+            <td><strong>Query-Level RECOMPILE</strong></td>
+            <td><code>OPTION (RECOMPILE)</code> appended to statement</td>
+            <td>Forces SQL Server to compile a fresh plan tailored to runtime parameters on every execution. Adds ~1-2ms CPU compilation time. Best for medium-frequency complex queries.</td>
           </tr>
           <tr>
-            <td><strong>Optimize For Unknown</strong></td>
+            <td><strong>OPTIMIZE FOR UNKNOWN</strong></td>
             <td><code>OPTION (OPTIMIZE FOR UNKNOWN)</code></td>
-            <td>Uses the density vector average from table statistics. Eliminates parameter bias.</td>
+            <td>Instructs optimizer to ignore the sniffed value and compile a safe, middle-of-the-road plan based on average table density. Best for high-frequency queries.</td>
           </tr>
           <tr>
-            <td><strong>Optimize For Specific Value</strong></td>
-            <td><code>OPTION (OPTIMIZE FOR (@AccountID = 1001))</code></td>
-            <td>Locks the plan to a known representative sweet spot.</td>
+            <td><strong>OPTIMIZE FOR Specific Value</strong></td>
+            <td><code>OPTION (OPTIMIZE FOR (@ClientID = 1001))</code></td>
+            <td>Locks the cached plan to a representative sweet spot.</td>
           </tr>
           <tr>
             <td><strong>Local Variable Masking</strong></td>
-            <td><code>DECLARE @LocalID INT = @ParamID;</code></td>
-            <td>Hides value from optimizer during compile, forcing average density estimation.</td>
+            <td><code>DECLARE @LocalID = @ClientID; WHERE ID = @LocalID;</code></td>
+            <td>Masks the value from the compiler, preventing sniffing and falling back to density estimates.</td>
           </tr>
         </tbody>
       </table>
     </section>
 
-    <!-- SECTION 2: USER DEFINED FUNCTIONS (UDFS) -->
+    <!-- ================================================================= -->
+    <!-- PILLAR 2: STORED PROCEDURES VS USER-DEFINED FUNCTIONS -->
+    <!-- ================================================================= -->
     <section>
-      <h2>2. Functions: Scalar UDFs vs Inline TVFs vs Multi-Statement TVFs</h2>
+      <h2>2. Stored Procedures vs User-Defined Functions (UDFs)</h2>
 
-      <div class="grid grid-3" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1rem; margin: 1.5rem 0;">
-        <div class="card" style="border-top: 4px solid var(--danger);">
-          <h4>Scalar UDFs 🚫</h4>
-          <p>Returns a single atomic value. Causes <strong>RBAR</strong> (Row-By-Agonizing-Row) execution: invoked once per row, forces context switching between SQL engine and T-SQL interpreter, and disables parallel query plans!</p>
-        </div>
-        <div class="card" style="border-top: 4px solid var(--success);">
-          <h4>Inline Table-Valued (iTVF) ⚡</h4>
-          <p>Contains a single <code>RETURN (SELECT ...)</code>. SQL Server inlines it directly into the outer execution plan like a parameterized view. Supports parallel execution and index seeks!</p>
-        </div>
-        <div class="card" style="border-top: 4px solid var(--accent);">
-          <h4>Multi-Statement TVF (mTVF) ⚠️</h4>
-          <p>Declares a <code>@TableVariable</code> return structure and uses <code>BEGIN...END</code> with procedural inserts. Suffers from lack of statistics, leading to severe cardinality misestimations.</p>
-        </div>
+      <p>A fundamental senior engineering concept is understanding the strict operational boundaries between a Stored Procedure and a Function:</p>
+
+      <table border="1" style="width: 100%; border-collapse: collapse; margin: 1.5rem 0;">
+        <thead>
+          <tr style="background: #f1f5f9;">
+            <th>Architectural Attribute</th>
+            <th>Stored Procedure</th>
+            <th>User-Defined Function (UDF)</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Return Obligation</strong></td>
+            <td>Optional. Can return 0, 1, or multiple result sets, or output parameters.</td>
+            <td><strong>Mandatory.</strong> Must return a scalar value or a table result.</td>
+          </tr>
+          <tr>
+            <td><strong>Usage in SQL Statements</strong></td>
+            <td>Cannot be called within <code>SELECT</code>, <code>WHERE</code>, or <code>HAVING</code> clauses. Must be executed via <code>EXEC</code>.</td>
+            <td><strong>Can be embedded directly</strong> inside <code>SELECT</code> expressions, <code>JOIN</code> predicates, and <code>WHERE</code> clauses.</td>
+          </tr>
+          <tr>
+            <td><strong>DML Modification</strong></td>
+            <td><strong>Can modify database state:</strong> Can execute <code>INSERT</code>, <code>UPDATE</code>, and <code>DELETE</code> on physical tables.</td>
+            <td><strong>Strictly Read-Only:</strong> Cannot modify physical database state or tables (no side-effects permitted).</td>
+          </tr>
+          <tr>
+            <td><strong>Transactions</strong></td>
+            <td>Can initiate, commit, and roll back explicit transactions (<code>BEGIN TRAN / COMMIT</code>).</td>
+            <td><strong>Cannot manage transactions:</strong> Cannot start or commit transactions.</td>
+          </tr>
+          <tr>
+            <td><strong>Dynamic SQL & Temp Tables</strong></td>
+            <td>Can execute dynamic SQL (<code>sp_executesql</code>) and create <code>#temp</code> tables.</td>
+            <td>Cannot execute dynamic SQL or create <code>#temp</code> tables (only <code>@table</code> variables).</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <!-- SCALAR UDF TRAP -->
+      <hr style="margin: 2rem 0; border: none; border-top: 1px dashed var(--border);">
+      <h3>The Scalar UDF Trap: The Silent RBAR Performance Killer</h3>
+      <p>A <strong>Scalar Function</strong> accepts parameters and returns a single atomic value (e.g. <code>dbo.fn_CalculateTax(Price)</code>).</p>
+
+      <div class="card" style="border-left: 5px solid var(--danger); background: #fef2f2;">
+        <h4>☠️ Why Scalar Functions Destroy Query Performance</h4>
+        <p>When you write: <code>SELECT OrderID, dbo.fn_CalculateFee(Quantity, LimitPrice) FROM Orders;</code></p>
+        <ol>
+          <li><strong>RBAR (Row-By-Agonizing-Row):</strong> SQL Server cannot optimize the function into a set-based vector. It must invoke the function <strong>once for every single row</strong> in the table! For 10 million orders, that is 10 million individual function executions!</li>
+          <li><strong>Engine Context Switching:</strong> Every row forces a CPU context switch between the Relational Storage Engine and the T-SQL Procedural Interpreter.</li>
+          <li><strong>Disables Parallel Query Plans:</strong> Prior to SQL Server 2019, referencing a scalar function forces SQL Server to run the entire query on a <strong>single CPU thread</strong>, completely disabling parallel multi-core execution!</li>
+        </ol>
       </div>
-    </section>
 
-    <!-- SECTION 3: TRIGGERS & THE INSERTED/DELETED TABLES -->
-    <section>
-      <h2>3. Triggers & The Multi-Row Execution Trap</h2>
-      <p>Triggers in SQL Server execute in response to DML events (<code>AFTER</code> or <code>INSTEAD OF</code>). Inside the trigger, SQL Server exposes two virtual, memory-resident system tables: <code>inserted</code> and <code>deleted</code>.</p>
+      <h4>The Solution: Inline Table-Valued Functions (iTVF)</h4>
+      <p>An <strong>Inline Table-Valued Function (iTVF)</strong> contains a single <code>RETURN (SELECT ...)</code> statement with no <code>BEGIN...END</code> block. The query optimizer treats an inline TVF as a macro: it inlines the function directly into the calling query's execution plan, preserving parallel index seeks!</p>
 
-      <div class="card" style="border-left: 4px solid var(--danger);">
-        <h4>⚠️ The Classic Junior Bug: Single-Row Trigger Assumption</h4>
-<pre><code class="language-sql">-- BROKEN TRIGGER ANTI-PATTERN:
-CREATE TRIGGER trg_Orders_Broken ON Orders AFTER INSERT AS
+<pre><code class="language-sql">-- 🚫 AVOID: Scalar Function (RBAR, single-threaded, slow)
+CREATE FUNCTION dbo.fn_GetPositionValue_Scalar (@Qty INT, @Price DECIMAL(18,4))
+RETURNS DECIMAL(18,2) AS
 BEGIN
-    DECLARE @OrderID BIGINT;
-    SELECT @OrderID = OrderID FROM inserted; -- FATAL!
-    -- If a batch inserts 500 orders, @OrderID only holds the LAST row!
-    -- 499 orders fail to process!
+    RETURN CAST(@Qty * @Price AS DECIMAL(18,2));
 END;
+GO
+
+-- ⚡ PREFERRED: High-Performance Inline Table-Valued Function (Inlined by Optimizer)
+CREATE FUNCTION dbo.fn_GetPositionValue_iTVF (@AccountID INT)
+RETURNS TABLE AS
+RETURN (
+    SELECT 
+        AccountID,
+        SUM(PositionUnits * CurrentMarketPrice) AS TotalValuation
+    FROM PortfolioPositions
+    WHERE AccountID = @AccountID
+    GROUP BY AccountID
+);
+GO
 </code></pre>
-        <p><strong>The Golden Rule:</strong> The <code>inserted</code> and <code>deleted</code> pseudo-tables are <strong>relational sets</strong>. You must <em>always</em> write set-based joins against <code>inserted</code> and <code>deleted</code>.</p>
-      </div>
     </section>
 
-    <!-- SECTION 4: EXERCISES -->
+    <!-- ================================================================= -->
+    <!-- PILLAR 3: TABLE-VALUED PARAMETERS (TVPS) -->
+    <!-- ================================================================= -->
     <section>
-      <h2>🏋️ Module 05 Exercises (With Toggleable Solutions)</h2>
+      <h2>3. Table-Valued Parameters (TVPs): Bulk Ingestion Pattern</h2>
+      <p>In high-throughput microservices, an order gateway might receive 2,000 trades per second. Calling a stored procedure 2,000 times in individual network calls creates massive TCP/IP latency.</p>
+      
+      <p><strong>Table-Valued Parameters (TVPs)</strong> allow an application (Java JDBC, C# ADO.NET) to pass an entire in-memory collection/array of rows as a single strongly-typed parameter into a stored procedure in <strong>one single network roundtrip</strong>.</p>
 
-      <!-- Exercise 1 -->
-      <div class="exercise-box">
-        <div class="exercise-header">
-          <div class="exercise-title">Exercise 5.1: High-Performance Batch Order Placement via Table-Valued Parameter (TVP)</div>
-          <span class="badge badge-hard">Hard</span>
-        </div>
-        <div class="schema-context">
-          <strong>Context:</strong> A Java backend routing 5,000 orders in a single HTTP call to SQL Server.
-        </div>
-        <p><strong>Requirement:</strong> Create a User-Defined Table Type <code>OrderBatchType</code>, and write a stored procedure <code>usp_PlaceBatchOrders</code> that validates cash balances, inserts all valid orders atomically, and outputs rejected orders with failure reasons.</p>
-
-        <div class="solution-details">
-          <details>
-            <summary class="solution-summary"><span>💡 View Solution & Explanation</span> <span>▼</span></summary>
-            <div class="solution-content">
-<pre><code class="language-sql">-- 1. Create User-Defined Table Type
+<pre><code class="language-sql">-- Step 1: Define User-Defined Table Type
 CREATE TYPE OrderBatchType AS TABLE (
     AccountID INT NOT NULL,
     SecurityID INT NOT NULL,
-    OrderSide VARCHAR(4) NOT NULL,
-    OrderType VARCHAR(10) NOT NULL,
     Quantity INT NOT NULL,
     LimitPrice DECIMAL(18,4) NOT NULL
 );
 GO
 
--- 2. Stored Procedure consuming READONLY TVP
-CREATE OR ALTER PROCEDURE usp_PlaceBatchOrders
-    @OrderBatch OrderBatchType READONLY
+-- Step 2: Stored Procedure consuming TVP (Must be READONLY)
+CREATE PROCEDURE usp_ProcessOrderBatch
+    @Batch OrderBatchType READONLY
 AS
 BEGIN
     SET NOCOUNT ON;
-    SET XACT_ABORT ON;
-
-    BEGIN TRY
-        BEGIN TRANSACTION;
-
-        -- Insert approved orders directly from TVP
-        INSERT INTO Orders (AccountID, SecurityID, OrderSide, OrderType, Quantity, LimitPrice, OrderStatus, OrderTime)
-        SELECT 
-            b.AccountID,
-            b.SecurityID,
-            b.OrderSide,
-            b.OrderType,
-            b.Quantity,
-            b.LimitPrice,
-            'PENDING',
-            SYSUTCDATETIME()
-        FROM @OrderBatch b
-        INNER JOIN Accounts a ON b.AccountID = a.AccountID
-        WHERE a.Status = 'ACTIVE' 
-          AND (b.OrderSide = 'SELL' OR a.CashBalance >= (b.Quantity * b.LimitPrice));
-
-        COMMIT TRANSACTION;
-    END TRY
-    BEGIN CATCH
-        IF @@TRANCOUNT > 0 ROLLBACK TRANSACTION;
-        THROW;
-    END CATCH
+    
+    INSERT INTO Orders (AccountID, SecurityID, Quantity, LimitPrice, OrderStatus)
+    SELECT AccountID, SecurityID, Quantity, LimitPrice, 'PENDING'
+    FROM @Batch;
 END;
 GO
 </code></pre>
-              <div class="solution-explanation">
-                <strong>Why TVPs Win:</strong> Passing an array of 5,000 records via TVP replaces 5,000 individual network roundtrips with a single network transmission, boosting throughput by over 40x. TVPs must always be declared with <code>READONLY</code>.
-              </div>
-            </div>
-          </details>
+    </section>
+
+    <!-- ================================================================= -->
+    <!-- PILLAR 4: TRIGGERS & THE MULTI-ROW BATCH TRAP -->
+    <!-- ================================================================= -->
+    <section>
+      <h2>4. Triggers: AFTER vs INSTEAD OF & The Multi-Row Trap</h2>
+      
+      <div class="grid grid-2" style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin: 1.5rem 0;">
+        <div class="card" style="border-left: 4px solid var(--primary);">
+          <h4>AFTER (FOR) Triggers</h4>
+          <p>Fires <strong>after</strong> the triggering DML statement (INSERT, UPDATE, DELETE) has completed and constraints are validated. Ideal for audit logging and cascading ledger updates.</p>
+        </div>
+        <div class="card" style="border-left: 4px solid var(--purple);">
+          <h4>INSTEAD OF Triggers</h4>
+          <p>Fires <strong>in place of</strong> the triggering statement. The original statement is intercepted and bypassed. Ideal for soft deletes and making non-updatable multi-table views writable.</p>
         </div>
       </div>
 
-      <!-- Exercise 2 -->
-      <div class="exercise-box">
-        <div class="exercise-header">
-          <div class="exercise-title">Exercise 5.2: Refactoring a Slow Scalar UDF to an Inline TVF</div>
-          <span class="badge badge-medium">Medium</span>
-        </div>
-        <div class="schema-context">
-          <strong>Context:</strong> A legacy scalar function calculates Net Liquidation Value per account.
-        </div>
-        <p><strong>Requirement:</strong> Rewrite a scalar function into an Inline Table-Valued Function (iTVF) and demonstrate how to query it against 100,000 accounts using <code>CROSS APPLY</code> without triggering RBAR context-switching.</p>
-
-        <div class="solution-details">
-          <details>
-            <summary class="solution-summary"><span>💡 View Solution & Explanation</span> <span>▼</span></summary>
-            <div class="solution-content">
-<pre><code class="language-sql">-- Refactored as High-Performance Inline Table-Valued Function (iTVF)
-CREATE OR ALTER FUNCTION dbo.fn_GetAccountNetLiquidation_iTVF (@AccountID INT)
-RETURNS TABLE
-AS
-RETURN (
-    SELECT 
-        a.AccountID,
-        CAST(a.CashBalance + ISNULL(SUM(p.PositionUnits * p.CurrentMarketPrice), 0.00) AS DECIMAL(18,2)) AS NetLiquidationValue
-    FROM dbo.Accounts a
-    LEFT JOIN dbo.PortfolioPositions p ON a.AccountID = p.AccountID
-    WHERE a.AccountID = @AccountID
-    GROUP BY a.AccountID, a.CashBalance
-);
-GO
-
--- High-speed query across all accounts using CROSS APPLY:
-SELECT 
-    a.AccountID,
-    a.AccountNumber,
-    nl.NetLiquidationValue
-FROM Accounts a
-CROSS APPLY dbo.fn_GetAccountNetLiquidation_iTVF(a.AccountID) nl;
-</code></pre>
-              <div class="solution-explanation">
-                <strong>Optimizer Magic:</strong> SQL Server treats an inline TVF as an expand-in-place macro. The optimizer flattens the function into the outer query's join tree, unlocking parallel index seeks!
-              </div>
-            </div>
-          </details>
-        </div>
-      </div>
-
-      <!-- Exercise 3 -->
-      <div class="exercise-box">
-        <div class="exercise-header">
-          <div class="exercise-title">Exercise 5.3: Production Audit Trail with INSTEAD OF Trigger</div>
-          <span class="badge badge-hard">Hard</span>
-        </div>
-        <div class="schema-context">
-          <strong>Context:</strong> Preventing physical deletes on <code>Accounts</code> (Soft-delete architecture)
-        </div>
-        <p><strong>Requirement:</strong> Create an <code>INSTEAD OF DELETE</code> trigger on the <code>Accounts</code> table that intercepts any <code>DELETE</code> statement, sets <code>Status = 'CLOSED'</code> instead, and writes an entry into <code>AuditLogs</code> with before and after states.</p>
-
-        <div class="solution-details">
-          <details>
-            <summary class="solution-summary"><span>💡 View Solution & Explanation</span> <span>▼</span></summary>
-            <div class="solution-content">
-<pre><code class="language-sql">CREATE OR ALTER TRIGGER trg_Accounts_SoftDelete
-ON Accounts
-INSTEAD OF DELETE
-AS
-BEGIN
-    SET NOCOUNT ON;
-
-    -- 1. Soft-delete the accounts
-    UPDATE a
-    SET a.Status = 'CLOSED',
-        a.UpdatedAt = SYSUTCDATETIME()
-    FROM Accounts a
-    INNER JOIN deleted d ON a.AccountID = d.AccountID;
-
-    -- 2. Audit the intercepted deletion event (Set-based)
-    INSERT INTO AuditLogs (TableName, OperationType, RecordID, ChangedBy, ChangePayload)
-    SELECT 
-        'Accounts',
-        'UPDATE',
-        CAST(d.AccountID AS VARCHAR(50)),
-        SUSER_SNAME(),
-        CONCAT('Intercepted DELETE; AccountNumber: ', d.AccountNumber, ' status set to CLOSED.')
-    FROM deleted d;
-END;
-GO
-</code></pre>
-              <div class="solution-explanation">
-                <strong>INSTEAD OF Mechanics:</strong> The trigger completely overrides the physical <code>DELETE</code> command. The engine populates the <code>deleted</code> pseudo-table with the rows targeted for deletion, allowing your custom logic to redirect the operation.
-              </div>
-            </div>
-          </details>
-        </div>
-      </div>
-
-      <!-- Exercise 4 -->
-      <div class="exercise-box">
-        <div class="exercise-header">
-          <div class="exercise-title">Exercise 5.4: Safe Dynamic SQL Search Procedure with sp_executesql</div>
-          <span class="badge badge-medium">Medium</span>
-        </div>
-        <div class="schema-context">
-          <strong>Context:</strong> Ad-hoc multi-attribute order search screen (Optional parameters)
-        </div>
-        <p><strong>Requirement:</strong> Write a stored procedure <code>usp_SearchOrders</code> that accepts optional filters: <code>@AccountID INT = NULL</code>, <code>@SecurityID INT = NULL</code>, <code>@MinPrice DECIMAL = NULL</code>, <code>@MaxPrice DECIMAL = NULL</code>. Use parameterized <code>sp_executesql</code> to prevent SQL injection and promote plan cache reuse.</p>
-
-        <div class="solution-details">
-          <details>
-            <summary class="solution-summary"><span>💡 View Solution & Explanation</span> <span>▼</span></summary>
-            <div class="solution-content">
-<pre><code class="language-sql">CREATE OR ALTER PROCEDURE usp_SearchOrders
-    @AccountID INT = NULL,
-    @SecurityID INT = NULL,
-    @MinPrice DECIMAL(18,4) = NULL,
-    @MaxPrice DECIMAL(18,4) = NULL
-AS
-BEGIN
-    SET NOCOUNT ON;
-
-    DECLARE @SQL NVARCHAR(MAX) = N'
-        SELECT OrderID, AccountID, SecurityID, OrderSide, Quantity, LimitPrice, OrderStatus, OrderTime
-        FROM dbo.Orders
-        WHERE 1 = 1';
-
-    IF @AccountID IS NOT NULL
-        SET @SQL += N' AND AccountID = @pAccountID';
-
-    IF @SecurityID IS NOT NULL
-        SET @SQL += N' AND SecurityID = @pSecurityID';
-
-    IF @MinPrice IS NOT NULL
-        SET @SQL += N' AND LimitPrice >= @pMinPrice';
-
-    IF @MaxPrice IS NOT NULL
-        SET @SQL += N' AND LimitPrice <= @pMaxPrice';
-
-    DECLARE @ParamDef NVARCHAR(500) = N'
-        @pAccountID INT,
-        @pSecurityID INT,
-        @pMinPrice DECIMAL(18,4),
-        @pMaxPrice DECIMAL(18,4)';
-
-    EXEC sp_executesql 
-        @stmt = @SQL,
-        @params = @ParamDef,
-        @pAccountID = @AccountID,
-        @pSecurityID = @SecurityID,
-        @pMinPrice = @MinPrice,
-        @pMaxPrice = @MaxPrice;
-END;
-GO
-</code></pre>
-              <div class="solution-explanation">
-                <strong>Why sp_executesql Beats EXEC():</strong> <code>sp_executesql</code> enforces strongly-typed parameters. SQL Server caches the compiled execution plan for identical parameter patterns, eliminating SQL Injection vulnerabilities and preventing plan cache memory pollution.
-              </div>
-            </div>
-          </details>
-        </div>
-      </div>
-
-      <!-- Exercise 5 -->
-      <div class="exercise-box">
-        <div class="exercise-header">
-          <div class="exercise-title">Exercise 5.5: Enterprise Error Handling Framework with THROW & XACT_ABORT</div>
-          <span class="badge badge-hard">Hard</span>
-        </div>
-        <div class="schema-context">
-          <strong>Context:</strong> Multi-table financial settlement fund transfer
-        </div>
-        <p><strong>Requirement:</strong> Write a stored procedure <code>usp_TransferSettlementCash</code> that transfers cash between two accounts. Include complete enterprise error handling: <code>SET XACT_ABORT ON</code>, <code>BEGIN TRY...BEGIN CATCH</code>, transaction token verification (<code>@@TRANCOUNT</code>), and re-raising errors using modern <code>THROW</code>.</p>
-
-        <div class="solution-details">
-          <details>
-            <summary class="solution-summary"><span>💡 View Solution & Explanation</span> <span>▼</span></summary>
-            <div class="solution-content">
-<pre><code class="language-sql">CREATE OR ALTER PROCEDURE usp_TransferSettlementCash
-    @FromAccountID INT,
-    @ToAccountID INT,
-    @Amount DECIMAL(18,4)
-AS
-BEGIN
-    SET NOCOUNT ON;
-    -- XACT_ABORT ON ensures rollback even on statement timeouts / client disconnects
-    SET XACT_ABORT ON;
-
-    IF @Amount <= 0
-    BEGIN
-        THROW 50001, 'Transfer amount must be strictly greater than zero.', 1;
-        RETURN;
-    END
-
-    BEGIN TRY
-        BEGIN TRANSACTION;
-
-        -- 1. Debit Source Account (Ensure sufficient funds)
-        UPDATE Accounts 
-        SET CashBalance = CashBalance - @Amount
-        WHERE AccountID = @FromAccountID AND CashBalance >= @Amount;
-
-        IF @@ROWCOUNT = 0
-            THROW 50002, 'Insufficient funds or source account not found.', 1;
-
-        -- 2. Credit Destination Account
-        UPDATE Accounts 
-        SET CashBalance = CashBalance + @Amount
-        WHERE AccountID = @ToAccountID;
-
-        IF @@ROWCOUNT = 0
-            THROW 50003, 'Destination account not found.', 1;
-
-        -- 3. Log to double-entry ledger
-        INSERT INTO LedgerTransactions (AccountID, TransactionType, Amount, ReferenceNote)
-        VALUES (@FromAccountID, 'WITHDRAWAL', -@Amount, CONCAT('Transfer to ', @ToAccountID)),
-               (@ToAccountID, 'DEPOSIT', @Amount, CONCAT('Transfer from ', @FromAccountID));
-
-        COMMIT TRANSACTION;
-    END TRY
-    BEGIN CATCH
-        -- Check if transaction is active or uncommittable (XACT_STATE = -1)
-        IF XACT_STATE() <> 0
-            ROLLBACK TRANSACTION;
-
-        -- Log failure to persistent error table before re-throwing
-        INSERT INTO AuditLogs (TableName, OperationType, RecordID, ChangePayload)
-        VALUES ('Accounts', 'DELETE', CAST(@FromAccountID AS VARCHAR(50)), 
-                CONCAT('Error ', ERROR_NUMBER(), ': ', ERROR_MESSAGE(), ' on line ', ERROR_LINE()));
-
-        -- THROW without arguments re-raises the original exception with stack trace preserved!
-        THROW;
-    END CATCH
-END;
-GO
-</code></pre>
-              <div class="solution-explanation">
-                <strong>THROW vs RAISERROR:</strong> Parameterless <code>THROW;</code> inside a <code>CATCH</code> block re-raises the original error verbatim with the exact line number and severity intact. <code>XACT_STATE() = -1</code> signals an uncommittable transaction that must be rolled back.
-              </div>
-            </div>
-          </details>
-        </div>
-      </div>
-
-      <!-- Exercise 6 -->
-      <div class="exercise-box">
-        <div class="exercise-header">
-          <div class="exercise-title">Exercise 5.6: OUTPUT Parameters vs Return Codes</div>
-          <span class="badge badge-easy">Easy</span>
-        </div>
-        <div class="schema-context">
-          <strong>Context:</strong> Capturing generated keys and record counts back to calling applications.
-        </div>
-        <p><strong>Requirement:</strong> Write a procedure that inserts a new Client and returns both the generated <code>ClientID</code> via an <code>OUTPUT</code> parameter and an integer status code via <code>RETURN</code>.</p>
-
-        <div class="solution-details">
-          <details>
-            <summary class="solution-summary"><span>💡 View Solution & Explanation</span> <span>▼</span></summary>
-            <div class="solution-content">
-<pre><code class="language-sql">CREATE OR ALTER PROCEDURE usp_RegisterClient
-    @ClientName NVARCHAR(150),
-    @ClientType VARCHAR(20),
-    @NewClientID INT OUTPUT
-AS
-BEGIN
-    SET NOCOUNT ON;
-
-    IF EXISTS (SELECT 1 FROM Clients WHERE ClientName = @ClientName)
-    BEGIN
-        SET @NewClientID = -1;
-        RETURN 1; -- Status code 1: Duplicate
-    END
-
-    INSERT INTO Clients (ClientName, ClientType)
-    VALUES (@ClientName, @ClientType);
-
-    SET @NewClientID = SCOPE_IDENTITY();
-    RETURN 0; -- Status code 0: Success
-END;
-GO
-
--- How to call and retrieve OUTPUT parameters:
-DECLARE @GeneratedID INT;
-DECLARE @ReturnCode INT;
-
-EXEC @ReturnCode = usp_RegisterClient 
-    @ClientName = N'Point72 Asset Management',
-    @ClientType = 'HEDGE_FUND',
-    @NewClientID = @GeneratedID OUTPUT;
-
-SELECT @ReturnCode AS ExitStatus, @GeneratedID AS AssignedClientID;
-</code></pre>
-              <div class="solution-explanation">
-                <strong>SCOPE_IDENTITY() vs @@IDENTITY:</strong> Always use <code>SCOPE_IDENTITY()</code>! <code>@@IDENTITY</code> returns the last identity value generated in <em>any</em> table in the current session—including any identity values created by background triggers!
-              </div>
-            </div>
-          </details>
-        </div>
-      </div>
-
-      <!-- Exercise 7 -->
-      <div class="exercise-box">
-        <div class="exercise-header">
-          <div class="exercise-title">Exercise 5.7: Converting a Slow Row-by-Row Cursor to a Set-Based Operation</div>
-          <span class="badge badge-medium">Medium</span>
-        </div>
-        <div class="schema-context">
-          <strong>Context:</strong> A nightly job calculates interest for margin accounts using a cursor.
-        </div>
-        <p><strong>Requirement:</strong> Take a legacy <code>CURSOR</code> iterating through 50,000 margin accounts and refactor it into an atomic set-based <code>UPDATE</code> with ledger journal inserts.</p>
-
-        <div class="solution-details">
-          <details>
-            <summary class="solution-summary"><span>💡 View Solution & Explanation</span> <span>▼</span></summary>
-            <div class="solution-content">
-<pre><code class="language-sql">-- Set-Based Atomic Interest Accrual (Replaces 50,000 Cursor Iterations)
-DECLARE @AnnualRate DECIMAL(5,4) = 0.0825;
-DECLARE @DailyRate DECIMAL(18,8) = @AnnualRate / 365.0;
-
--- 1. Output table to capture debit amounts
-DECLARE @Accruals TABLE (
-    AccountID INT,
-    InterestDebit DECIMAL(18,4)
-);
-
--- 2. Atomic Set Update with OUTPUT clause
-UPDATE a
-SET a.CashBalance = a.CashBalance - CAST(ABS(a.CashBalance) * @DailyRate AS DECIMAL(18,4))
-OUTPUT inserted.AccountID, CAST(ABS(deleted.CashBalance) * @DailyRate AS DECIMAL(18,4))
-INTO @Accruals (AccountID, InterestDebit)
-FROM Accounts a
-WHERE a.AccountType = 'MARGIN' 
-  AND a.CashBalance < 0; -- Negative balance represents borrowed margin
-
--- 3. Bulk insert ledger interest entries
-INSERT INTO LedgerTransactions (AccountID, TransactionType, Amount, ReferenceNote)
-SELECT AccountID, 'FEE', -InterestDebit, 'Daily Margin Debit Interest'
-FROM @Accruals;
-</code></pre>
-              <div class="solution-explanation">
-                <strong>Set-Based Superiority:</strong> The cursor executes 50,000 individual transactions, locks, and log flushes. The set-based rewrite processes all 50,000 accounts in a single pass in under 40 milliseconds.
-              </div>
-            </div>
-          </details>
-        </div>
-      </div>
-
-      <!-- Exercise 8 -->
-      <div class="exercise-box">
-        <div class="exercise-header">
-          <div class="exercise-title">Exercise 5.8: Detecting and Mitigating Parameter Sniffing Live</div>
-          <span class="badge badge-hard">Hard</span>
-        </div>
-        <div class="schema-context">
-          <strong>Context:</strong> Querying order executions for skew distributions
-        </div>
-        <p><strong>Requirement:</strong> Demonstrate how to write a stored procedure using <code>OPTION (OPTIMIZE FOR UNKNOWN)</code> and evaluate its plan against <code>OPTION (RECOMPILE)</code>.</p>
-
-        <div class="solution-details">
-          <details>
-            <summary class="solution-summary"><span>💡 View Solution & Explanation</span> <span>▼</span></summary>
-            <div class="solution-content">
-<pre><code class="language-sql">CREATE OR ALTER PROCEDURE usp_GetOrdersByStatus
-    @Status VARCHAR(20)
-AS
-BEGIN
-    SET NOCOUNT ON;
-
-    -- OPTION (OPTIMIZE FOR UNKNOWN) tells the optimizer to bypass sniffing
-    -- and use the average statistics distribution histogram.
-    SELECT 
-        OrderID,
-        AccountID,
-        SecurityID,
-        Quantity,
-        OrderTime
-    FROM Orders
-    WHERE OrderStatus = @Status
-    OPTION (OPTIMIZE FOR UNKNOWN);
-END;
-GO
-</code></pre>
-              <div class="solution-explanation">
-                <strong>When to use OPTIMIZE FOR UNKNOWN:</strong> If 99% of your orders are 'FILLED' and 0.1% are 'REJECTED', a sniffed plan for 'REJECTED' causes table scans when querying 'FILLED'. <code>OPTIMIZE FOR UNKNOWN</code> provides stable, consistent execution time regardless of which parameter is invoked first.
-              </div>
-            </div>
-          </details>
-        </div>
+      <div class="card" style="border-left: 5px solid var(--danger); background: #fef2f2;">
+        <h4>⚠️ The Classic Multi-Row Trigger Bug</h4>
+        <p>Inside a trigger, SQL Server exposes two virtual system tables: <code>inserted</code> and <code>deleted</code>.</p>
+        <p>A fatal mistake is assuming triggers fire once per row:
+        <br><code>SELECT @ID = OrderID FROM inserted; -- BROKEN!</code></p>
+        <p>If an application executes <code>INSERT INTO Orders SELECT ... FROM Staging</code> inserting 5,000 rows, <strong>the trigger fires ONCE for the entire batch</strong>! The <code>inserted</code> table contains all 5,000 rows. Selecting into a scalar variable captures only one row, dropping the other 4,999 rows! You must <strong>always write set-based joins against <code>inserted</code> and <code>deleted</code></strong>.</p>
       </div>
     </section>
 
-    <!-- SECTION 5: INTERVIEW SCRIPT -->
+    <!-- ================================================================= -->
+    <!-- PILLAR 5: ENTERPRISE ERROR HANDLING & THROW -->
+    <!-- ================================================================= -->
     <section>
-      <h2>📋 How to Answer This in an Interview</h2>
-      <div class="card" style="background: #f8fafc; border-left: 5px solid var(--purple);">
-        <h4>Interviewer Question: "What is Parameter Sniffing in SQL Server, and what are your primary techniques to resolve it?"</h4>
-        <p><strong>Staff Engineer Response:</strong></p>
+      <h2>5. Enterprise Error Handling: THROW vs RAISERROR & XACT_ABORT</h2>
+      
+      <p>Modern T-SQL uses structured <code>TRY...CATCH</code> blocks with <code>THROW</code> and <code>SET XACT_ABORT ON</code>:</p>
+
+      <ul>
+        <li><code>SET XACT_ABORT ON</code>: Guarantees that if a runtime error or client timeout occurs, SQL Server automatically rolls back the entire transaction. Without this setting, certain errors leave transactions orphaned in an open, uncommitted state holding locks!</li>
+        <li><code>THROW</code> vs <code>RAISERROR</code>: Parameterless <code>THROW;</code> inside a CATCH block re-throws the original exception verbatim, preserving the original error code, line number, and call stack. <code>RAISERROR</code> historically altered line numbers and required custom message registration.</li>
+      </ul>
+
+<pre><code class="language-sql">CREATE PROCEDURE usp_TransferFundsAtomic
+    @FromAccount INT,
+    @ToAccount INT,
+    @Amount DECIMAL(18,2)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SET XACT_ABORT ON; -- Mandatory for robust rollback!
+
+    BEGIN TRY
+        BEGIN TRANSACTION;
+
+        UPDATE Accounts SET CashBalance = CashBalance - @Amount WHERE AccountID = @FromAccount;
+        UPDATE Accounts SET CashBalance = CashBalance + @Amount WHERE AccountID = @ToAccount;
+
+        COMMIT TRANSACTION;
+    END TRY
+    BEGIN CATCH
+        -- Check if transaction is in an uncommittable state (-1)
+        IF XACT_STATE() <> 0
+            ROLLBACK TRANSACTION;
+
+        -- Re-throw original error with stack trace intact
+        THROW;
+    END CATCH
+END;
+GO
+</code></pre>
+    </section>
+
+    <!-- ================================================================= -->
+    <!-- PILLAR 6: INTERVIEW SCRIPT & FOLLOW-UP GRILL ROUND -->
+    <!-- ================================================================= -->
+    <section>
+      <h2>📋 How to Master This in an Interview</h2>
+      
+      <div class="card" style="background: #f8fafc; border-left: 5px solid var(--purple); margin-bottom: 1.5rem;">
+        <h4>Interviewer Question: "What is Parameter Sniffing in SQL Server Stored Procedures, and how do you resolve it?"</h4>
+        <p><strong>Staff Engineer Model Response:</strong></p>
         <blockquote style="font-style: italic; color: #334155; margin: 0.5rem 0;">
-          "<strong>Parameter Sniffing</strong> is the default behavior where SQL Server captures the runtime parameter values passed during a stored procedure's initial compilation and tailors the cached execution plan specifically to that parameter's cardinality.
+          "<strong>Parameter Sniffing</strong> is the default behavior where SQL Server inspects the runtime parameter values passed during a stored procedure's initial execution, compiling an execution plan tailored specifically to that parameter's data distribution and caching it in the Plan Cache for subsequent reuse.
           <br><br>
-          In workloads with uniform data distribution, this is highly beneficial. However, in skewed tables—such as an institutional client with 5 million trades versus a retail client with 2 trades—a plan compiled for the 2-trade client uses an Index Seek + Key Lookup. When executed for the 5-million-trade client, those 5 million random I/O lookups saturate the storage subsystem and exhaust worker threads.
+          While beneficial for uniform data distributions, it causes catastrophic performance degradation on skewed tables. For example, if a procedure compiles first for a client with 2 trades, the optimizer creates an Index Seek + Key Lookup plan. When an institutional client with 5 million trades subsequent calls that procedure, the engine reuses that plan, attempting 5 million random I/O Key Lookups and exhausting server resources.
           <br><br>
-          My remediation strategy follows a clear hierarchy:
-          <br>
-          1. <strong>OPTION (RECOMPILE):</strong> For complex queries executed a few hundred times a day, recompiling on each execution guarantees optimal plans tailored to the exact parameter without plan cache pollution.
-          <br>
-          2. <strong>OPTIMIZE FOR UNKNOWN:</strong> For high-frequency OLTP queries (thousands of executions per second) where compilation CPU overhead is unacceptable, this instructs the engine to build a stable plan using average column densities.
-          <br>
-          3. <strong>Conditional Branching:</strong> Splitting the procedure into separate internal queries (e.g. <code>IF @IsHighVolume = 1 EXEC usp_HighVolume ELSE EXEC usp_LowVolume</code>) to give each parameter profile its own independent, cached plan."
+          My remediation strategy:
+          1. For medium-frequency complex queries, use <code>OPTION (RECOMPILE)</code> to ensure the optimizer builds a tailored plan on every execution.
+          2. For high-frequency OLTP queries where compilation CPU overhead is unacceptable, use <code>OPTION (OPTIMIZE FOR UNKNOWN)</code> to force compilation against the average statistical density vector.
+          3. When parameter ranges naturally segregate into distinct profiles (small vs huge), use procedural branching to separate the logic into distinct procedures with their own independent plan cache entries."
         </blockquote>
       </div>
+
+      <div class="card" style="background: #fffbeb; border-left: 5px solid var(--accent);">
+        <h4>🎯 The Interviewer Grill Round (Trap Follow-Ups)</h4>
+        <ul>
+          <li><strong>Trap:</strong> <em>"What is the difference between a Stored Procedure and a Function?"</em><br>
+          <strong>Answer:</strong> "Functions are strictly read-only, cannot modify physical database state, cannot manage transactions, and must return a value, allowing them to be embedded inside SELECT and WHERE clauses. Stored Procedures can modify database state (DML), control transactions, execute dynamic SQL, create temp tables, and return zero, one, or multiple result sets, but must be called explicitly via EXEC."</li>
+          <li><strong>Trap:</strong> <em>"Why are Scalar UDFs considered an anti-pattern in high-throughput systems?"</em><br>
+          <strong>Answer:</strong> "Because they execute RBAR (Row-By-Agonizing-Row). For every row returned by the query, SQL Server forces a CPU context switch between the storage engine and T-SQL interpreter, and historically forces single-threaded serial execution, disabling multi-core parallelism. They should be rewritten as Inline Table-Valued Functions (iTVFs)."</li>
+          <li><strong>Trap:</strong> <em>"What is the danger of writing single-row variable assignments inside a Trigger?"</em><br>
+          <strong>Answer:</strong> "In SQL Server, triggers fire once per DML statement, not once per row. If a statement inserts or updates 10,000 rows in a batch, the <code>inserted</code> pseudo-table contains 10,000 rows. A scalar variable assignment (<code>SELECT @id = id FROM inserted</code>) arbitrarily captures only one row, dropping the other 9,999 rows. Triggers must always use set-based joins against inserted and deleted."</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- SECTION: EXERCISES LINK -->
+    <section style="margin-top: 3rem;">
+      <h2>🏋️ Ready for Hands-On Practice?</h2>
+      <p>Test your knowledge with 8 real-world production exercises on Table-Valued Parameters, Inline TVFs, INSTEAD OF Triggers, Parameterized Dynamic SQL, and Error Handling in the Exercises module.</p>
+      <a href="exercises.html" class="nav-next" style="display: inline-block; margin-top: 0.5rem;">👉 View All 50+ Exercises & Solutions →</a>
     </section>
 
     <div class="page-nav" style="margin-top: 3rem;">

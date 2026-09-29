@@ -27,59 +27,176 @@
     </nav>
 
     <header>
-      <h1>04 · Views, CTEs, Temporary Tables & PIVOT</h1>
-      <p class="lead">Standard vs Indexed Views (SCHEMABINDING), Recursive CTEs for Hierarchical Tree Traversal, The Great TempDB Showdown (#Temp vs ##Global vs @Table), and Dynamic PIVOT.</p>
+      <h1>04 · The Engineering Guide to Views, CTEs & Temporary Tables</h1>
+      <p class="lead">Standard vs Materialized Indexed Views, Recursive CTE Engine Mechanics, The Great TempDB Showdown (#Temp vs ##Global vs @Table), and Transaction Rollback Mechanics.</p>
     </header>
 
-    <!-- SECTION 1: VIEWS DEEP DIVE -->
+    <!-- ================================================================= -->
+    <!-- PILLAR 1: VIEWS DEEP DIVE -->
+    <!-- ================================================================= -->
     <section>
-      <h2>1. Standard Views vs Indexed (Materialized) Views</h2>
-      <p>A standard <strong>View</strong> is not a physical table; it is a saved <code>SELECT</code> query stored in the data dictionary. When queried, SQL Server expands the view definition into the outer query during compilation.</p>
+      <h2>1. Views: Standard vs Indexed (Materialized) Views</h2>
 
-      <div class="card" style="border-left: 4px solid var(--purple);">
-        <h4>⚡ Indexed (Materialized) Views</h4>
-        <p>An <strong>Indexed View</strong> has a physical Clustered B-Tree index created on it. The result set is physically materialized on disk and automatically synchronized by the SQL Server storage engine whenever the underlying base tables undergo INSERT, UPDATE, or DELETE operations.</p>
-        <p><strong>Requirements for an Indexed View:</strong></p>
-        <ol>
-          <li>Must be created <code>WITH SCHEMABINDING</code> (prevents changes to underlying table structures).</li>
-          <li>Base tables must be referenced using two-part names (e.g. <code>dbo.Orders</code>).</li>
-          <li>First index created must be a <strong>UNIQUE CLUSTERED INDEX</strong>.</li>
-          <li>If using aggregation, must include <code>COUNT_BIG(*)</code>, and cannot use <code>DISTINCT</code>, <code>TOP</code>, or <code>UNION</code>.</li>
-        </ol>
+      <h3>A. What is a Standard View & Why Does It Exist?</h3>
+      <p>A standard <strong>View</strong> is a saved SQL query stored in the database metadata dictionary (in <code>sys.views</code>). It does <strong>not store any physical data</strong> on disk.</p>
+      
+      <p><strong>Core Architectural Reasons to Use Views:</strong></p>
+      <ul>
+        <li><strong>Security & Access Abstraction:</strong> Suppose you have an <code>Accounts</code> table containing client names, cash balances, tax IDs, and encrypted credit limits. You want data analysts to analyze account types without viewing sensitive balances or tax IDs. You create a view selecting only safe columns, and grant analysts permissions <strong>strictly on the view</strong>, denying access to the base table!</li>
+        <li><strong>Query Simplification:</strong> Encapsulates 10-table joins and complicated business logic into a single virtual object (e.g. <code>SELECT * FROM v_ActiveClientPortfolio</code>).</li>
+        <li><strong>Row-Level Security:</strong> Filtering rows so a department only sees records relevant to their country (e.g. <code>WHERE CountryCode = 'US'</code>).</li>
+      </ul>
+
+      <div class="card" style="border-left: 4px solid var(--accent); background: #f8fafc;">
+        <h4>⚙️ How Standard Views Execute Under the Hood (View Inlining)</h4>
+        <p>When you query a view: <code>SELECT * FROM v_Clients WHERE Status = 'ACTIVE'</code>, SQL Server does <strong>not</strong> execute the view first and then filter. Instead, the Query Optimizer performs <strong>View Inlining / Query Expansion</strong>: it substitutes the view's underlying SQL directly into your outer query, optimizing the combined syntax into a single unified execution plan.</p>
       </div>
 
-      <div class="card" style="background: #f8fafc; margin-top: 1rem;">
-        <h4>⚠️ The Enterprise Edition vs Standard Edition Trap: <code>WITH (NOEXPAND)</code></h4>
-        <p>In <strong>Enterprise Edition</strong>, the query optimizer automatically recognizes that a query can be satisfied by an indexed view and matches it, even if the query names the base tables! In <strong>Standard Edition</strong>, SQL Server will expand the indexed view back into base table joins <em>unless</em> you explicitly include the query hint <code>WITH (NOEXPAND)</code>!</p>
+      <!-- INDEXED VIEWS -->
+      <hr style="margin: 2rem 0; border: none; border-top: 1px dashed var(--border);">
+      <h3>B. Indexed (Materialized) Views: The Physical Performance Powerhouse</h3>
+      <p>In standard views, the query runs fresh every time. If a view performs heavy aggregations over 100,000,000 rows, it takes 15 seconds every time an analyst runs it.</p>
+      <p>An <strong>Indexed View</strong> (known in Oracle as a Materialized View) is completely different: <strong>the result set is physically written to disk and organized as a B-Tree Clustered Index!</strong></p>
+
+      <div class="card" style="border-left: 5px solid var(--purple); background: #faf5ff;">
+        <h4>⚡ Automatic Synchronization by the Storage Engine</h4>
+        <p>Whenever an <code>INSERT</code>, <code>UPDATE</code>, or <code>DELETE</code> modifies rows in the underlying base tables, the SQL Server storage engine <strong>automatically updates the indexed view's physical B-tree in real time</strong> within the same transaction! When someone queries the view, SQL Server reads the pre-calculated aggregate instantly in 1 millisecond.</p>
       </div>
+
+      <h4>Mandatory Engineering Requirements to Create an Indexed View:</h4>
+      <ol>
+        <li><strong>WITH SCHEMABINDING:</strong> The view must be created with the <code>SCHEMABINDING</code> clause. This locks the schema of all referenced underlying tables, preventing anyone from altering column types or dropping tables that would break the view.</li>
+        <li><strong>Two-Part Object Names:</strong> All tables must be referenced using schema prefixes (e.g. <code>dbo.Orders</code>, not just <code>Orders</code>).</li>
+        <li><strong>Deterministic Expressions Only:</strong> Cannot use non-deterministic functions like <code>GETDATE()</code>, <code>NEWID()</code>, or <code>RAND()</code>.</li>
+        <li><strong>Unique Clustered Index First:</strong> The very first index created on the view must be a <strong>UNIQUE CLUSTERED INDEX</strong> on the group keys.</li>
+        <li><strong>COUNT_BIG(*) is Mandatory:</strong> If the view uses aggregation (<code>GROUP BY</code>), it <strong>must</strong> include <code>COUNT_BIG(*)</code> in the SELECT list so the storage engine can track row counts when maintaining sums.</li>
+      </ol>
+
+<pre><code class="language-sql">-- 1. Create View with SchemaBinding and COUNT_BIG(*)
+CREATE OR ALTER VIEW dbo.v_AccountHoldingSummary
+WITH SCHEMABINDING
+AS
+SELECT 
+    AccountID,
+    COUNT_BIG(*) AS TotalHoldings,
+    SUM(PositionUnits) AS TotalUnits
+FROM dbo.PortfolioPositions
+GROUP BY AccountID;
+GO
+
+-- 2. Materialize by creating a Unique Clustered Index
+CREATE UNIQUE CLUSTERED INDEX CIX_v_AccountHoldingSummary 
+ON dbo.v_AccountHoldingSummary (AccountID);
+GO
+
+-- 3. Production Query Hint: WITH (NOEXPAND)
+-- Mandatory in Standard Edition to prevent the optimizer from expanding back to base tables!
+SELECT AccountID, TotalHoldings, TotalUnits
+FROM dbo.v_AccountHoldingSummary WITH (NOEXPAND)
+WHERE AccountID = 1001;
+</code></pre>
     </section>
 
-    <!-- SECTION 2: RECURSIVE CTES -->
+    <!-- ================================================================= -->
+    <!-- PILLAR 2: COMMON TABLE EXPRESSIONS (CTES) & RECURSION -->
+    <!-- ================================================================= -->
     <section>
-      <h2>2. Common Table Expressions (CTEs) & Recursion</h2>
-      <p>A CTE is a named temporary result set defined within the execution scope of a single <code>SELECT</code>, <code>INSERT</code>, <code>UPDATE</code>, or <code>DELETE</code> statement. CTEs do not persist in TempDB; they are inlined into the execution plan.</p>
+      <h2>2. Common Table Expressions (CTEs) & Recursive Hierarchies</h2>
+
+      <h3>A. What is a CTE & Why Did ANSI Invent It?</h3>
+      <p>A <strong>Common Table Expression (CTE)</strong> is a temporary, named result set defined using the <code>WITH</code> clause immediately preceding a <code>SELECT</code>, <code>INSERT</code>, <code>UPDATE</code>, or <code>DELETE</code> statement.</p>
+
+      <p><strong>The Pain Point It Solved:</strong> Before CTEs, multi-step data transformations required horrific nested derived tables:</p>
+<pre><code class="language-sql">-- THE UGLY PRE-CTE WAY (Nested Derived Tables):
+SELECT * FROM (
+    SELECT AccountID, AvgQty FROM (
+        SELECT AccountID, AVG(Quantity) AS AvgQty FROM Orders GROUP BY AccountID
+    ) AS Step1 WHERE AvgQty > 100
+) AS Step2;
+
+-- THE ELEGANT CTE WAY:
+WITH Step1 AS (
+    SELECT AccountID, AVG(Quantity) AS AvgQty FROM Orders GROUP BY AccountID
+),
+Step2 AS (
+    SELECT AccountID, AvgQty FROM Step1 WHERE AvgQty > 100
+)
+SELECT * FROM Step2;
+</code></pre>
+
+      <p><strong>CTE Lifecycle & Memory:</strong> A CTE does <strong>not persist</strong> in TempDB. It is purely syntactic sugar that is inlined by the optimizer during query plan compilation. Its scope is strictly confined to the single statement that defines it.</p>
+
+      <!-- RECURSIVE CTES -->
+      <hr style="margin: 2rem 0; border: none; border-top: 1px dashed var(--border);">
+      <h3>B. Recursive CTEs: Traversal of Trees & Graph Hierarchies</h3>
+      <p>A <strong>Recursive CTE</strong> references itself. It is the premier SQL technique for traversing hierarchical tree structures—such as management reporting chains, organizational charts, bill-of-materials, or parent-child account allocations—without procedural loops or cursors.</p>
+
+      <h4>The 4 Pillars of a Recursive CTE:</h4>
+      <ol>
+        <li><strong>Anchor Member:</strong> The base query that executes <em>once</em> to establish the starting points of the hierarchy (e.g. top-level CEOs or root master accounts where <code>ParentID IS NULL</code>).</li>
+        <li><strong>UNION ALL:</strong> Strictly binds the anchor member to the recursive member. (<code>UNION</code> with distinct is forbidden in recursion).</li>
+        <li><strong>Recursive Member:</strong> Joins the child table back to the CTE itself (joining <code>Child.ParentID = CTE.EntityID</code>). This executes repeatedly.</li>
+        <li><strong>Termination Condition:</strong> Recursion stops automatically when the recursive member returns zero rows (the leaf nodes are reached).</li>
+      </ol>
 
       <div class="mermaid">
 flowchart TD
-    Anchor["Anchor Member<br/>(Base query - executes once)"] --> UnionAll["UNION ALL"]
-    UnionAll --> Recursive["Recursive Member<br/>(References CTE name - executes repeatedly)"]
-    Recursive --> Check{"Is result set empty OR<br/>recursion depth reached?"}
-    Check -- No --> Recursive
-    Check -- Yes --> Final["Final Output Result Set"]
+    Anchor["Anchor Member (Executes ONCE)<br/>Find Master Accounts (ParentID IS NULL)"] --> Stack["Intermediate Spool Stack"]
+    Stack --> Recurse["Recursive Member<br/>Join child accounts to previous level"]
+    Recurse --> Check{"Did child query<br/>return rows?"}
+    Check -- Yes (Depth + 1) --> Stack
+    Check -- No (End of Tree) --> Output["Final Combined Result Set"]
       </div>
 
-      <p><strong>Recursion Protection:</strong> By default, SQL Server caps recursion at 100 iterations. To modify this, append <code>OPTION (MAXRECURSION 0)</code> (unlimited) or a specific depth (e.g., <code>OPTION (MAXRECURSION 500)</code>).</p>
+<pre><code class="language-sql">-- Traverse a multi-tier institutional fund structure:
+WITH FundTreeCTE AS (
+    -- 1. Anchor Member: Top-level Master Funds
+    SELECT 
+        EntityID,
+        ParentEntityID,
+        EntityName,
+        1 AS TierLevel,
+        CAST(EntityName AS NVARCHAR(MAX)) AS TreePath
+    FROM InstitutionalEntities
+    WHERE ParentEntityID IS NULL
+
+    UNION ALL
+
+    -- 2. Recursive Member: Subordinate Feeder Funds
+    SELECT 
+        child.EntityID,
+        child.ParentEntityID,
+        child.EntityName,
+        parent.TierLevel + 1,
+        CAST(parent.TreePath + ' -> ' + child.EntityName AS NVARCHAR(MAX))
+    FROM InstitutionalEntities child
+    INNER JOIN FundTreeCTE parent ON child.ParentEntityID = parent.EntityID
+)
+SELECT EntityID, EntityName, TierLevel, TreePath
+FROM FundTreeCTE
+ORDER BY TreePath
+OPTION (MAXRECURSION 100); -- Protects against infinite loops from circular references!
+</code></pre>
     </section>
 
-    <!-- SECTION 3: TEMP TABLES VS TABLE VARIABLES -->
+    <!-- ================================================================= -->
+    <!-- PILLAR 3: THE GREAT TEMPDB SHOWDOWN -->
+    <!-- ================================================================= -->
     <section>
-      <h2>3. The TempDB Showdown: #Temp vs ##Global vs @Table</h2>
-      <p>One of the most pervasive myths in SQL Server engineering is that <em>"Table variables live entirely in RAM while #temp tables live in TempDB"</em>. <strong>This is completely false!</strong> Both structures are allocated and backed by TempDB pages.</p>
+      <h2>3. The Great TempDB Showdown: #Temp Tables vs ##Global Tables vs @Table Variables</h2>
+
+      <p>One of the most persistent myths among database developers is: <em>"Table variables live entirely in memory (RAM), while #temp tables live on disk in TempDB."</em></p>
+      
+      <div class="card" style="border-left: 5px solid var(--danger); background: #fef2f2;">
+        <h4>🚫 The Myth Debunked by SQL Server Storage Engine Architecture</h4>
+        <p><strong>BOTH <code>#Temp</code> tables and <code>@Table</code> variables are created and stored inside TempDB!</strong> Both write to 8 KB pages in TempDB, both use the TempDB buffer pool, and both spill to disk if memory pressure occurs.</p>
+        <p>The true differences between them lie in <strong>Statistics, Cardinality Estimation, Recompilation, and Transaction Rollback Behavior</strong>.</p>
+      </div>
 
       <table border="1" style="width: 100%; border-collapse: collapse; margin: 1.5rem 0;">
         <thead>
           <tr style="background: #f1f5f9;">
-            <th>Feature</th>
+            <th>Architectural Attribute</th>
             <th>Local Temp Table (<code>#Temp</code>)</th>
             <th>Global Temp Table (<code>##Global</code>)</th>
             <th>Table Variable (<code>@Table</code>)</th>
@@ -87,434 +204,126 @@ flowchart TD
         </thead>
         <tbody>
           <tr>
-            <td><strong>Scope</strong></td>
-            <td>Current session / Current stored proc execution level.</td>
-            <td>Global across all sessions on the entire instance.</td>
-            <td>Current batch / Current stored procedure.</td>
+            <td><strong>Scope & Visibility</strong></td>
+            <td>Current session / executing stored procedure level. Automatically dropped when procedure or session terminates.</td>
+            <td>Global across all sessions on the entire instance. Dropped when creating session disconnects AND all referencing queries finish.</td>
+            <td>Current batch / executing block. Dropped immediately when batch reaches <code>GO</code> or procedure ends.</td>
           </tr>
           <tr>
-            <td><strong>Statistics</strong></td>
-            <td><strong>Yes!</strong> Column statistics generated and maintained; cost-based optimizer estimates cardinality accurately.</td>
-            <td><strong>Yes!</strong> Fully maintained.</td>
-            <td><strong>No column statistics!</strong> Historically estimated as exactly 1 row (causes catastrophic Nested Loops joins on 100k rows!).</td>
+            <td><strong>Column Statistics (Histograms)</strong></td>
+            <td><strong>YES!</strong> SQL Server creates and auto-updates distribution statistics. The Optimizer accurately estimates row counts.</td>
+            <td><strong>YES!</strong> Fully maintained statistics.</td>
+            <td><strong>NO COLUMN STATISTICS!</strong> The optimizer historically assumes cardinality is exactly <strong>1 row</strong>! (Can cause disastrous Nested Loop plans on 100k rows).</td>
           </tr>
           <tr>
-            <td><strong>Indexes</strong></td>
-            <td>Clustered and Non-Clustered indexes can be created anytime after table creation.</td>
-            <td>Clustered and Non-Clustered indexes allowed.</td>
-            <td>Only primary keys / unique constraints declared inline at definition (SQL 2014+ allows inline non-unique indexes).</td>
+            <td><strong>Index Support</strong></td>
+            <td>Can create Clustered and multiple Non-Clustered indexes <em>anytime</em> after creation.</td>
+            <td>Full clustered and non-clustered index support.</td>
+            <td>Only inline PRIMARY KEY / UNIQUE constraints declared at definition (SQL 2014+ allows inline non-unique indexes).</td>
           </tr>
           <tr>
-            <td><strong>Transactions</strong></td>
-            <td>Participates in explicit user transactions; rolls back cleanly on <code>ROLLBACK TRAN</code>.</td>
+            <td><strong>Transaction Rollback Behavior</strong></td>
+            <td>Participates fully in transactions. If you execute <code>ROLLBACK TRAN</code>, changes to <code>#Temp</code> are <strong>reverted</strong>.</td>
             <td>Participates in transactions; rolls back.</td>
-            <td><strong>Does not roll back!</strong> Changes made to a table variable survive a transaction rollback!</td>
+            <td><strong>DOES NOT ROLL BACK!</strong> Changes to <code>@Table</code> variables are non-transactional and <strong>survive</strong> a <code>ROLLBACK TRANSACTION</code>!</td>
           </tr>
           <tr>
-            <td><strong>Dynamic SQL</strong></td>
-            <td>Visible to child dynamic SQL batches called via <code>sp_executesql</code>.</td>
-            <td>Visible everywhere.</td>
-            <td>Not visible to child dynamic SQL batches.</td>
+            <td><strong>Parallel Execution Plans</strong></td>
+            <td>Full support for multi-threaded parallel execution plans.</td>
+            <td>Full support for parallel plans.</td>
+            <td>Historically forces single-threaded serial plans when modified (prior to modern database compatibility levels).</td>
           </tr>
         </tbody>
       </table>
+
+      <h3>When to Use Which: The Senior Engineer's Decision Matrix</h3>
+      <ul>
+        <li><strong>Use a CTE when:</strong> You need a readable, single-use query abstraction (like assigning <code>ROW_NUMBER()</code> for pagination or running a recursive hierarchy) that does not need to be queried multiple times.</li>
+        <li><strong>Use a Local <code>#Temp</code> Table when:</strong> You are processing more than ~100 rows, performing heavy multi-table joins, or writing multi-step batch procedures where you query intermediate data multiple times. The presence of column statistics is non-negotiable for query performance.</li>
+        <li><strong>Use a <code>@Table</code> Variable when:</strong> You have a tiny lookup list (under 50 rows), OR you are inside a <code>TRY...CATCH</code> block and need an in-memory audit table to log error messages that must <strong>survive a transaction rollback</strong>.</li>
+      </ul>
     </section>
 
-    <!-- SECTION 4: EXERCISES -->
+    <!-- ================================================================= -->
+    <!-- PILLAR 4: PIVOT & UNPIVOT -->
+    <!-- ================================================================= -->
     <section>
-      <h2>🏋️ Module 04 Exercises (With Toggleable Solutions)</h2>
+      <h2>4. PIVOT and UNPIVOT: Cross-Tab Transformation</h2>
+      
+      <p><code>PIVOT</code> transforms unique values from one column into multiple columns in the output, performing aggregations across the intersection. <code>UNPIVOT</code> performs the reverse: normalizing wide columns into key-value rows.</p>
 
-      <!-- Exercise 1 -->
-      <div class="exercise-box">
-        <div class="exercise-header">
-          <div class="exercise-title">Exercise 4.1: Materialized Real-Time Portfolio Summary via Indexed View</div>
-          <span class="badge badge-hard">Hard</span>
-        </div>
-        <div class="schema-context">
-          <strong>Context:</strong> High-frequency portfolio valuation aggregation
-        </div>
-        <p><strong>Requirement:</strong> Create an indexed view <code>v_AccountPortfolioValuation</code> that computes total holding count, total units, and total market value grouped by AccountID. Include all required settings (<code>SCHEMABINDING</code>, <code>COUNT_BIG</code>), create the clustered index, and write a query using <code>WITH (NOEXPAND)</code>.</p>
+      <div class="mermaid">
+flowchart LR
+    subgraph NormalizedRows [Normalized Rows (Source)]
+        R1["Acc 101 | Tech | $50k"]
+        R2["Acc 101 | Finance | $30k"]
+        R3["Acc 102 | Tech | $80k"]
+    end
+    NormalizedRows --> PivotEngine["PIVOT Operator"]
+    subgraph PivotedGrid [Pivoted Output Grid]
+        G1["AccID | Tech_Val | Finance_Val"]
+        G2["101   | $50k     | $30k"]
+        G3["102   | $80k     | $0"]
+    end
+    PivotEngine --> PivotedGrid
+      </div>
 
-        <div class="solution-details">
-          <details>
-            <summary class="solution-summary"><span>💡 View Solution & Explanation</span> <span>▼</span></summary>
-            <div class="solution-content">
-<pre><code class="language-sql">-- 1. Create View with Schemabinding
-CREATE OR ALTER VIEW dbo.v_AccountPortfolioValuation
-WITH SCHEMABINDING
-AS
+<pre><code class="language-sql">-- Static PIVOT Example: Summarizing Sector Value per Account
 SELECT 
     AccountID,
-    COUNT_BIG(*) AS HoldingCount,
-    SUM(CAST(PositionUnits AS BIGINT)) AS TotalUnits,
-    SUM(CAST(PositionUnits * CurrentMarketPrice AS DECIMAL(18,2))) AS TotalMarketValue
-FROM dbo.PortfolioPositions
-GROUP BY AccountID;
-GO
-
--- 2. Create Unique Clustered Index (Physically materializes data)
-CREATE UNIQUE CLUSTERED INDEX CIX_v_AccountPortfolioValuation 
-ON dbo.v_AccountPortfolioValuation (AccountID);
-GO
-
--- 3. Production Query with NOEXPAND hint (Works on all SQL Server editions)
-SELECT AccountID, HoldingCount, TotalUnits, TotalMarketValue
-FROM dbo.v_AccountPortfolioValuation WITH (NOEXPAND)
-WHERE AccountID = 1001;
-</code></pre>
-              <div class="solution-explanation">
-                <strong>Why NOEXPAND:</strong> <code>WITH (NOEXPAND)</code> forces the engine to read the precomputed materialized view index directly, achieving sub-millisecond aggregation without touching the base <code>PortfolioPositions</code> table.
-              </div>
-            </div>
-          </details>
-        </div>
-      </div>
-
-      <!-- Exercise 2 -->
-      <div class="exercise-box">
-        <div class="exercise-header">
-          <div class="exercise-title">Exercise 4.2: Recursive CTE for Multi-Tier Fund & Sub-Account Hierarchy</div>
-          <span class="badge badge-hard">Hard</span>
-        </div>
-        <div class="schema-context">
-          <strong>Context:</strong> Table <code>InstitutionalEntities (EntityID, ParentEntityID, EntityName, AllocatedCapital)</code>
-        </div>
-        <p><strong>Requirement:</strong> Master funds own feeder funds, which own individual algorithmic trading desks. Write a Recursive CTE that traverses the tree starting from the Master Fund (ParentEntityID IS NULL), outputting: EntityID, EntityName, DepthLevel, FullHierarchyPath (e.g. <code>"Citadel Master > Quantitative Desk > High Frequency Desk"</code>), and Cumulative Sub-Fund Capital.</p>
-
-        <div class="solution-details">
-          <details>
-            <summary class="solution-summary"><span>💡 View Solution & Explanation</span> <span>▼</span></summary>
-            <div class="solution-content">
-<pre><code class="language-sql">-- Recursive Entity Hierarchy Traversal
-WITH EntityHierarchyCTE AS (
-    -- Anchor Member: Root master funds
-    SELECT 
-        EntityID,
-        ParentEntityID,
-        EntityName,
-        AllocatedCapital,
-        0 AS DepthLevel,
-        CAST(EntityName AS NVARCHAR(1000)) AS FullHierarchyPath
-    FROM InstitutionalEntities
-    WHERE ParentEntityID IS NULL
-
-    UNION ALL
-
-    -- Recursive Member: Subordinate entities
-    SELECT 
-        child.EntityID,
-        child.ParentEntityID,
-        child.EntityName,
-        child.AllocatedCapital,
-        parent.DepthLevel + 1,
-        CAST(parent.FullHierarchyPath + ' > ' + child.EntityName AS NVARCHAR(1000))
-    FROM InstitutionalEntities child
-    INNER JOIN EntityHierarchyCTE parent ON child.ParentEntityID = parent.EntityID
-)
-SELECT 
-    EntityID,
-    EntityName,
-    DepthLevel,
-    FullHierarchyPath,
-    AllocatedCapital
-FROM EntityHierarchyCTE
-ORDER BY FullHierarchyPath
-OPTION (MAXRECURSION 50);
-</code></pre>
-              <div class="solution-explanation">
-                <strong>Recursive Pattern:</strong> The anchor evaluates top-level entities. The recursive member joins child rows to the CTE itself. Casting <code>FullHierarchyPath</code> to a fixed <code>NVARCHAR(1000)</code> prevents data type length mismatch errors between iterations.
-              </div>
-            </div>
-          </details>
-        </div>
-      </div>
-
-      <!-- Exercise 3 -->
-      <div class="exercise-box">
-        <div class="exercise-header">
-          <div class="exercise-title">Exercise 4.3: High-Cardinality Staging: #Temp Table vs Table Variable Benchmark</div>
-          <span class="badge badge-medium">Medium</span>
-        </div>
-        <div class="schema-context">
-          <strong>Context:</strong> Batch processing 250,000 incoming FIX fills
-        </div>
-        <p><strong>Requirement:</strong> Write a script comparing the cardinality estimation and join plan for: (1) A table variable <code>@Fills</code>, and (2) A local temp table <code>#Fills</code> with a clustered index. Explain why table variables can trigger catastrophic Cartesian or Nested Loop spills.</p>
-
-        <div class="solution-details">
-          <details>
-            <summary class="solution-summary"><span>💡 View Solution & Explanation</span> <span>▼</span></summary>
-            <div class="solution-content">
-<pre><code class="language-sql">-- Approach A: Local Temp Table with Clustered Index (Recommended for large datasets)
-CREATE TABLE #Fills (
-    FillID BIGINT PRIMARY KEY,
-    OrderID BIGINT,
-    FillQuantity INT,
-    FillPrice DECIMAL(18,4)
-);
-
-INSERT INTO #Fills (FillID, OrderID, FillQuantity, FillPrice)
-SELECT ExecutionID, OrderID, FillQuantity, FillPrice FROM Executions;
-
--- SQL Server creates statistics automatically; optimizer chooses Hash Match or Merge Join
-SELECT o.AccountID, SUM(f.FillQuantity * f.FillPrice) AS TotalFilledValue
-FROM Orders o
-INNER JOIN #Fills f ON o.OrderID = f.OrderID
-GROUP BY o.AccountID;
-
-DROP TABLE #Fills;
-
--- Approach B: Table Variable (Dangerous for large datasets prior to SQL Server 2019)
-DECLARE @FillsVar TABLE (
-    FillID BIGINT PRIMARY KEY,
-    OrderID BIGINT,
-    FillQuantity INT,
-    FillPrice DECIMAL(18,4)
-);
-
-INSERT INTO @FillsVar (FillID, OrderID, FillQuantity, FillPrice)
-SELECT ExecutionID, OrderID, FillQuantity, FillPrice FROM Executions;
-
--- Optimizer estimated 1 row! Chooses Nested Loops with 250,000 seeks into Orders table!
-SELECT o.AccountID, SUM(f.FillQuantity * f.FillPrice) AS TotalFilledValue
-FROM Orders o
-INNER JOIN @FillsVar f ON o.OrderID = f.OrderID
-GROUP BY o.AccountID;
-</code></pre>
-              <div class="solution-explanation">
-                <strong>Engine Insight:</strong> Because table variables lack column statistics, the optimizer assumes they contain exactly 1 row. When joining with millions of records, it generates a Nested Loops join plan that seeks into the target table 250,000 times instead of performing a single Hash Join pass!
-              </div>
-            </div>
-          </details>
-        </div>
-      </div>
-
-      <!-- Exercise 4 -->
-      <div class="exercise-box">
-        <div class="exercise-header">
-          <div class="exercise-title">Exercise 4.4: Static PIVOT for Cross-Tab Portfolio Sector Allocations</div>
-          <span class="badge badge-medium">Medium</span>
-        </div>
-        <div class="schema-context">
-          <strong>Context:</strong> <code>Accounts</code>, <code>Securities (Sector)</code>, <code>PortfolioPositions</code>
-        </div>
-        <p><strong>Requirement:</strong> Write a static <code>PIVOT</code> query that outputs one row per AccountID, with columns representing the total position market value in: <code>[Technology]</code>, <code>[Financials]</code>, <code>[Semiconductors]</code>, and <code>[Consumer Discretionary]</code>.</p>
-
-        <div class="solution-details">
-          <details>
-            <summary class="solution-summary"><span>💡 View Solution & Explanation</span> <span>▼</span></summary>
-            <div class="solution-content">
-<pre><code class="language-sql">SELECT 
-    AccountID,
-    ISNULL([Technology], 0.00) AS Technology_Value,
-    ISNULL([Financials], 0.00) AS Financials_Value,
-    ISNULL([Semiconductors], 0.00) AS Semiconductors_Value,
-    ISNULL([Consumer Discretionary], 0.00) AS Consumer_Value
+    ISNULL([Technology], 0.00) AS Tech_Value,
+    ISNULL([Financials], 0.00) AS Financial_Value
 FROM (
-    SELECT 
-        p.AccountID,
-        s.Sector,
-        CAST(p.PositionUnits * p.CurrentMarketPrice AS DECIMAL(18,2)) AS MarketValue
-    FROM PortfolioPositions p
-    INNER JOIN Securities s ON p.SecurityID = s.SecurityID
-) AS SourceTable
+    -- Source subquery must strictly project: Group Key, Pivot Column, and Value!
+    SELECT AccountID, Sector, MarketValue FROM AccountHoldings
+) AS SourceData
 PIVOT (
     SUM(MarketValue)
-    FOR Sector IN ([Technology], [Financials], [Semiconductors], [Consumer Discretionary])
-) AS PivotTable
-ORDER BY AccountID;
+    FOR Sector IN ([Technology], [Financials])
+) AS PivotResult;
 </code></pre>
-              <div class="solution-explanation">
-                <strong>PIVOT Rules:</strong> The source subquery must project <em>strictly</em> three things: (1) Row grouping keys (AccountID), (2) The pivot spreading column (Sector), and (3) The aggregation value (MarketValue). Any extra unprojected columns will unintentionally fragment the grouping rows!
-              </div>
-            </div>
-          </details>
-        </div>
+    </section>
+
+    <!-- ================================================================= -->
+    <!-- PILLAR 5: INTERVIEW SCRIPT & FOLLOW-UP GRILL ROUND -->
+    <!-- ================================================================= -->
+    <section>
+      <h2>📋 How to Master This in an Interview</h2>
+      
+      <div class="card" style="background: #f8fafc; border-left: 5px solid var(--purple); margin-bottom: 1.5rem;">
+        <h4>Interviewer Question: "Explain the difference between a CTE, a #Temp Table, and a @Table Variable. Under what conditions will choosing the wrong one crash server performance?"</h4>
+        <p><strong>Staff Engineer Model Response:</strong></p>
+        <blockquote style="font-style: italic; color: #334155; margin: 0.5rem 0;">
+          "All three serve as temporary data structures, but their physical lifecycle and interaction with the Query Optimizer are fundamentally distinct:
+          <br><br>
+          A <strong>CTE</strong> is an inline query expression valid only for the single statement that executes it. It is not materialized in TempDB; rather, the optimizer embeds its definition directly into the outer query's plan. It is ideal for recursive tree traversal and self-contained query modularity.
+          <br><br>
+          A <strong>#Temp Table</strong> is a physical table created in TempDB. It has full distribution statistics (histograms), supports Clustered and Non-Clustered indexes, participates in transaction rollbacks, and supports parallel execution plans.
+          <br><br>
+          A <strong>@Table Variable</strong> is also hosted in TempDB, but it lacks column distribution statistics. Historically, the optimizer assumes a table variable contains exactly 1 row.
+          <br><br>
+          <strong>The Performance Crash Scenario:</strong> If an engineer loads 500,000 rows into a table variable and joins it with another large table, the optimizer's 1-row estimation causes it to choose a <strong>Nested Loops Join</strong> instead of a Hash Join. The engine attempts 500,000 individual B-tree seeks into the target table, exhausting worker threads and freezing the server. For any dataset larger than ~100 rows, a <code>#Temp</code> table is mandatory."
+        </blockquote>
       </div>
 
-      <!-- Exercise 5 -->
-      <div class="exercise-box">
-        <div class="exercise-header">
-          <div class="exercise-title">Exercise 4.5: Dynamic PIVOT for Unknown Number of Stock Tickers</div>
-          <span class="badge badge-hard">Hard</span>
-        </div>
-        <div class="schema-context">
-          <strong>Context:</strong> New tickers are added daily; static column names will break.
-        </div>
-        <p><strong>Requirement:</strong> Write a stored procedure or dynamic SQL script that dynamically constructs the ticker column list using <code>STRING_AGG()</code> and pivots order volumes across all active tickers.</p>
-
-        <div class="solution-details">
-          <details>
-            <summary class="solution-summary"><span>💡 View Solution & Explanation</span> <span>▼</span></summary>
-            <div class="solution-content">
-<pre><code class="language-sql">DECLARE @Columns NVARCHAR(MAX) = '';
-DECLARE @SQL NVARCHAR(MAX) = '';
-
--- 1. Build comma-separated bracketed list of distinct tickers
-SELECT @Columns = STRING_AGG(QUOTENAME(Ticker), ', ') WITHIN GROUP (ORDER BY Ticker)
-FROM (SELECT DISTINCT Ticker FROM Securities WHERE IsActive = 1) AS t;
-
--- 2. Construct dynamic PIVOT query string
-SET @SQL = '
-SELECT AccountID, ' + @Columns + '
-FROM (
-    SELECT 
-        o.AccountID,
-        s.Ticker,
-        o.Quantity
-    FROM Orders o
-    INNER JOIN Securities s ON o.SecurityID = s.SecurityID
-) AS src
-PIVOT (
-    SUM(Quantity)
-    FOR Ticker IN (' + @Columns + ')
-) AS pvt
-ORDER BY AccountID;';
-
--- 3. Execute safely via sp_executesql
-EXEC sp_executesql @SQL;
-</code></pre>
-              <div class="solution-explanation">
-                <strong>Dynamic SQL Security:</strong> <code>QUOTENAME(Ticker)</code> escapes the string with square brackets (e.g. <code>[AAPL]</code>), neutralizing any potential SQL injection attacks from rogue ticker symbols.
-              </div>
-            </div>
-          </details>
-        </div>
-      </div>
-
-      <!-- Exercise 6 -->
-      <div class="exercise-box">
-        <div class="exercise-header">
-          <div class="exercise-title">Exercise 4.6: Normalizing Wide Tables using UNPIVOT</div>
-          <span class="badge badge-medium">Medium</span>
-        </div>
-        <div class="schema-context">
-          <strong>Context:</strong> A legacy risk system stores quarterly returns across wide columns: <code>QuarterlyRisk (AccountID, Q1_Return, Q2_Return, Q3_Return, Q4_Return)</code>
-        </div>
-        <p><strong>Requirement:</strong> Write an <code>UNPIVOT</code> query to convert these 4 quarterly columns into normalized rows with schema <code>(AccountID, QuarterName, ReturnValue)</code>.</p>
-
-        <div class="solution-details">
-          <details>
-            <summary class="solution-summary"><span>💡 View Solution & Explanation</span> <span>▼</span></summary>
-            <div class="solution-content">
-<pre><code class="language-sql">SELECT 
-    AccountID,
-    QuarterName,
-    ReturnValue
-FROM (
-    SELECT AccountID, Q1_Return, Q2_Return, Q3_Return, Q4_Return
-    FROM QuarterlyRisk
-) AS WideTable
-UNPIVOT (
-    ReturnValue FOR QuarterName IN (Q1_Return, Q2_Return, Q3_Return, Q4_Return)
-) AS UnpivotedTable;
-</code></pre>
-              <div class="solution-explanation">
-                <strong>UNPIVOT Nuance:</strong> <code>UNPIVOT</code> automatically suppresses rows where the value is NULL. All pivoted source columns must share the exact same data type (e.g. all <code>DECIMAL(10,4)</code>).
-              </div>
-            </div>
-          </details>
-        </div>
-      </div>
-
-      <!-- Exercise 7 -->
-      <div class="exercise-box">
-        <div class="exercise-header">
-          <div class="exercise-title">Exercise 4.7: Global Temporary Tables (##Global) for Cross-Session Audit Caching</div>
-          <span class="badge badge-medium">Medium</span>
-        </div>
-        <div class="schema-context">
-          <strong>Context:</strong> Nightly batch jobs running across multiple worker threads
-        </div>
-        <p><strong>Requirement:</strong> Demonstrate how a global temporary table (<code>##GlobalSettlements</code>) can be populated by a master orchestrator session, read concurrently by child sessions, and explain the exact lifecycle rules for when SQL Server automatically deallocates it.</p>
-
-        <div class="solution-details">
-          <details>
-            <summary class="solution-summary"><span>💡 View Solution & Explanation</span> <span>▼</span></summary>
-            <div class="solution-content">
-<pre><code class="language-sql">-- In Master Orchestrator Session:
-IF OBJECT_ID('tempdb..##GlobalSettlements') IS NOT NULL
-    DROP TABLE ##GlobalSettlements;
-
-CREATE TABLE ##GlobalSettlements (
-    BatchID UNIQUEIDENTIFIER DEFAULT NEWID(),
-    AccountID INT,
-    NetCash DECIMAL(18,2)
-);
-
-INSERT INTO ##GlobalSettlements (AccountID, NetCash)
-SELECT AccountID, CashBalance FROM Accounts;
-
--- Child Worker Sessions (Can read without creating their own copy):
-SELECT * FROM ##GlobalSettlements WHERE NetCash > 1000000;
-</code></pre>
-              <div class="solution-explanation">
-                <strong>Deallocation Lifecycle:</strong> A global temporary table is automatically dropped by SQL Server when: (1) The session that created it disconnects, <strong>AND</strong> (2) All other sessions actively querying or referencing the table finish their current execution.
-              </div>
-            </div>
-          </details>
-        </div>
-      </div>
-
-      <!-- Exercise 8 -->
-      <div class="exercise-box">
-        <div class="exercise-header">
-          <div class="exercise-title">Exercise 4.8: Transaction Rollback Resilience in Table Variables</div>
-          <span class="badge badge-hard">Hard</span>
-        </div>
-        <div class="schema-context">
-          <strong>Context:</strong> Production error logging inside failed financial transactions
-        </div>
-        <p><strong>Requirement:</strong> Write a script proving that when an explicit transaction rolls back due to a business rule violation, changes made to a table variable are <strong>preserved</strong>, whereas changes made to a <code>#temp</code> table or base table are reverted.</p>
-
-        <div class="solution-details">
-          <details>
-            <summary class="solution-summary"><span>💡 View Solution & Explanation</span> <span>▼</span></summary>
-            <div class="solution-content">
-<pre><code class="language-sql">-- Declare table variable and temp table
-DECLARE @ErrorLog TABLE (Step VARCHAR(50), ErrorMsg VARCHAR(100));
-CREATE TABLE #TempAudit (Step VARCHAR(50));
-
-BEGIN TRANSACTION;
-    INSERT INTO #TempAudit VALUES ('Step 1 Started');
-    INSERT INTO @ErrorLog VALUES ('Step 1', 'Simulated Validation Failure');
-
-    -- Transaction fails and is aborted:
-    ROLLBACK TRANSACTION;
-
--- Inspect contents post-rollback:
-SELECT * FROM #TempAudit; 
--- Result: 0 ROWS! (Rolled back cleanly)
-
-SELECT * FROM @ErrorLog;  
--- Result: 1 ROW PRESERVED! ('Step 1', 'Simulated Validation Failure')
-
-DROP TABLE #TempAudit;
-</code></pre>
-              <div class="solution-explanation">
-                <strong>Architectural Goldmine:</strong> Because table variables are non-transactional variables, they do not participate in transaction rollbacks! This unique behavior makes table variables ideal for logging error messages and audit failures inside <code>CATCH</code> blocks where the transaction must be aborted.
-              </div>
-            </div>
-          </details>
-        </div>
+      <div class="card" style="background: #fffbeb; border-left: 5px solid var(--accent);">
+        <h4>🎯 The Interviewer Grill Round (Trap Follow-Ups)</h4>
+        <ul>
+          <li><strong>Trap:</strong> <em>"Do table variables live purely in RAM while temp tables live on disk?"</em><br>
+          <strong>Answer:</strong> "No, that is a widespread myth. Both table variables and #temp tables allocate pages in the TempDB database buffer pool and spill to physical TempDB data files under memory pressure."</li>
+          <li><strong>Trap:</strong> <em>"What happens if an explicit transaction is rolled back: what happens to the data inside a #temp table versus a @table variable?"</em><br>
+          <strong>Answer:</strong> "Changes made to a <code>#temp</code> table are fully logged and will roll back cleanly. In contrast, <code>@table</code> variables are non-transactional variables; modifications made to a table variable <strong>survive</strong> the rollback. This makes table variables uniquely suited for capturing audit messages inside CATCH blocks."</li>
+          <li><strong>Trap:</strong> <em>"Why is the WITH (NOEXPAND) hint required when querying Indexed Views in SQL Server Standard Edition?"</em><br>
+          <strong>Answer:</strong> "In Enterprise Edition, the query optimizer automatically recognizes that a query can be satisfied by an indexed view and matches it. In Standard Edition, the optimizer ignores the view's clustered index and expands the view back into base table joins <em>unless</em> you explicitly include the <code>WITH (NOEXPAND)</code> hint."</li>
+        </ul>
       </div>
     </section>
 
-    <!-- SECTION 5: INTERVIEW SCRIPT -->
-    <section>
-      <h2>📋 How to Answer This in an Interview</h2>
-      <div class="card" style="background: #f8fafc; border-left: 5px solid var(--purple);">
-        <h4>Interviewer Question: "When would you use a #Temp Table versus a @Table Variable in SQL Server?"</h4>
-        <p><strong>Staff Engineer Response:</strong></p>
-        <blockquote style="font-style: italic; color: #334155; margin: 0.5rem 0;">
-          "The choice comes down to <strong>cardinality, query optimization, and transaction boundaries</strong>.
-          <br><br>
-          I choose <strong>#Temp Tables</strong> for medium to large datasets (more than ~100 rows) or when joining with other physical tables. Why? Because #temp tables have full column distribution statistics generated and updated by the query optimizer. The optimizer can choose optimal join algorithms like Hash Match or Merge Join, create additional non-clustered indexes post-population, and participate in parallel execution plans.
-          <br><br>
-          I choose <strong>@Table Variables</strong> for tiny lookup sets (under 50 rows) or specifically inside <code>TRY...CATCH</code> blocks where I need an in-memory audit log that survives a <code>ROLLBACK TRANSACTION</code>.
-          <br><br>
-          Historically, table variables had no column statistics, leading the optimizer to hardcode a cardinality estimate of exactly 1 row. If that table variable actually contained 100,000 rows, joining it with another large table triggered a disastrous Nested Loops join that ran for hours. While SQL Server 2019 introduced Table Variable Deferred Compilation to mitigate this, #temp tables remain the standard for high-throughput enterprise batch processing."
-        </blockquote>
-      </div>
+    <!-- SECTION: EXERCISES LINK -->
+    <section style="margin-top: 3rem;">
+      <h2>🏋️ Ready for Hands-On Practice?</h2>
+      <p>Test your knowledge with 8 real-world production exercises on Materialized Indexed Views, Recursive Account Hierarchies, Table Variable Rollback Resilience, and Dynamic PIVOT in the Exercises module.</p>
+      <a href="exercises.html" class="nav-next" style="display: inline-block; margin-top: 0.5rem;">👉 View All 50+ Exercises & Solutions →</a>
     </section>
 
     <div class="page-nav" style="margin-top: 3rem;">
