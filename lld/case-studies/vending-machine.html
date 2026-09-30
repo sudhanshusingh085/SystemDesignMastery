@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Design a Vending Machine — System Design Mastery</title>
   <link rel="stylesheet" href="../../css/style.css">
-  <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.0/dist/mermaid.min.js"></script>
 </head>
 <body>
 <button class="menu-toggle" aria-label="Toggle menu">☰</button>
@@ -94,9 +94,13 @@
     <p>When returning change, we can use a Greedy Algorithm (pick the largest coin possible first). However, if the coin denominations are non-standard (e.g., 1, 3, 4) and we owe 6, Greedy gives (4, 1, 1) = 3 coins, while Dynamic Programming (DP) gives (3, 3) = 2 coins. For standard US/EU coins, Greedy is mathematically optimal and faster (O(N)). If exact change cannot be made due to empty coin hoppers, the machine must roll back the transaction and refund the original inserted amount.</p>
 
     <h2>Phase 5: Production-Grade Java 21 Code</h2>
-    <span class="code-label">Java</span>
-    <pre>
-import java.util.Map;
+<div class="code-tabs">
+  <div class="code-tabs-header">
+    <button class="code-tab-btn active" data-tab="java">☕ Java 21</button>
+    <button class="code-tab-btn" data-tab="csharp">🔷 C#</button>
+  </div>
+  <div class="code-tab-content active" data-tab-content="java">
+    <pre><code class="language-java">import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.locks.ReentrantLock;
 
@@ -230,8 +234,153 @@ class VendingMachine {
         lock.lock();
         try { state.selectProduct(this, p); } finally { lock.unlock(); }
     }
+}</code></pre>
+  </div>
+  <div class="code-tab-content" data-tab-content="csharp">
+    <pre><code class="language-csharp">using System;
+using System.Collections.Generic;
+
+public enum Coin { Penny = 1, Nickel = 5, Dime = 10, Quarter = 25 }
+
+public record Item(string Name, int PriceInCents);
+
+public class Inventory
+{
+    private readonly Dictionary<string, (Item Item, int Count)> _stock = new();
+
+    public void AddItem(string code, Item item, int count) => _stock[code] = (item, count);
+
+    public Item? GetItem(string code) => _stock.TryGetValue(code, out var entry) ? entry.Item : null;
+
+    public bool IsAvailable(string code) => _stock.TryGetValue(code, out var entry) && entry.Count > 0;
+
+    public void DeductItem(string code)
+    {
+        if (_stock.TryGetValue(code, out var entry) && entry.Count > 0)
+        {
+            _stock[code] = (entry.Item, entry.Count - 1);
+        }
+    }
 }
-    </pre>
+
+// --- STATE PATTERN ---
+public interface IVendingMachineState
+{
+    void InsertCoin(VendingMachine vm, Coin coin);
+    void SelectItem(VendingMachine vm, string code);
+    void Dispense(VendingMachine vm);
+    void Cancel(VendingMachine vm);
+}
+
+public class IdleState : IVendingMachineState
+{
+    public void InsertCoin(VendingMachine vm, Coin coin)
+    {
+        vm.CurrentBalance += (int)coin;
+        Console.WriteLine($"Inserted {(int)coin}c. Current Balance: {vm.CurrentBalance}c");
+        vm.SetState(new HasMoneyState());
+    }
+
+    public void SelectItem(VendingMachine vm, string code) => Console.WriteLine("Please insert coins first.");
+    public void Dispense(VendingMachine vm) => Console.WriteLine("Please insert coins and choose an item.");
+    public void Cancel(VendingMachine vm) => Console.WriteLine("No transaction in progress.");
+}
+
+public class HasMoneyState : IVendingMachineState
+{
+    public void InsertCoin(VendingMachine vm, Coin coin)
+    {
+        vm.CurrentBalance += (int)coin;
+        Console.WriteLine($"Added {(int)coin}c. Total Balance: {vm.CurrentBalance}c");
+    }
+
+    public void SelectItem(VendingMachine vm, string code)
+    {
+        var item = vm.Inventory.GetItem(code);
+        if (item == null || !vm.Inventory.IsAvailable(code))
+        {
+            Console.WriteLine($"Item {code} is out of stock!");
+            return;
+        }
+
+        if (vm.CurrentBalance < item.PriceInCents)
+        {
+            Console.WriteLine($"Insufficient balance! {item.Name} costs {item.PriceInCents}c, you have {vm.CurrentBalance}c");
+            return;
+        }
+
+        vm.SelectedCode = code;
+        Console.WriteLine($"Selected {item.Name}. Proceeding to dispense.");
+        vm.SetState(new DispensingState());
+        vm.Dispense();
+    }
+
+    public void Dispense(VendingMachine vm) => Console.WriteLine("Select an item first.");
+
+    public void Cancel(VendingMachine vm)
+    {
+        Console.WriteLine($"Refunding {vm.CurrentBalance}c. Transaction cancelled.");
+        vm.CurrentBalance = 0;
+        vm.SetState(new IdleState());
+    }
+}
+
+public class DispensingState : IVendingMachineState
+{
+    public void InsertCoin(VendingMachine vm, Coin coin) => Console.WriteLine("Please wait, dispensing item.");
+    public void SelectItem(VendingMachine vm, string code) => Console.WriteLine("Currently dispensing.");
+
+    public void Dispense(VendingMachine vm)
+    {
+        var item = vm.Inventory.GetItem(vm.SelectedCode!)!;
+        vm.Inventory.DeductItem(vm.SelectedCode!);
+        vm.CurrentBalance -= item.PriceInCents;
+
+        Console.WriteLine($"[DISPENSER] *** CLUNK *** Enjoy your {item.Name}!");
+
+        if (vm.CurrentBalance > 0)
+        {
+            Console.WriteLine($"[CHANGE] Returning change: {vm.CurrentBalance}c");
+            vm.CurrentBalance = 0;
+        }
+
+        vm.SelectedCode = null;
+        vm.SetState(new IdleState());
+    }
+
+    public void Cancel(VendingMachine vm) => Console.WriteLine("Cannot cancel while dispensing!");
+}
+
+public class VendingMachine
+{
+    public Inventory Inventory { get; } = new();
+    public int CurrentBalance { get; set; }
+    public string? SelectedCode { get; set; }
+
+    private IVendingMachineState _state = new IdleState();
+
+    public void SetState(IVendingMachineState state) => _state = state;
+    public void InsertCoin(Coin coin) => _state.InsertCoin(this, coin);
+    public void SelectItem(string code) => _state.SelectItem(this, code);
+    public void Dispense() => _state.Dispense(this);
+    public void Cancel() => _state.Cancel(this);
+}
+
+public class Program
+{
+    public static void Main()
+    {
+        var vm = new VendingMachine();
+        vm.Inventory.AddItem("A1", new Item("Cola", 50), 5);
+        vm.Inventory.AddItem("B2", new Item("Chips", 75), 3);
+
+        vm.InsertCoin(Coin.Quarter);
+        vm.InsertCoin(Coin.Quarter);
+        vm.SelectItem("A1");
+    }
+}</code></pre>
+  </div>
+</div>
 
     <h2>Phase 6: Trade-offs & The Interviewer's Deep Follow-Up Questions</h2>
     <div class="callout callout-warning">

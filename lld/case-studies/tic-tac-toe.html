@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Tic-Tac-Toe — System Design Mastery</title>
   <link rel="stylesheet" href="../../css/style.css">
-  <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.0/dist/mermaid.min.js"></script>
 </head>
 <body>
 <button class="menu-toggle" aria-label="Toggle menu">☰</button>
@@ -64,9 +64,13 @@
     </div>
 
     <h2>4. Java 21 Implementation</h2>
-    <span class="code-label">Java</span>
-    <pre>
-import java.util.ArrayList;
+<div class="code-tabs">
+  <div class="code-tabs-header">
+    <button class="code-tab-btn active" data-tab="java">☕ Java 21</button>
+    <button class="code-tab-btn" data-tab="csharp">🔷 C#</button>
+  </div>
+  <div class="code-tab-content active" data-tab-content="java">
+    <pre><code class="language-java">import java.util.ArrayList;
 import java.util.List;
 import java.util.Scanner;
 
@@ -249,8 +253,190 @@ public class Main {
     public static void main(String[] args) {
         // Run with a simulated input for testing or actual ConsoleInputHandler
     }
+}</code></pre>
+  </div>
+  <div class="code-tab-content" data-tab-content="csharp">
+    <pre><code class="language-csharp">using System;
+using System.Collections.Generic;
+
+public enum Symbol { Empty, X, O }
+
+public class Board
+{
+    private readonly Symbol[,] _grid;
+    public int Size { get; }
+
+    public Board(int size = 3)
+    {
+        Size = size;
+        _grid = new Symbol[size, size];
+    }
+
+    public bool PlaceSymbol(int row, int col, Symbol symbol)
+    {
+        if (row < 0 || row >= Size || col < 0 || col >= Size || _grid[row, col] != Symbol.Empty)
+        {
+            return false;
+        }
+        _grid[row, col] = symbol;
+        return true;
+    }
+
+    public Symbol GetSymbol(int row, int col) => _grid[row, col];
+
+    public bool IsFull()
+    {
+        for (int r = 0; r < Size; r++)
+            for (int c = 0; c < Size; c++)
+                if (_grid[r, c] == Symbol.Empty) return false;
+        return true;
+    }
+
+    public void PrintBoard()
+    {
+        for (int r = 0; r < Size; r++)
+        {
+            for (int c = 0; c < Size; c++)
+            {
+                char ch = _grid[r, c] switch
+                {
+                    Symbol.X => 'X',
+                    Symbol.O => 'O',
+                    _ => '.'
+                };
+                Console.Write($" {ch} ");
+                if (c < Size - 1) Console.Write("|");
+            }
+            Console.WriteLine();
+            if (r < Size - 1) Console.WriteLine("---+---+---");
+        }
+    }
 }
-    </pre>
+
+public interface IWinChecker
+{
+    bool CheckWin(Board board, int lastRow, int lastCol, Symbol symbol);
+}
+
+public class StandardWinChecker : IWinChecker
+{
+    public bool CheckWin(Board board, int row, int col, Symbol symbol)
+    {
+        int size = board.Size;
+
+        // Check row
+        bool win = true;
+        for (int c = 0; c < size; c++)
+        {
+            if (board.GetSymbol(row, c) != symbol) { win = false; break; }
+        }
+        if (win) return true;
+
+        // Check col
+        win = true;
+        for (int r = 0; r < size; r++)
+        {
+            if (board.GetSymbol(r, col) != symbol) { win = false; break; }
+        }
+        if (win) return true;
+
+        // Check main diagonal
+        if (row == col)
+        {
+            win = true;
+            for (int i = 0; i < size; i++)
+            {
+                if (board.GetSymbol(i, i) != symbol) { win = false; break; }
+            }
+            if (win) return true;
+        }
+
+        // Check anti-diagonal
+        if (row + col == size - 1)
+        {
+            win = true;
+            for (int i = 0; i < size; i++)
+            {
+                if (board.GetSymbol(i, size - 1 - i) != symbol) { win = false; break; }
+            }
+            if (win) return true;
+        }
+
+        return false;
+    }
+}
+
+public record Player(string Name, Symbol Symbol);
+
+public class TicTacToeGame
+{
+    private readonly Board _board;
+    private readonly Queue<Player> _players = new();
+    private readonly IWinChecker _winChecker;
+
+    public TicTacToeGame(Player p1, Player p2, int size = 3)
+    {
+        _board = new Board(size);
+        _players.Enqueue(p1);
+        _players.Enqueue(p2);
+        _winChecker = new StandardWinChecker();
+    }
+
+    public void Play()
+    {
+        bool gameOver = false;
+        while (!gameOver)
+        {
+            _board.PrintBoard();
+            var current = _players.Dequeue();
+            Console.WriteLine($"[Turn] {current.Name} ({current.Symbol}) - enter move (simulated):");
+
+            // Simple simulated turn for demonstration
+            int row = 0, col = 0;
+            for (int r = 0; r < _board.Size; r++)
+            {
+                for (int c = 0; c < _board.Size; c++)
+                {
+                    if (_board.GetSymbol(r, c) == Symbol.Empty)
+                    {
+                        row = r; col = c; goto MoveFound;
+                    }
+                }
+            }
+        MoveFound:
+            _board.PlaceSymbol(row, col, current.Symbol);
+            Console.WriteLine($"{current.Name} placed at ({row}, {col})");
+
+            if (_winChecker.CheckWin(_board, row, col, current.Symbol))
+            {
+                _board.PrintBoard();
+                Console.WriteLine($"🎉 GAME OVER! Winner: {current.Name}!");
+                gameOver = true;
+            }
+            else if (_board.IsFull())
+            {
+                _board.PrintBoard();
+                Console.WriteLine("🤝 GAME OVER! It's a DRAW!");
+                gameOver = true;
+            }
+            else
+            {
+                _players.Enqueue(current);
+            }
+        }
+    }
+}
+
+public class Program
+{
+    public static void Main()
+    {
+        var game = new TicTacToeGame(new Player("Alice", Symbol.X), new Player("Bob", Symbol.O));
+        game.Play();
+    }
+}</code></pre>
+  </div>
+</div>
 
     <h2>5. Why is it recommended / When to use it?</h2>
     <p>By extracting <code>WinChecker</code>, we handle an NxN board without deeply nested, hardcoded arrays. The <code>InputHandler</code> injection ensures we can easily adapt the game for a web UI or mobile app without changing the core game logic.</p>

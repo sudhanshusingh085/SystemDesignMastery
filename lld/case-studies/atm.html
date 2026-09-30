@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>ATM Machine Design — System Design Mastery</title>
   <link rel="stylesheet" href="../../css/style.css">
-  <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.0/dist/mermaid.min.js"></script>
 </head>
 <body>
 <button class="menu-toggle" aria-label="Toggle menu">☰</button>
@@ -52,9 +52,13 @@
     </div>
 
     <h2>4. Java 21 Code Implementation</h2>
-    <span class="code-label">Java</span>
-    <pre><code>
-import java.util.*;
+<div class="code-tabs">
+  <div class="code-tabs-header">
+    <button class="code-tab-btn active" data-tab="java">☕ Java 21</button>
+    <button class="code-tab-btn" data-tab="csharp">🔷 C#</button>
+  </div>
+  <div class="code-tab-content active" data-tab-content="java">
+    <pre><code class="language-java">import java.util.*;
 import java.time.LocalDateTime;
 
 // Enum for transaction types
@@ -216,8 +220,195 @@ public class Main {
         Card myCard = new Card("1234-5678-9012-3456", "1234", "BANK_1");
         atm.insertCard(myCard);
     }
+}</code></pre>
+  </div>
+  <div class="code-tab-content" data-tab-content="csharp">
+    <pre><code class="language-csharp">using System;
+using System.Collections.Generic;
+
+// Enum for transaction types & denominations
+public enum TransactionType { Withdraw, Deposit, BalanceCheck, Transfer }
+
+public enum Denomination
+{
+    Hundred = 100,
+    FiveHundred = 500,
+    Thousand = 1000,
+    TwoThousand = 2000
 }
-    </code></pre>
+
+public record Card(string CardNumber, string Pin, string BankId);
+public record Account(string AccountNumber, string CardNumber, decimal Balance);
+
+public interface IBankService
+{
+    bool Authenticate(Card card, string pin);
+    Account? GetAccount(Card card);
+    bool DeductAmount(Account account, decimal amount);
+}
+
+public class BankServiceImpl : IBankService
+{
+    private readonly Dictionary<string, Account> _accounts = new()
+    {
+        ["1234-5678-9012-3456"] = new Account("ACC-999", "1234-5678-9012-3456", 25000m)
+    };
+
+    public bool Authenticate(Card card, string pin) => card.Pin == pin;
+
+    public Account? GetAccount(Card card) =>
+        _accounts.TryGetValue(card.CardNumber, out var acc) ? acc : null;
+
+    public bool DeductAmount(Account account, decimal amount)
+    {
+        if (account.Balance >= amount)
+        {
+            _accounts[account.CardNumber] = account with { Balance = account.Balance - amount };
+            return true;
+        }
+        return false;
+    }
+}
+
+public interface ICashDispenser
+{
+    bool Dispense(int amount);
+}
+
+public class GreedyCashDispenser : ICashDispenser
+{
+    public bool Dispense(int amount)
+    {
+        Console.WriteLine($"[Hardware Cash Dispenser] Dispensing ${amount} in bills...");
+        return true;
+    }
+}
+
+// --- STATE PATTERN (SOLID: OCP & SRP) ---
+public interface IAtmState
+{
+    void InsertCard(AtmMachine atm, Card card);
+    void AuthenticatePin(AtmMachine atm, string pin);
+    void SelectTransaction(AtmMachine atm, TransactionType type, decimal amount = 0);
+    void EjectCard(AtmMachine atm);
+}
+
+public class IdleState : IAtmState
+{
+    public void InsertCard(AtmMachine atm, Card card)
+    {
+        Console.WriteLine("Card inserted successfully. Please enter PIN.");
+        atm.CurrentCard = card;
+        atm.SetState(new AuthenticatingState());
+    }
+    public void AuthenticatePin(AtmMachine atm, string pin) => Console.WriteLine("Please insert card first.");
+    public void SelectTransaction(AtmMachine atm, TransactionType type, decimal amount) => Console.WriteLine("Insert card first.");
+    public void EjectCard(AtmMachine atm) => Console.WriteLine("No card present.");
+}
+
+public class AuthenticatingState : IAtmState
+{
+    public void InsertCard(AtmMachine atm, Card card) => Console.WriteLine("Card already inserted.");
+    public void AuthenticatePin(AtmMachine atm, string pin)
+    {
+        if (atm.BankService.Authenticate(atm.CurrentCard!, pin))
+        {
+            Console.WriteLine("PIN verified. Welcome!");
+            atm.CurrentAccount = atm.BankService.GetAccount(atm.CurrentCard!);
+            atm.SetState(new SelectingTransactionState());
+        }
+        else
+        {
+            Console.WriteLine("Invalid PIN! Ejecting card.");
+            atm.EjectCard();
+        }
+    }
+    public void SelectTransaction(AtmMachine atm, TransactionType type, decimal amount) => Console.WriteLine("Enter PIN first.");
+    public void EjectCard(AtmMachine atm) => atm.ResetToIdle();
+}
+
+public class SelectingTransactionState : IAtmState
+{
+    public void InsertCard(AtmMachine atm, Card card) => Console.WriteLine("Card already present.");
+    public void AuthenticatePin(AtmMachine atm, string pin) => Console.WriteLine("Already authenticated.");
+
+    public void SelectTransaction(AtmMachine atm, TransactionType type, decimal amount)
+    {
+        switch (type)
+        {
+            case TransactionType.BalanceCheck:
+                Console.WriteLine($"Your Current Balance: ${atm.CurrentAccount?.Balance}");
+                break;
+            case TransactionType.Withdraw:
+                if (atm.BankService.DeductAmount(atm.CurrentAccount!, amount))
+                {
+                    atm.CashDispenser.Dispense((int)amount);
+                    Console.WriteLine($"Withdrawal complete. Remaining: ${atm.CurrentAccount?.Balance - amount}");
+                }
+                else
+                {
+                    Console.WriteLine("Insufficient funds or bank rejection.");
+                }
+                break;
+        }
+    }
+
+    public void EjectCard(AtmMachine atm)
+    {
+        Console.WriteLine("Card ejected. Have a nice day!");
+        atm.ResetToIdle();
+    }
+}
+
+// --- CONTEXT (ATM MACHINE) ---
+public class AtmMachine
+{
+    public IBankService BankService { get; }
+    public ICashDispenser CashDispenser { get; }
+    public Card? CurrentCard { get; set; }
+    public Account? CurrentAccount { get; set; }
+
+    private IAtmState _state = new IdleState();
+
+    public AtmMachine(IBankService bankService, ICashDispenser cashDispenser)
+    {
+        BankService = bankService;
+        CashDispenser = cashDispenser;
+    }
+
+    public void SetState(IAtmState state) => _state = state;
+    public void ResetToIdle()
+    {
+        CurrentCard = null;
+        CurrentAccount = null;
+        _state = new IdleState();
+    }
+
+    public void InsertCard(Card card) => _state.InsertCard(this, card);
+    public void EnterPin(string pin) => _state.AuthenticatePin(this, pin);
+    public void Withdraw(decimal amount) => _state.SelectTransaction(this, TransactionType.Withdraw, amount);
+    public void CheckBalance() => _state.SelectTransaction(this, TransactionType.BalanceCheck);
+    public void EjectCard() => _state.EjectCard(this);
+}
+
+public class Program
+{
+    public static void Main()
+    {
+        var bankService = new BankServiceImpl();
+        var dispenser = new GreedyCashDispenser();
+        var atm = new AtmMachine(bankService, dispenser);
+
+        var myCard = new Card("1234-5678-9012-3456", "1234", "BANK_1");
+        atm.InsertCard(myCard);
+        atm.EnterPin("1234");
+        atm.CheckBalance();
+        atm.Withdraw(500m);
+        atm.EjectCard();
+    }
+}</code></pre>
+  </div>
+</div>
 
     <h2>5. Why is this recommended?</h2>
     <p>Using the <strong>State Pattern</strong> avoids giant <code>if-else</code> or <code>switch</code> blocks to check what the ATM is currently doing. Each state manages its own transitions, adhering to the <strong>Single Responsibility Principle</strong>.</p>

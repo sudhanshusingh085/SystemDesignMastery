@@ -1,4 +1,4 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Security — System Design Mastery</title><link rel="stylesheet" href="../css/style.css"><script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script></head><body>
+<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Security — System Design Mastery</title><link rel="stylesheet" href="../css/style.css"><script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.0/dist/mermaid.min.js"></script></head><body>
 <button class="menu-toggle">☰</button>
 <div class="page-wrapper"><aside class="sidebar" id="sidebar"></aside>
 <main class="main-content">
@@ -52,7 +52,7 @@ public class PasswordHasher {
 sequenceDiagram
     Client->>Server: 1. Login (username, password)
     Server-->>Client: 2. Return JWT
-    Client->>Server: 3. Request Profile (Header: Authorization: Bearer <JWT>)
+    Client->>Server: 3. Request Profile (Header: Authorization: Bearer [JWT])
     Server-->>Server: 4. Verify Signature
     Server-->>Client: 5. Return Profile Data
 </div>

@@ -212,16 +212,26 @@ function setupScrollTop() {
 
 // --- Mermaid ---
 function initMermaid() {
-  if (typeof mermaid !== 'undefined') {
-    mermaid.initialize({
-      startOnLoad: true,
-      theme: 'base',
-      themeVariables: {
-        primaryColor: '#dbeafe', primaryTextColor: '#1e293b', primaryBorderColor: '#2563eb',
-        lineColor: '#64748b', secondaryColor: '#f1f5f9', tertiaryColor: '#f8fafc',
-        fontFamily: 'Segoe UI, system-ui, sans-serif', fontSize: '14px',
+  const m = window.mermaid || (typeof mermaid !== 'undefined' ? mermaid : null);
+  if (m) {
+    try {
+      m.initialize({
+        startOnLoad: false,
+        theme: 'base',
+        themeVariables: {
+          primaryColor: '#dbeafe', primaryTextColor: '#1e293b', primaryBorderColor: '#2563eb',
+          lineColor: '#64748b', secondaryColor: '#f1f5f9', tertiaryColor: '#f8fafc',
+          fontFamily: 'Segoe UI, system-ui, sans-serif', fontSize: '14px',
+        }
+      });
+      if (typeof m.run === 'function') {
+        m.run().catch(err => console.warn('Mermaid render warning:', err));
+      } else if (typeof m.contentLoaded === 'function') {
+        m.contentLoaded();
       }
-    });
+    } catch (e) {
+      console.warn('Mermaid initialization warning:', e);
+    }
   }
 }
 

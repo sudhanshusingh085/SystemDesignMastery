@@ -252,16 +252,26 @@ function setupScrollTop() {
 
 // --- Mermaid ---
 function initMermaid() {
-  if (typeof mermaid !== 'undefined') {
-    mermaid.initialize({
-      startOnLoad: true,
-      theme: 'base',
-      themeVariables: {
-        primaryColor: '#dbeafe', primaryTextColor: '#1e293b', primaryBorderColor: '#2563eb',
-        lineColor: '#64748b', secondaryColor: '#f1f5f9', tertiaryColor: '#f8fafc',
-        fontFamily: 'Segoe UI, system-ui, sans-serif', fontSize: '14px',
+  const m = window.mermaid || (typeof mermaid !== 'undefined' ? mermaid : null);
+  if (m) {
+    try {
+      m.initialize({
+        startOnLoad: false,
+        theme: 'base',
+        themeVariables: {
+          primaryColor: '#dbeafe', primaryTextColor: '#1e293b', primaryBorderColor: '#2563eb',
+          lineColor: '#64748b', secondaryColor: '#f1f5f9', tertiaryColor: '#f8fafc',
+          fontFamily: 'Segoe UI, system-ui, sans-serif', fontSize: '14px',
+        }
+      });
+      if (typeof m.run === 'function') {
+        m.run().catch(err => console.warn('Mermaid render warning:', err));
+      } else if (typeof m.contentLoaded === 'function') {
+        m.contentLoaded();
       }
-    });
+    } catch (e) {
+      console.warn('Mermaid initialization warning:', e);
+    }
   }
 }
 
@@ -353,10 +363,63 @@ function setupNotesWidget() {
   });
 }
 
+/* --- Multi-Language Code Tabs Setup --- */
+function setupCodeTabs() {
+  const DEFAULT_LANG = localStorage.getItem('sdm-code-lang') || 'java';
+
+  function activateTab(lang) {
+    localStorage.setItem('sdm-code-lang', lang);
+    document.querySelectorAll('.code-tabs').forEach(container => {
+      const btns = container.querySelectorAll('.code-tab-btn');
+      const contents = container.querySelectorAll('.code-tab-content');
+      
+      let matched = false;
+      btns.forEach(b => {
+        if (b.dataset.tab === lang) {
+          b.classList.add('active');
+          matched = true;
+        } else {
+          b.classList.remove('active');
+        }
+      });
+      
+      contents.forEach(c => {
+        if (c.dataset.tabContent === lang) {
+          c.classList.add('active');
+        } else {
+          c.classList.remove('active');
+        }
+      });
+
+      // fallback to first tab if this container doesn't have target lang
+      if (!matched && btns.length > 0) {
+        btns[0].classList.add('active');
+        if (contents.length > 0) contents[0].classList.add('active');
+      }
+    });
+  }
+
+  // Bind click handlers
+  document.querySelectorAll('.code-tabs').forEach(container => {
+    container.querySelectorAll('.code-tab-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        const lang = btn.dataset.tab;
+        activateTab(lang);
+      });
+    });
+  });
+
+  // Initial activation based on stored preference
+  activateTab(DEFAULT_LANG);
+}
+
 document.addEventListener('DOMContentLoaded', () => {
   buildSidebar();
   setupMenuToggle();
   setupScrollTop();
   initMermaid();
   setupNotesWidget();
+  setupCodeTabs();
 });
+

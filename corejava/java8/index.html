@@ -1,16 +1,12 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Java 8+ Features — Functional Architecture in Modern Finance</title>
     <link rel="stylesheet" href="../../css/style.css">
-    <script type="module" src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs"></script>
-    <script>
-        import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
-        mermaid.initialize({ startOnLoad: true, theme: 'dark' });
-    </script>
-  <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.0/dist/mermaid.min.js"></script>
+    <script src="../js/main.js" defer></script>
 </head>
 <body>
 
@@ -20,27 +16,26 @@
   <aside class="sidebar" id="sidebar"></aside>
 
   <main class="main-content">
-<nav class="breadcrumb">
-        <a href="../index.html">Home</a> &gt; <span>04 &middot; Java 8 Features</span>
+    <nav class="breadcrumb">
+        <a href="../index.html">Home</a> &gt; <span>04 · Java 8 Features</span>
     </nav>
 
     <header>
-        <h1>Java 8+ Features &mdash; Functional Architecture in Modern Finance</h1>
-        <p class="subtitle">Mastering Lambdas, Streams, and the `java.time` API for High-Frequency Trading Systems</p>
+        <h1>Java 8+ Features — Functional Architecture in Modern Finance</h1>
+        <p class="subtitle">Mastering Lambdas, Target Typing, Streams, and the java.time API for High-Frequency Trading Systems</p>
     </header>
 
-    
-        <section id="paradigm-shift">
-            <h2>1. The Paradigm Shift: Imperative vs Functional Java</h2>
-            <p>
-                In high-frequency trading (HFT) and institutional order management systems (OMS), state mutations are the breeding ground for critical concurrency bugs. An imperative loop that modifies a shared <code>List&lt;Trade&gt;</code> or updates an accumulator variable representing total exposure introduces locking bottlenecks and data races. Functional programming in Java 8+ emphasizes <em>immutability</em> and <em>declarative data processing</em>.
-            </p>
-            <p>
-                By passing behavior (functions) as data, we can define parallelizable pipelines where each stage operates on an immutable view of the data. At the bytecode level, lambda expressions are <strong>not</strong> compiled into anonymous inner classes (which would pollute the PermGen/Metaspace). Instead, they leverage the <code>invokedynamic</code> instruction introduced in Java 7, dynamically generating the class implementation at runtime via the <code>LambdaMetafactory</code>.
-            </p>
-            <p>
-                A crucial constraint in lambdas is variable capture. Captured variables must be <strong>effectively final</strong>. If a lambda executed in a thread pool could mutate a local variable from its enclosing scope, it would violate thread safety without explicit synchronization.
-            </p>
+    <section id="paradigm-shift">
+        <h2>1. The Paradigm Shift: Imperative vs Functional Java</h2>
+        <p>
+            In high-frequency trading (HFT) and institutional order management systems (OMS), state mutations are the breeding ground for critical concurrency bugs. An imperative loop that modifies a shared <code>List&lt;Trade&gt;</code> or updates an accumulator variable representing total exposure introduces locking bottlenecks and data races. Functional programming in Java 8+ emphasizes <em>immutability</em> and <em>declarative data processing</em>.
+        </p>
+        <p>
+            By passing behavior (functions) as data, we can define parallelizable pipelines where each stage operates on an immutable view of the data. At the bytecode level, lambda expressions are <strong>not</strong> compiled into anonymous inner classes (which would pollute the PermGen/Metaspace). Instead, they leverage the <code>invokedynamic</code> instruction introduced in Java 7, dynamically generating the class implementation at runtime via the <code>LambdaMetafactory</code>.
+        </p>
+        <p>
+            A crucial constraint in lambdas is variable capture. Captured variables must be <strong>effectively final</strong>. If a lambda executed in a thread pool could mutate a local variable from its enclosing scope, it would violate thread safety without explicit synchronization.
+        </p>
 <pre><code class="language-java">// Imperative (Mutable State - Bug Prone)
 double totalNotional = 0;
 for (Trade trade : trades) {
@@ -56,66 +51,169 @@ double totalNotional = trades.stream()
     .mapToDouble(t -> t.getPrice() * t.getQuantity())
     .sum();
 </code></pre>
-        </section>
+    </section>
 
-        <section id="core-interfaces">
-            <h2>2. Core Functional Interfaces in <code>java.util.function</code></h2>
-            <p>
-                To support lambdas, Java introduced specialized SAM (Single Abstract Method) interfaces. In trading pipelines, these represent specific behavioral contracts:
-            </p>
-            <ul>
-                <li><strong><code>Predicate&lt;T&gt;</code></strong> (Returns boolean): Used in pre-trade risk checks. e.g., <code>trade -> trade.getQuantity() &lt;= 10000</code>.</li>
-                <li><strong><code>Function&lt;T, R&gt;</code></strong> (Returns R): Used in data transformations, such as converting a <code>Trade</code> into a FIX <code>ExecutionReport</code>, or applying an FX rate. e.g., <code>fxRate::convert</code>.</li>
-                <li><strong><code>Consumer&lt;T&gt;</code></strong> (Returns void): Used for side-effects, such as writing to an audit log or publishing to Kafka. e.g., <code>auditService::logTrade</code>.</li>
-                <li><strong><code>Supplier&lt;T&gt;</code></strong> (Takes nothing, returns T): Used for lazy evaluation and generator patterns. e.g., generating unique <code>ClOrdID</code> (Client Order ID) via <code>UUID::randomUUID</code>.</li>
-            </ul>
+    <!-- SECTION 2: TARGET TYPING & PREDICATE DEDUCTION -->
+    <section id="target-typing">
+        <h2>2. Target Typing: How Does Java Know to Look at <code>Predicate&lt;Trade&gt;</code>?</h2>
+        
+        <div class="callout callout-info">
+            <div class="callout-title">💡 The Core Insight: Lambdas Have No Intrinsic Type!</div>
+            <p>Unlike a literal number (<code>10</code> is an <code>int</code>) or a string (<code>"AAPL"</code> is a <code>String</code>), a lambda expression like <code>trade -> trade.getNotional() > 0</code> <strong>has no type of its own</strong> in isolation!</p>
+            <p>If you type: <code>var x = (trade) -> trade.getNotional() > 0;</code> the Java compiler will immediately fail with: <em>"Cannot infer type: lambda expression requires an explicit target type."</em></p>
+        </div>
 
-            <h3>Custom Functional Interface for Execution</h3>
-            <p>
-                You can define domain-specific contracts using <code>@FunctionalInterface</code>, which allows default and static methods for utility behavior.
-            </p>
-<pre><code class="language-java">@FunctionalInterface
-public interface RiskStrategy {
-    boolean evaluate(Order order);
+        <h3>The Compiler's Step-by-Step Deduction Process:</h3>
+        <p>How does Java figure out what functional interface your lambda represents? <strong>It figures this out by looking at the surrounding context—specifically, the method you are calling or the variable you are assigning to.</strong> This mechanism is called <strong>Target Typing</strong>.</p>
 
-    // Default method to chain strategies
-    default RiskStrategy and(RiskStrategy other) {
-        return order -> this.evaluate(order) && other.evaluate(order);
-    }
+        <div class="mermaid">
+flowchart TD
+    A["trades is List(Trade)"] --> B["trades.stream() creates Stream(Trade)"]
+    B --> C["Compiler looks at Stream(T).filter(Predicate rule)"]
+    C --> D["Substituting T = Trade: Expected parameter is Predicate(Trade)"]
+    D --> E["Predicate(Trade) has SAM: boolean test(Trade t)"]
+    E --> F["Compiler matches lambda: (trade) -> trade.notional > 0"]
+    F --> G["1 argument (Trade) -> returns boolean. PERFECT MATCH!"]
+    G --> H["Bytecode emits invokedynamic targeting Predicate(Trade)"]
+        </div>
+
+        <ol>
+            <li><strong>Stream Generic Resolution:</strong> You have a <code>List&lt;Trade&gt; trades</code>. Calling <code>trades.stream()</code> creates a <code>Stream&lt;Trade&gt;</code> where the generic type parameter <code>T</code> is bound to <code>Trade</code>.</li>
+            <li><strong>Method Signature Inspection:</strong> The compiler inspects the rules for <code>Stream&lt;Trade&gt;</code> and checks how the <code>filter()</code> method is defined in the Java standard library:
+                <pre><code class="language-java">public Stream&lt;T&gt; filter(Predicate&lt;? super T&gt; predicate);</code></pre>
+                Because <code>T</code> is <code>Trade</code>, the method specifically requires a <code>Predicate&lt;Trade&gt;</code>.
+            </li>
+            <li><strong>The "Aha!" Moment:</strong> Because you placed your lambda <code>trade -> trade.getNotional() > 0</code> inside the parentheses of <code>.filter(...)</code>, the compiler says: <em>"Ah! The filter method specifically requires a <code>Predicate&lt;Trade&gt;</code>. I will convert this lambda into a <code>Predicate&lt;Trade&gt;</code>."</em></li>
+            <li><strong>SAM (Single Abstract Method) Verification:</strong> The compiler opens <code>Predicate&lt;Trade&gt;</code> and sees its abstract method:
+                <pre><code class="language-java">boolean test(Trade t);</code></pre>
+                It verifies that your lambda accepts 1 argument (<code>Trade</code>) and returns a <code>boolean</code> (the result of <code>trade.getNotional() > 0</code>). Because the signature matches, compilation succeeds!
+            </li>
+        </ol>
+
+        <hr>
+
+        <h3>Custom <code>@FunctionalInterface</code> vs Built-in Java Library</h3>
+        <p>A lambda can bind to <em>either</em> a custom functional interface you define yourself, <em>or</em> one of the built-in interfaces from <code>java.util.function</code>. Notice how the lambda syntax looks identical, but the way you trigger it differs:</p>
+
+        <div class="code-comparison">
+            <h4>Option 1: You Write Your Own Custom Interface</h4>
+            <pre><code class="language-java">// 1. You write the custom interface
+@FunctionalInterface
+interface DiscountCalculator {
+    double applyDiscount(double price); 
 }
 
-// Usage in an OMS:
-RiskStrategy maxQuantity = order -> order.getQuantity() < 50000;
-RiskStrategy restrictedSymbols = order -> !RestrictedList.contains(order.getSymbol());
-RiskStrategy aggregateRisk = maxQuantity.and(restrictedSymbols);
-</code></pre>
-            
-            <div class="callout interview-script">
-                <h3>📋 How to Answer This in an Interview</h3>
-                <p><strong>Q: "What is a functional interface and how does Java handle lambdas internally?"</strong></p>
-                <p><strong>Script:</strong> "A functional interface is an interface with exactly one abstract method, typically annotated with <code>@FunctionalInterface</code>. In our Risk Engine, we use <code>Predicate</code> for compliance checks and <code>Consumer</code> for asynchronous audit logging. Internally, Java does not create a physical <code>.class</code> file for every lambda like it did for anonymous inner classes. Instead, it uses the <code>invokedynamic</code> bytecode instruction. The JVM's <code>LambdaMetafactory</code> links the lambda at runtime to a private synthetic method, significantly reducing memory overhead and classloading latency."</p>
-            </div>
-        </section>
+public class CustomDemo {
+    public static void main(String[] args) {
+        // 2. You define the lambda
+        DiscountCalculator halfOff = (price) -> price * 0.50;
+        
+        // 3. You trigger it using your custom method name: applyDiscount()
+        double result = halfOff.applyDiscount(100.0);
+        System.out.println("Custom result: $" + result); // $50.0
+    }
+}</code></pre>
 
-        <section id="stream-internals">
-            <h2>3. Stream API Internals (Intermediate vs Terminal Operations)</h2>
-            <p>
-                A Stream is a pipeline of computational operations. Crucially, streams are <strong>lazy</strong>. Intermediate operations (like <code>filter</code> or <code>map</code>) do not execute until a terminal operation (like <code>collect</code>, <code>sum</code>, or <code>findFirst</code>) is invoked.
-            </p>
-            <p>
-                Furthermore, intermediate operations can be <em>short-circuiting</em>. Operations like <code>limit()</code>, <code>anyMatch()</code>, or <code>findFirst()</code> will halt the pipeline execution the moment the condition is satisfied, preventing unnecessary computation over massive market data feeds.
-            </p>
+            <h4>Option 2: You Use Java's Built-in <code>java.util.function.Function</code></h4>
+            <pre><code class="language-java">import java.util.function.Function; // Built-in Java library
 
-            <div class="mermaid">
-            flowchart LR
-                A[List&lt;Trade&gt;] -->|Stream Source| B(Filter: status==FILLED)
-                B -->|Intermediate| C(Map: getNotional)
-                C -->|Intermediate| D(Filter: notional > 1M)
-                D -->|Terminal| E((sum))
-                
-                style A fill:#2e2e2e,stroke:#fff,stroke-width:2px
-                style E fill:#8b0000,stroke:#fff,stroke-width:2px
-            </div>
+public class BuiltInDemo {
+    public static void main(String[] args) {
+        // 1. No interface to write! Just use Java's Function<T, R>.
+        // <Double, Double> means it takes a Double, and returns a Double.
+        
+        // 2. You define the lambda (looks EXACTLY the same)
+        Function<Double, Double> halfOff = (price) -> price * 0.50;
+        
+        // 3. You trigger it using Java's built-in method name: apply()
+        double result = halfOff.apply(100.0);
+        System.out.println("Built-in result: $" + result); // $50.0
+    }
+}</code></pre>
+        </div>
+
+        <h3>The Big 4 Built-In Functional Interfaces Cheatsheet</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>Interface</th>
+                    <th>SAM Method Signature</th>
+                    <th>Functional Concept</th>
+                    <th>Real-World Finance Example</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><strong><code>Predicate&lt;T&gt;</code></strong></td>
+                    <td><code>boolean test(T t)</code></td>
+                    <td>Condition / Filter (Returns boolean)</td>
+                    <td>Pre-trade compliance check: <code>trade -&gt; trade.getQty() &lt;= 50000</code></td>
+                </tr>
+                <tr>
+                    <td><strong><code>Function&lt;T, R&gt;</code></strong></td>
+                    <td><code>R apply(T t)</code></td>
+                    <td>Transform (Takes T, transforms to R)</td>
+                    <td>Currency conversion: <code>usdAmount -&gt; usdAmount * fxRate</code></td>
+                </tr>
+                <tr>
+                    <td><strong><code>Consumer&lt;T&gt;</code></strong></td>
+                    <td><code>void accept(T t)</code></td>
+                    <td>Side-effect (Consumes data, returns void)</td>
+                    <td>Logging to Kafka/Audit store: <code>trade -&gt; kafkaProducer.send(trade)</code></td>
+                </tr>
+                <tr>
+                    <td><strong><code>Supplier&lt;T&gt;</code></strong></td>
+                    <td><code>T get()</code></td>
+                    <td>Factory / Lazy Generator (Takes nothing, returns T)</td>
+                    <td>Generating FIX ClOrdId: <code>() -&gt; UUID.randomUUID().toString()</code></td>
+                </tr>
+                <tr>
+                    <td><strong><code>BiFunction&lt;T, U, R&gt;</code></strong></td>
+                    <td><code>R apply(T t, U u)</code></td>
+                    <td>2-argument transform (Takes T and U, returns R)</td>
+                    <td>Calculating P&amp;L: <code>(entryPrice, exitPrice) -&gt; exitPrice - entryPrice</code></td>
+                </tr>
+                <tr>
+                    <td><strong><code>UnaryOperator&lt;T&gt;</code></strong></td>
+                    <td><code>T apply(T t)</code></td>
+                    <td>Same-type transform (Specialized <code>Function&lt;T, T&gt;</code>)</td>
+                    <td>Applying market fee: <code>price -&gt; price * 1.002</code></td>
+                </tr>
+            </tbody>
+        </table>
+
+        <div class="callout callout-warning">
+            <div class="callout-title">⚡ High-Frequency Trading Performance Tip: Avoid Autoboxing with Primitives!</div>
+            <p>Using <code>Predicate&lt;Double&gt;</code> causes the JVM to constantly box <code>double</code> into <code>Double</code> objects on every tick, destroying L1 CPU cache and generating massive Garbage Collection churn. Always use the built-in primitive specializations:</p>
+            <ul>
+                <li><code>DoublePredicate</code> (method: <code>boolean test(double val)</code>)</li>
+                <li><code>IntPredicate</code>, <code>LongPredicate</code></li>
+                <li><code>DoubleFunction&lt;R&gt;</code>, <code>ToDoubleFunction&lt;T&gt;</code></li>
+                <li><code>DoubleConsumer</code>, <code>DoubleSupplier</code></li>
+            </ul>
+        </div>
+    </section>
+
+    <!-- SECTION 3: STREAM INTERNALS -->
+    <section id="stream-internals">
+        <h2>3. Stream API Internals (Intermediate vs Terminal Operations)</h2>
+        <p>
+            A Stream is a pipeline of computational operations. Crucially, streams are <strong>lazy</strong>. Intermediate operations (like <code>filter</code> or <code>map</code>) do not execute until a terminal operation (like <code>collect</code>, <code>sum</code>, or <code>findFirst</code>) is invoked.
+        </p>
+        <p>
+            Furthermore, intermediate operations can be <em>short-circuiting</em>. Operations like <code>limit()</code>, <code>anyMatch()</code>, or <code>findFirst()</code> will halt the pipeline execution the moment the condition is satisfied, preventing unnecessary computation over massive market data feeds.
+        </p>
+
+        <div class="mermaid">
+flowchart LR
+    A["List&lt;Trade&gt;"] -->|Stream Source| B["Filter: status == FILLED"]
+    B -->|Intermediate| C["Map: getNotional"]
+    C -->|Intermediate| D["Filter: notional &gt; 1M"]
+    D -->|Terminal| E((sum))
+    
+    style A fill:#2e2e2e,stroke:#fff,stroke-width:2px
+    style E fill:#8b0000,stroke:#fff,stroke-width:2px
+        </div>
 
 <pre><code class="language-java">// Calculating Value-at-Risk (VaR) across filtered equities
 // Execution is lazy: The filters won't run until .sum() is called.
@@ -125,17 +223,18 @@ double totalVaR = portfolio.getPositions().stream()
     .mapToDouble(Position::calculateVaR) // Heavy quantitative computation
     .sum();
 </code></pre>
-        </section>
+    </section>
 
-        <section id="map-vs-flatmap">
-            <h2>4. <code>map()</code> vs <code>flatMap()</code> (The Most Frequently Asked Stream Question)</h2>
-            <p>
-                In complex trading systems, data is deeply nested. You often deal with a <code>List&lt;Portfolio&gt;</code>, where each <code>Portfolio</code> contains a <code>List&lt;Position&gt;</code>, and each <code>Position</code> contains a <code>List&lt;Trade&gt;</code>.
-            </p>
-            <ul>
-                <li><strong><code>map()</code></strong> is a 1-to-1 transformation. If you apply <code>map(Portfolio::getTrades)</code>, you get a <code>Stream&lt;List&lt;Trade&gt;&gt;</code>. This is generally useless if you want to filter all trades.</li>
-                <li><strong><code>flatMap()</code></strong> is a 1-to-Many flattening operation. It requires the mapping function to return a <code>Stream</code>, and it "flattens" those streams into a single continuous stream of elements.</li>
-            </ul>
+    <!-- SECTION 4: MAP VS FLATMAP -->
+    <section id="map-vs-flatmap">
+        <h2>4. <code>map()</code> vs <code>flatMap()</code> (The Most Frequently Asked Stream Question)</h2>
+        <p>
+            In complex trading systems, data is deeply nested. You often deal with a <code>List&lt;Portfolio&gt;</code>, where each <code>Portfolio</code> contains a <code>List&lt;Position&gt;</code>, and each <code>Position</code> contains a <code>List&lt;Trade&gt;</code>.
+        </p>
+        <ul>
+            <li><strong><code>map()</code></strong> is a 1-to-1 transformation. If you apply <code>map(Portfolio::getTrades)</code>, you get a <code>Stream&lt;List&lt;Trade&gt;&gt;</code>. This is generally useless if you want to filter all trades.</li>
+            <li><strong><code>flatMap()</code></strong> is a 1-to-Many flattening operation. It requires the mapping function to return a <code>Stream</code>, and it "flattens" those streams into a single continuous stream of elements.</li>
+        </ul>
 
 <pre><code class="language-java">List&lt;Portfolio&gt; firmPortfolios = riskService.getAllPortfolios();
 
@@ -149,19 +248,20 @@ List&lt;Trade&gt; largeTradesAcrossFirm = firmPortfolios.stream()
     .collect(Collectors.toList());
 </code></pre>
 
-            <div class="callout interview-script">
-                <h3>📋 How to Answer This in an Interview</h3>
-                <p><strong>Q: "What is the exact difference between map and flatMap?"</strong></p>
-                <p><strong>Script:</strong> "<code>map</code> transforms a single input into a single output, maintaining the stream's structural depth. If I map a <code>Portfolio</code> to its <code>List&lt;Trade&gt;</code>, I end up with a <code>Stream&lt;List&lt;Trade&gt;&gt;</code>. <code>flatMap</code>, on the other hand, transforms a single input into <em>multiple</em> outputs (a Stream) and merges them into the top-level stream. In an OMS, if I need to calculate aggregate firm-wide exposure, I use <code>flatMap</code> to extract all trades from all portfolios into a single, unified <code>Stream&lt;Trade&gt;</code> for seamless downstream aggregation."</p>
-            </div>
-        </section>
+        <div class="callout callout-info">
+            <div class="callout-title">📋 How to Answer This in an Interview</div>
+            <p><strong>Q: "What is the exact difference between map and flatMap?"</strong></p>
+            <p><strong>Script:</strong> "<code>map</code> transforms a single input into a single output, maintaining the stream's structural depth. If I map a <code>Portfolio</code> to its <code>List&lt;Trade&gt;</code>, I end up with a <code>Stream&lt;List&lt;Trade&gt;&gt;</code>. <code>flatMap</code>, on the other hand, transforms a single input into <em>multiple</em> outputs (a Stream) and merges them into the top-level stream. In an OMS, if I need to calculate aggregate firm-wide exposure, I use <code>flatMap</code> to extract all trades from all portfolios into a single, unified <code>Stream&lt;Trade&gt;</code> for seamless downstream aggregation."</p>
+        </div>
+    </section>
 
-        <section id="advanced-collectors">
-            <h2>5. Advanced Collectors (<code>java.util.stream.Collectors</code>)</h2>
-            <p>
-                Terminal operations often require restructuring the processed stream back into collections or complex aggregates. The <code>Collectors</code> utility class provides highly optimized, thread-safe reduction operations.
-            </p>
-            
+    <!-- SECTION 5: ADVANCED COLLECTORS -->
+    <section id="advanced-collectors">
+        <h2>5. Advanced Collectors (<code>java.util.stream.Collectors</code>)</h2>
+        <p>
+            Terminal operations often require restructuring the processed stream back into collections or complex aggregates. The <code>Collectors</code> utility class provides highly optimized, thread-safe reduction operations.
+        </p>
+        
 <pre><code class="language-java">// 1. Grouping: Aggregate trades by Currency Pair for FX exposure
 Map&lt;String, List&lt;Trade&gt;&gt; tradesByCcy = trades.stream()
     .collect(Collectors.groupingBy(Trade::getCurrencyPair));
@@ -177,16 +277,17 @@ Map&lt;String, Double&gt; vwapBySymbol = executions.stream()
         Collectors.averagingDouble(Execution::getPrice)
     ));
 </code></pre>
-        </section>
+    </section>
 
-        <section id="optional">
-            <h2>6. <code>Optional&lt;T&gt;</code> Best Practices & Anti-Patterns</h2>
-            <p>
-                <code>Optional</code> was introduced strictly as a return type for methods that might not return a value, explicitly signaling to the caller that the result might be absent. It forces the caller to handle the null case, eradicating the dreaded <code>NullPointerException</code>.
-            </p>
-            <p>
-                <strong>Anti-Pattern:</strong> Calling <code>optional.get()</code> without checking <code>isPresent()</code> is identical to dereferencing a null pointer. Never use <code>Optional</code> as a class field or a method parameter (it adds unnecessary object allocation overhead and memory footprint).
-            </p>
+    <!-- SECTION 6: OPTIONAL BEST PRACTICES -->
+    <section id="optional">
+        <h2>6. <code>Optional&lt;T&gt;</code> Best Practices &amp; Anti-Patterns</h2>
+        <p>
+            <code>Optional</code> was introduced strictly as a return type for methods that might not return a value, explicitly signaling to the caller that the result might be absent. It forces the caller to handle the null case, eradicating the dreaded <code>NullPointerException</code>.
+        </p>
+        <p>
+            <strong>Anti-Pattern:</strong> Calling <code>optional.get()</code> without checking <code>isPresent()</code> is identical to dereferencing a null pointer. Never use <code>Optional</code> as a class field or a method parameter (it adds unnecessary object allocation overhead and memory footprint).
+        </p>
 
 <pre><code class="language-java">public Optional&lt;Security&gt; lookupSecurity(String ricCode) {
     return securityMaster.findByRic(ricCode);
@@ -203,29 +304,31 @@ Security sec = lookupSecurity("VOD.L")
 Security sec = lookupSecurity("VOD.L")
     .orElseGet(() -> bloombergService.fetchSecurity("VOD.L"));
 </code></pre>
-        </section>
+    </section>
 
-        <section id="method-references">
-            <h2>7. Method References</h2>
-            <p>
-                Method references (<code>::</code>) provide a shorthand syntax for lambdas that do nothing but call an existing method. They make code more readable.
-            </p>
-            <ul>
-                <li><strong>Static:</strong> <code>Math::abs</code> (equivalent to <code>x -> Math.abs(x)</code>)</li>
-                <li><strong>Instance (Bound):</strong> <code>auditLogger::log</code> (equivalent to <code>t -> auditLogger.log(t)</code>)</li>
-                <li><strong>Instance (Unbound):</strong> <code>Trade::getSymbol</code> (equivalent to <code>t -> t.getSymbol()</code>)</li>
-                <li><strong>Constructor:</strong> <code>Order::new</code> (equivalent to <code>() -> new Order()</code>)</li>
-            </ul>
-        </section>
+    <!-- SECTION 7: METHOD REFERENCES -->
+    <section id="method-references">
+        <h2>7. Method References</h2>
+        <p>
+            Method references (<code>::</code>) provide a shorthand syntax for lambdas that do nothing but call an existing method. They make code more readable.
+        </p>
+        <ul>
+            <li><strong>Static:</strong> <code>Math::abs</code> (equivalent to <code>x -> Math.abs(x)</code>)</li>
+            <li><strong>Instance (Bound):</strong> <code>auditLogger::log</code> (equivalent to <code>t -> auditLogger.log(t)</code>)</li>
+            <li><strong>Instance (Unbound):</strong> <code>Trade::getSymbol</code> (equivalent to <code>t -> t.getSymbol()</code>)</li>
+            <li><strong>Constructor:</strong> <code>Order::new</code> (equivalent to <code>() -> new Order()</code>)</li>
+        </ul>
+    </section>
 
-        <section id="java-time">
-            <h2>8. Modern Date/Time API (<code>java.time</code>) for Electronic Trading</h2>
-            <p>
-                Prior to Java 8, <code>java.util.Date</code> and <code>java.util.Calendar</code> were a disaster. They were mutable (causing massive thread-safety issues in concurrent pricing engines) and had bizarre zero-indexed months.
-            </p>
-            <p>
-                The <code>java.time</code> package (JSR-310) is immutable, thread-safe, and nanosecond-precise (critical for FIX timestamping). Core classes include <code>Instant</code> (machine time), <code>LocalDate</code> (date without timezone), and <code>ZonedDateTime</code> (time with offset and rules).
-            </p>
+    <!-- SECTION 8: JAVA.TIME API -->
+    <section id="java-time">
+        <h2>8. Modern Date/Time API (<code>java.time</code>) for Electronic Trading</h2>
+        <p>
+            Prior to Java 8, <code>java.util.Date</code> and <code>java.util.Calendar</code> were a disaster. They were mutable (causing massive thread-safety issues in concurrent pricing engines) and had bizarre zero-indexed months.
+        </p>
+        <p>
+            The <code>java.time</code> package (JSR-310) is immutable, thread-safe, and nanosecond-precise (critical for FIX timestamping). Core classes include <code>Instant</code> (machine time), <code>LocalDate</code> (date without timezone), and <code>ZonedDateTime</code> (time with offset and rules).
+        </p>
 
 <pre><code class="language-java">// Calculating T+2 Settlement Date
 LocalDate tradeDate = LocalDate.now(ZoneId.of("America/New_York"));
@@ -239,27 +342,28 @@ if (settlementDate.getDayOfWeek() == DayOfWeek.SATURDAY) {
 }
 // Note: A real implementation would query a HolidayCalendar service
 </code></pre>
-        </section>
+    </section>
 
-        <section id="grill-round">
-            <div class="callout grill-round">
-                <h3>🎯 Interviewer Follow-Up Questions (The Grill Round)</h3>
-                
-                <p><strong>1. "Can a Stream be reused after calling a terminal operation?"</strong></p>
-                <p><strong>Answer:</strong> "Absolutely not. Once a terminal operation (like <code>collect</code> or <code>findFirst</code>) is invoked, the stream is considered consumed and closed. Attempting to reuse it will throw an <code>IllegalStateException</code>. If we need to process the same dataset multiple times, we must either create a new Stream from the source collection or materialize the stream into a new collection."</p>
-                
-                <p><strong>2. "When should you NOT use parallel streams (<code>.parallelStream()</code>) in an execution engine?"</strong></p>
-                <p><strong>Answer:</strong> "Parallel streams use the shared JVM <code>ForkJoinPool.commonPool()</code>. In a latency-sensitive trading system, blocking I/O operations (like database calls or network requests) inside a parallel stream will starve this shared pool, degrading performance across the entire application. They should only be used for CPU-bound computations on large, easily partitionable datasets (like massive arrays or ArrayLists), and even then, only after rigorous JMH benchmarking."</p>
-                
-                <p><strong>3. "Why shouldn't you use <code>Optional</code> as a field in an Entity class (e.g., <code>class Trade { Optional&lt;String&gt; traderId; }</code>)?"</strong></p>
-                <p><strong>Answer:</strong> "<code>Optional</code> is not <code>Serializable</code>, which breaks JPA, Hibernate, and distributed caching mechanisms like Hazelcast or Redis. Furthermore, it adds 16 bytes of object header overhead per instance. For a cache holding millions of trades, this causes severe memory bloat. Fields should just be nullable, and getters should return <code>Optional</code> if we want to enforce safety at the API boundary."</p>
-            </div>
-        </section>
+    <!-- SECTION 9: GRILL ROUND -->
+    <section id="grill-round">
+        <div class="callout callout-warning">
+            <div class="callout-title">🎯 Interviewer Follow-Up Questions (The Grill Round)</div>
+            
+            <p><strong>1. "Can a Stream be reused after calling a terminal operation?"</strong></p>
+            <p><strong>Answer:</strong> "Absolutely not. Once a terminal operation (like <code>collect</code> or <code>findFirst</code>) is invoked, the stream is considered consumed and closed. Attempting to reuse it will throw an <code>IllegalStateException</code>. If we need to process the same dataset multiple times, we must either create a new Stream from the source collection or materialize the stream into a new collection."</p>
+            
+            <p><strong>2. "When should you NOT use parallel streams (<code>.parallelStream()</code>) in an execution engine?"</strong></p>
+            <p><strong>Answer:</strong> "Parallel streams use the shared JVM <code>ForkJoinPool.commonPool()</code>. In a latency-sensitive trading system, blocking I/O operations (like database calls or network requests) inside a parallel stream will starve this shared pool, degrading performance across the entire application. They should only be used for CPU-bound computations on large, easily partitionable datasets (like massive arrays or ArrayLists), and even then, only after rigorous JMH benchmarking."</p>
+            
+            <p><strong>3. "Why shouldn't you use <code>Optional</code> as a field in an Entity class (e.g., <code>class Trade { Optional&lt;String&gt; traderId; }</code>)?"</strong></p>
+            <p><strong>Answer:</strong> "<code>Optional</code> is not <code>Serializable</code>, which breaks JPA, Hibernate, and distributed caching mechanisms like Hazelcast or Redis. Furthermore, it adds 16 bytes of object header overhead per instance. For a cache holding millions of trades, this causes severe memory bloat. Fields should just be nullable, and getters should return <code>Optional</code> if we want to enforce safety at the API boundary."</p>
+        </div>
+    </section>
+
   </main>
 </div>
 
 <button class="scroll-top" aria-label="Scroll to top">↑</button>
-<script src="../../js/main.js"></script>
+<script src="../js/main.js"></script>
 </body>
 </html>
-

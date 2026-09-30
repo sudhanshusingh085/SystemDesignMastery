@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Food Ordering System — System Design Mastery</title>
   <link rel="stylesheet" href="../../css/style.css">
-  <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.0/dist/mermaid.min.js"></script>
 </head>
 <body>
 <button class="menu-toggle" aria-label="Toggle menu">☰</button>
@@ -60,8 +60,13 @@
         <h2>Low-Level Design (Java 21)</h2>
         <p>Here is the complete object-oriented design using Java 21 features like records, sealed interfaces, and pattern matching.</p>
         
-        <span class="code-label">Java</span>
-<pre><code>import java.time.LocalDateTime;
+<div class="code-tabs">
+  <div class="code-tabs-header">
+    <button class="code-tab-btn active" data-tab="java">☕ Java 21</button>
+    <button class="code-tab-btn" data-tab="csharp">🔷 C#</button>
+  </div>
+  <div class="code-tab-content active" data-tab-content="java">
+    <pre><code class="language-java">import java.time.LocalDateTime;
 import java.util.*;
 
 // SOLID: Single Responsibility — these records just hold data
@@ -308,8 +313,118 @@ public class Main {
         service.acceptOrder(order);
         service.markReadyForPickup(order);
     }
+}</code></pre>
+  </div>
+  <div class="code-tab-content" data-tab-content="csharp">
+    <pre><code class="language-csharp">using System;
+using System.Collections.Generic;
+
+public record MenuItem(string Id, string Name, decimal Price);
+
+public class Restaurant
+{
+    public string Id { get; }
+    public string Name { get; }
+    public List<MenuItem> Menu { get; } = new();
+
+    public Restaurant(string id, string name)
+    {
+        Id = id;
+        Name = name;
+    }
 }
-</code></pre>
+
+public record CartItem(MenuItem Item, int Quantity);
+
+public class Cart
+{
+    public Restaurant? Restaurant { get; private set; }
+    public List<CartItem> Items { get; } = new();
+
+    public void AddItem(Restaurant restaurant, MenuItem item, int qty)
+    {
+        if (Restaurant != null && Restaurant.Id != restaurant.Id)
+        {
+            Console.WriteLine("Warning: Items must be from the same restaurant. Clearing cart.");
+            Items.Clear();
+        }
+        Restaurant = restaurant;
+        Items.Add(new CartItem(item, qty));
+    }
+
+    public decimal CalculateTotal()
+    {
+        decimal sum = 0;
+        foreach (var ci in Items) sum += ci.Item.Price * ci.Quantity;
+        return sum;
+    }
+}
+
+public enum OrderStatus
+{
+    Placed, Confirmed, Preparing, ReadyForPickup, OutForDelivery, Delivered, Cancelled
+}
+
+public class Order
+{
+    public string OrderId { get; } = Guid.NewGuid().ToString();
+    public Restaurant Restaurant { get; }
+    public List<CartItem> Items { get; }
+    public decimal TotalAmount { get; }
+    public OrderStatus Status { get; private set; } = OrderStatus.Placed;
+
+    public Order(Restaurant restaurant, List<CartItem> items, decimal total)
+    {
+        Restaurant = restaurant;
+        Items = new List<CartItem>(items);
+        TotalAmount = total;
+    }
+
+    public void TransitionTo(OrderStatus newStatus)
+    {
+        Console.WriteLine($"[Order {OrderId}] State transition: {Status} -> {newStatus}");
+        Status = newStatus;
+    }
+}
+
+public class FoodOrderingService
+{
+    public Order PlaceOrder(Cart cart)
+    {
+        if (cart.Restaurant == null || cart.Items.Count == 0)
+        {
+            throw new InvalidOperationException("Cannot place order with empty cart.");
+        }
+
+        var order = new Order(cart.Restaurant, cart.Items, cart.CalculateTotal());
+        Console.WriteLine($"Order placed successfully! Total: ${order.TotalAmount:F2}");
+        return order;
+    }
+}
+
+public class Program
+{
+    public static void Main()
+    {
+        var restaurant = new Restaurant("REST-1", "Mario's Pizza");
+        var pizza = new MenuItem("ITEM-1", "Margherita", 14.50m);
+        var garlicBread = new MenuItem("ITEM-2", "Garlic Bread", 5.00m);
+
+        var cart = new Cart();
+        cart.AddItem(restaurant, pizza, 2);
+        cart.AddItem(restaurant, garlicBread, 1);
+
+        var service = new FoodOrderingService();
+        var order = service.PlaceOrder(cart);
+
+        order.TransitionTo(OrderStatus.Confirmed);
+        order.TransitionTo(OrderStatus.Preparing);
+        order.TransitionTo(OrderStatus.OutForDelivery);
+        order.TransitionTo(OrderStatus.Delivered);
+    }
+}</code></pre>
+  </div>
+</div>
     </section>
     
     <div class="callout callout-info">

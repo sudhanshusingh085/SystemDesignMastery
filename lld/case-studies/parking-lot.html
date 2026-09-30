@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Design a Parking Lot System Masterclass — System Design Mastery</title>
   <link rel="stylesheet" href="../../css/style.css">
-  <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.0/dist/mermaid.min.js"></script>
 </head>
 <body>
 <button class="menu-toggle" aria-label="Toggle menu">☰</button>
@@ -127,9 +127,13 @@
 
     <section>
       <h2>Phase 5: Complete, Robust Java 21 Code</h2>
-      <span class="code-label">Java 21</span>
-      <pre><code>
-import java.time.LocalDateTime;
+<div class="code-tabs">
+  <div class="code-tabs-header">
+    <button class="code-tab-btn active" data-tab="java">☕ Java 21</button>
+    <button class="code-tab-btn" data-tab="csharp">🔷 C#</button>
+  </div>
+  <div class="code-tab-content active" data-tab-content="java">
+    <pre><code class="language-java">import java.time.LocalDateTime;
 import java.time.Duration;
 import java.util.*;
 import java.util.concurrent.locks.Lock;
@@ -329,8 +333,219 @@ public class Main {
         
         System.out.println("Unparked successfully. Total Fee: $" + fee);
     }
+}</code></pre>
+  </div>
+  <div class="code-tab-content" data-tab-content="csharp">
+    <pre><code class="language-csharp">using System;
+using System.Collections.Generic;
+
+// --- ENUMS ---
+public enum VehicleType { Bike, Car, Truck }
+public enum SpotType { Compact, Regular, Large }
+public enum PaymentStatus { Pending, Completed, Failed }
+
+// --- DOMAIN ENTITIES ---
+// OOP: Abstraction & Encapsulation
+public abstract record Vehicle(string LicensePlate, VehicleType Type);
+
+public record Bike(string LicensePlate) : Vehicle(LicensePlate, VehicleType.Bike);
+public record Car(string LicensePlate) : Vehicle(LicensePlate, VehicleType.Car);
+public record Truck(string LicensePlate) : Vehicle(LicensePlate, VehicleType.Truck);
+
+// SOLID: SRP - ParkingSpot only manages its own state
+public class ParkingSpot
+{
+    private readonly object _lock = new();
+    public string SpotId { get; }
+    public SpotType Type { get; }
+    public bool IsFree { get; private set; }
+    public Vehicle? CurrentVehicle { get; private set; }
+
+    public ParkingSpot(string spotId, SpotType type)
+    {
+        SpotId = spotId;
+        Type = type;
+        IsFree = true;
+    }
+
+    public void AssignVehicle(Vehicle vehicle)
+    {
+        lock (_lock)
+        {
+            CurrentVehicle = vehicle;
+            IsFree = false;
+        }
+    }
+
+    public void RemoveVehicle()
+    {
+        lock (_lock)
+        {
+            CurrentVehicle = null;
+            IsFree = true;
+        }
+    }
 }
-      </code></pre>
+
+// --- STRATEGY PATTERNS (SOLID: OCP) ---
+public interface IParkingStrategy
+{
+    ParkingSpot? FindSpot(IEnumerable<ParkingFloor> floors, SpotType type);
+}
+
+public class NearestFirstParkingStrategy : IParkingStrategy
+{
+    public ParkingSpot? FindSpot(IEnumerable<ParkingFloor> floors, SpotType type)
+    {
+        foreach (var floor in floors)
+        {
+            foreach (var spot in floor.Spots)
+            {
+                if (spot.Type == type && spot.IsFree)
+                {
+                    return spot;
+                }
+            }
+        }
+        return null;
+    }
+}
+
+public interface IFeeStrategy
+{
+    double CalculateFee(DateTime entryTime, DateTime exitTime, VehicleType type);
+}
+
+public class HourlyFeeStrategy : IFeeStrategy
+{
+    public double CalculateFee(DateTime entryTime, DateTime exitTime, VehicleType type)
+    {
+        var hours = Math.Max((int)Math.Ceiling((exitTime - entryTime).TotalHours), 1);
+        return type switch
+        {
+            VehicleType.Bike => hours * 10.0,
+            VehicleType.Car => hours * 20.0,
+            VehicleType.Truck => hours * 30.0,
+            _ => throw new ArgumentOutOfRangeException(nameof(type))
+        };
+    }
+}
+
+// C# 9+ Record for pure DTO Immutability
+public record Ticket(string TicketId, string LicensePlate, string SpotId, DateTime EntryTime);
+
+// --- COMPOSITE ENTITIES ---
+public class ParkingFloor
+{
+    public int FloorNumber { get; }
+    public List<ParkingSpot> Spots { get; } = new();
+
+    public ParkingFloor(int floorNumber, int capacity)
+    {
+        FloorNumber = floorNumber;
+        for (int i = 1; i <= capacity; i++)
+        {
+            var type = (i % 3 == 0) ? SpotType.Large : (i % 2 == 0) ? SpotType.Regular : SpotType.Compact;
+            Spots.Add(new ParkingSpot($"{floorNumber}-{i}", type));
+        }
+    }
+}
+
+// --- CORE SYSTEM CONTEXT (SINGLETON) ---
+public class ParkingLot
+{
+    private static ParkingLot? _instance;
+    private static readonly object _initLock = new();
+    private readonly object _assignmentLock = new();
+    private readonly List<ParkingFloor> _floors = new();
+    private readonly IParkingStrategy _parkingStrategy;
+
+    private ParkingLot(int numFloors, int spotsPerFloor)
+    {
+        for (int i = 1; i <= numFloors; i++)
+        {
+            _floors.Add(new ParkingFloor(i, spotsPerFloor));
+        }
+        _parkingStrategy = new NearestFirstParkingStrategy();
+    }
+
+    public static ParkingLot GetInstance(int numFloors, int spotsPerFloor)
+    {
+        if (_instance == null)
+        {
+            lock (_initLock)
+            {
+                _instance ??= new ParkingLot(numFloors, spotsPerFloor);
+            }
+        }
+        return _instance;
+    }
+
+    private static SpotType GetSpotTypeForVehicle(VehicleType vType) => vType switch
+    {
+        VehicleType.Bike => SpotType.Compact,
+        VehicleType.Car => SpotType.Regular,
+        VehicleType.Truck => SpotType.Large,
+        _ => throw new ArgumentOutOfRangeException(nameof(vType))
+    };
+
+    public Ticket ParkVehicle(Vehicle vehicle)
+    {
+        var requiredType = GetSpotTypeForVehicle(vehicle.Type);
+
+        lock (_assignmentLock)
+        {
+            var spot = _parkingStrategy.FindSpot(_floors, requiredType);
+            if (spot == null)
+            {
+                throw new InvalidOperationException($"Parking Lot Full for vehicle type: {vehicle.Type}");
+            }
+            spot.AssignVehicle(vehicle);
+            var ticketId = Guid.NewGuid().ToString();
+            return new Ticket(ticketId, vehicle.LicensePlate, spot.SpotId, DateTime.UtcNow);
+        }
+    }
+
+    public double UnparkVehicle(Ticket ticket, IFeeStrategy feeStrategy)
+    {
+        foreach (var floor in _floors)
+        {
+            foreach (var spot in floor.Spots)
+            {
+                if (spot.SpotId == ticket.SpotId)
+                {
+                    spot.RemoveVehicle();
+                    break;
+                }
+            }
+        }
+        return feeStrategy.CalculateFee(ticket.EntryTime, DateTime.UtcNow.AddHours(3), VehicleType.Car);
+    }
+}
+
+// --- MAIN SIMULATION ---
+public class Program
+{
+    public static void Main()
+    {
+        Console.WriteLine("Initializing Parking Lot with 2 floors, 6 spots each...");
+        var lot = ParkingLot.GetInstance(2, 6);
+
+        var myCar = new Car("CA-1234");
+        Console.WriteLine("Attempting to park Car: CA-1234...");
+
+        var ticket = lot.ParkVehicle(myCar);
+        Console.WriteLine($"Parked successfully! Ticket Details: {ticket}");
+
+        Console.WriteLine("Processing Exit...");
+        IFeeStrategy hourlyBilling = new HourlyFeeStrategy();
+        double fee = lot.UnparkVehicle(ticket, hourlyBilling);
+
+        Console.WriteLine($"Unparked successfully. Total Fee: ${fee:F2}");
+    }
+}</code></pre>
+  </div>
+</div>
     </section>
 
     <section>

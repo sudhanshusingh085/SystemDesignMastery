@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SOLID Principles Masterclass — System Design Mastery</title>
   <link rel="stylesheet" href="../css/style.css">
-  <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.0/dist/mermaid.min.js"></script>
 </head>
 <body>
 <button class="menu-toggle" aria-label="Toggle menu">☰</button>
@@ -39,9 +39,13 @@
 
       <h3>3. Flawed Implementation (Anti-pattern)</h3>
       <p>This class is a ticking time bomb. A change to the email formatting will require modifying the `EmployeeService`, risking breakage in salary calculation.</p>
-      <span class="code-label">Java (Anti-pattern)</span>
-      <pre><code>
-public class EmployeeService {
+      <div class="code-tabs">
+  <div class="code-tabs-header">
+    <button class="code-tab-btn active" data-tab="java">☕ Java (Anti-pattern)</button>
+    <button class="code-tab-btn" data-tab="csharp">🔷 C# (Anti-pattern)</button>
+  </div>
+  <div class="code-tab-content active" data-tab-content="java">
+    <pre><code class="language-java">public class EmployeeService {
     // VIOLATION: Three distinct reasons to change!
     // 1. Business Logic changes (salary rules)
     public double calculatePay(Employee emp) {
@@ -57,8 +61,32 @@ public class EmployeeService {
     public void sendEmail(Employee emp, String msg) {
         // SMTP logic here...
     }
-}
-      </code></pre>
+}</code></pre>
+  </div>
+  <div class="code-tab-content" data-tab-content="csharp">
+    <pre><code class="language-csharp">public class EmployeeService
+{
+    // VIOLATION: Three distinct reasons to change!
+    // 1. Business Logic changes (salary rules)
+    public double CalculatePay(Employee emp)
+    {
+        return emp.BaseSalary * 1.2;
+    }
+
+    // 2. Database schema changes (persistence)
+    public void SaveToDatabase(Employee emp)
+    {
+        // ADO.NET / EF Core logic here...
+    }
+
+    // 3. Notification requirement changes (formatting, SMTP)
+    public void SendEmail(Employee emp, string msg)
+    {
+        // SmtpClient / SendGrid logic here...
+    }
+}</code></pre>
+  </div>
+</div>
 
       <h3>4. Refactored Architecture</h3>
       <div class="diagram-container">
@@ -76,9 +104,13 @@ public class EmployeeService {
 
       <h3>5. Clean Java 21 Implementation</h3>
       <p>Notice the deliberate use of <code>final</code>, constructor injection for dependency isolation, and separating data from behavior.</p>
-      <span class="code-label">Java 21 (Clean)</span>
-      <pre><code>
-// Data Transfer Object. 'record' inherently provides immutability.
+      <div class="code-tabs">
+  <div class="code-tabs-header">
+    <button class="code-tab-btn active" data-tab="java">☕ Java 21 (Clean)</button>
+    <button class="code-tab-btn" data-tab="csharp">🔷 C# (Clean)</button>
+  </div>
+  <div class="code-tab-content active" data-tab-content="java">
+    <pre><code class="language-java">// Data Transfer Object. 'record' inherently provides immutability.
 public record Employee(String id, double baseSalary, String email) {}
 
 // Reason to change: Business logic modifications
@@ -116,8 +148,58 @@ public final class EmployeeOnboardingWorkflow {
         repository.save(emp);
         notifier.notify(emp, "Welcome aboard!");
     }
+}</code></pre>
+  </div>
+  <div class="code-tab-content" data-tab-content="csharp">
+    <pre><code class="language-csharp">// Data Transfer Object. 'record' inherently provides immutability.
+public record Employee(string Id, double BaseSalary, string Email);
+
+// Reason to change: Business logic modifications
+public sealed class SalaryCalculator
+{
+    public double CalculatePay(Employee emp)
+    {
+        return emp.BaseSalary * 1.2; // Complex business rules belong here
+    }
 }
-      </code></pre>
+
+// Reason to change: Persistence framework (e.g., migrating from SQL to CosmosDB)
+public interface IEmployeeRepository
+{
+    void Save(Employee emp);
+}
+
+// Reason to change: Notification medium (Email to SMS)
+public interface INotificationService
+{
+    void Notify(Employee emp, string message);
+}
+
+// Orchestrator - Reason to change: Only if the overarching workflow changes
+public sealed class EmployeeOnboardingWorkflow
+{
+    private readonly IEmployeeRepository _repository;
+    private readonly INotificationService _notifier;
+    private readonly SalaryCalculator _salaryCalc;
+
+    public EmployeeOnboardingWorkflow(
+        IEmployeeRepository repository, 
+        INotificationService notifier, 
+        SalaryCalculator salaryCalc)
+    {
+        _repository = repository;
+        _notifier = notifier;
+        _salaryCalc = salaryCalc;
+    }
+
+    public void Onboard(Employee emp)
+    {
+        _repository.Save(emp);
+        _notifier.Notify(emp, "Welcome aboard!");
+    }
+}</code></pre>
+  </div>
+</div>
 
       <h3>6. Hard Interview Questions & Gotchas</h3>
       <div class="callout callout-warning">
@@ -139,9 +221,13 @@ public final class EmployeeOnboardingWorkflow {
 
       <h3>3. Flawed Implementation (Anti-pattern)</h3>
       <p>Adding a `Triangle` requires modifying the `AreaCalculator`. This breaks OCP and forces regression testing on previously verified code (`Circle` and `Rectangle`).</p>
-      <span class="code-label">Java (Anti-pattern)</span>
-      <pre><code>
-public class AreaCalculator {
+      <div class="code-tabs">
+  <div class="code-tabs-header">
+    <button class="code-tab-btn active" data-tab="java">☕ Java (Anti-pattern)</button>
+    <button class="code-tab-btn" data-tab="csharp">🔷 C# (Anti-pattern)</button>
+  </div>
+  <div class="code-tab-content active" data-tab-content="java">
+    <pre><code class="language-java">public class AreaCalculator {
     // VIOLATION: Modifying this method every time a new shape is added.
     public double calculateArea(Object shape) {
         if (shape instanceof Circle c) {
@@ -152,8 +238,28 @@ public class AreaCalculator {
         // What about Triangle? We have to modify this file!
         throw new IllegalArgumentException("Unknown shape");
     }
-}
-      </code></pre>
+}</code></pre>
+  </div>
+  <div class="code-tab-content" data-tab-content="csharp">
+    <pre><code class="language-csharp">public class AreaCalculator
+{
+    // VIOLATION: Modifying this method every time a new shape is added.
+    public double CalculateArea(object shape)
+    {
+        if (shape is Circle c)
+        {
+            return Math.PI * c.Radius * c.Radius;
+        }
+        else if (shape is Rectangle r)
+        {
+            return r.Width * r.Height;
+        }
+        // What about Triangle? We have to modify this file!
+        throw new ArgumentException("Unknown shape");
+    }
+}</code></pre>
+  </div>
+</div>
 
       <h3>4. Refactored Architecture</h3>
       <div class="diagram-container">
@@ -180,9 +286,13 @@ public class AreaCalculator {
 
       <h3>5. Clean Java 21 Implementation</h3>
       <p>Using polymorphic dispatch. Note the modern Java 21 `sealed` interface if we want to restrict the domain, or open interface for infinite extension.</p>
-      <span class="code-label">Java 21 (Clean)</span>
-      <pre><code>
-// Abstraction: Open for extension
+      <div class="code-tabs">
+  <div class="code-tabs-header">
+    <button class="code-tab-btn active" data-tab="java">☕ Java 21 (Clean)</button>
+    <button class="code-tab-btn" data-tab="csharp">🔷 C# (Clean)</button>
+  </div>
+  <div class="code-tab-content active" data-tab-content="java">
+    <pre><code class="language-java">// Abstraction: Open for extension
 public interface Shape {
     double calculateArea();
 }
@@ -213,13 +323,52 @@ public record Triangle(double base, double height) implements Shape {
 
 // Closed for modification: This class never changes, no matter how many shapes we add.
 public final class AreaCalculator {
-    public double calculateTotalArea(List&lt;Shape&gt; shapes) {
+    public double calculateTotalArea(List<Shape> shapes) {
         return shapes.stream()
                      .mapToDouble(Shape::calculateArea)
                      .sum();
     }
+}</code></pre>
+  </div>
+  <div class="code-tab-content" data-tab-content="csharp">
+    <pre><code class="language-csharp">using System;
+using System.Collections.Generic;
+using System.Linq;
+
+// Abstraction: Open for extension
+public interface IShape
+{
+    double CalculateArea();
 }
-      </code></pre>
+
+// Extension 1
+public record Circle(double Radius) : IShape
+{
+    public double CalculateArea() => Math.PI * Radius * Radius;
+}
+
+// Extension 2
+public record Rectangle(double Width, double Height) : IShape
+{
+    public double CalculateArea() => Width * Height;
+}
+
+// Extension 3 (Added without touching existing code!)
+public record Triangle(double BaseLength, double Height) : IShape
+{
+    public double CalculateArea() => 0.5 * BaseLength * Height;
+}
+
+// Closed for modification: This class never changes, no matter how many shapes we add.
+public sealed class AreaCalculator
+{
+    public double CalculateTotalArea(IEnumerable<IShape> shapes)
+    {
+        return shapes.Sum(s => s.CalculateArea());
+    }
+}</code></pre>
+  </div>
+</div>
 
       <h3>6. Hard Interview Questions & Gotchas</h3>
       <div class="callout callout-warning">
@@ -241,9 +390,13 @@ public final class AreaCalculator {
 
       <h3>3. Flawed Implementation (Anti-pattern)</h3>
       <p>The classic Square-Rectangle problem. Mathematically, a square is a rectangle. Behaviorally, it is not.</p>
-      <span class="code-label">Java (Anti-pattern)</span>
-      <pre><code>
-public class Rectangle {
+      <div class="code-tabs">
+  <div class="code-tabs-header">
+    <button class="code-tab-btn active" data-tab="java">☕ Java (Anti-pattern)</button>
+    <button class="code-tab-btn" data-tab="csharp">🔷 C# (Anti-pattern)</button>
+  </div>
+  <div class="code-tab-content active" data-tab-content="java">
+    <pre><code class="language-java">public class Rectangle {
     protected int width;
     protected int height;
     
@@ -274,8 +427,43 @@ public void resize(Rectangle r) {
     // For a Rectangle, area should be 50.
     // But if 'r' is actually a Square, area is 100! Program logic breaks.
     assert r.getArea() == 50; 
+}</code></pre>
+  </div>
+  <div class="code-tab-content" data-tab-content="csharp">
+    <pre><code class="language-csharp">public class Rectangle
+{
+    public virtual int Width { get; set; }
+    public virtual int Height { get; set; }
+    public int GetArea() => Width * Height;
 }
-      </code></pre>
+
+public class Square : Rectangle
+{
+    // VIOLATION: Changing the expected behavior of the base class
+    public override int Width
+    {
+        get => base.Width;
+        set { base.Width = value; base.Height = value; } // Unexpected side effect!
+    }
+
+    public override int Height
+    {
+        get => base.Height;
+        set { base.Width = value; base.Height = value; } // Unexpected side effect!
+    }
+}
+
+// CATASTROPHIC BUG:
+public void Resize(Rectangle r)
+{
+    r.Width = 5;
+    r.Height = 10;
+    // For a Rectangle, area should be 50.
+    // But if 'r' is actually a Square, area is 100! Program logic breaks.
+    System.Diagnostics.Debug.Assert(r.GetArea() == 50);
+}</code></pre>
+  </div>
+</div>
 
       <h3>4. Refactored Architecture</h3>
       <div class="diagram-container">
@@ -290,9 +478,13 @@ public void resize(Rectangle r) {
 
       <h3>5. Clean Java 21 Implementation</h3>
       <p>Use immutable records and independent implementations of a common behavioral interface.</p>
-      <span class="code-label">Java 21 (Clean)</span>
-      <pre><code>
-public interface Shape {
+      <div class="code-tabs">
+  <div class="code-tabs-header">
+    <button class="code-tab-btn active" data-tab="java">☕ Java 21 (Clean)</button>
+    <button class="code-tab-btn" data-tab="csharp">🔷 C# (Clean)</button>
+  </div>
+  <div class="code-tab-content active" data-tab-content="java">
+    <pre><code class="language-java">public interface Shape {
     int getArea();
 }
 
@@ -310,8 +502,27 @@ public record Square(int side) implements Shape {
     public int getArea() {
         return side * side;
     }
+}</code></pre>
+  </div>
+  <div class="code-tab-content" data-tab-content="csharp">
+    <pre><code class="language-csharp">public interface IShape
+{
+    int GetArea();
 }
-      </code></pre>
+
+// Records are inherently immutable. You can't mutate width/height independently, 
+// eliminating the side-effect bug entirely.
+public record Rectangle(int Width, int Height) : IShape
+{
+    public int GetArea() => Width * Height;
+}
+
+public record Square(int Side) : IShape
+{
+    public int GetArea() => Side * Side;
+}</code></pre>
+  </div>
+</div>
 
       <h3>6. Hard Interview Questions & Gotchas</h3>
       <div class="callout callout-warning">
@@ -332,9 +543,13 @@ public record Square(int side) implements Shape {
       <p><strong>Code Smell:</strong> Fat interfaces. Classes implementing interfaces but throwing `NotImplementedException` or leaving methods blank for half the contract.</p>
 
       <h3>3. Flawed Implementation (Anti-pattern)</h3>
-      <span class="code-label">Java (Anti-pattern)</span>
-      <pre><code>
-public interface SmartDevice {
+      <div class="code-tabs">
+  <div class="code-tabs-header">
+    <button class="code-tab-btn active" data-tab="java">☕ Java (Anti-pattern)</button>
+    <button class="code-tab-btn" data-tab="csharp">🔷 C# (Anti-pattern)</button>
+  </div>
+  <div class="code-tab-content active" data-tab-content="java">
+    <pre><code class="language-java">public interface SmartDevice {
     void print();
     void scan();
     void fax();
@@ -357,8 +572,39 @@ public class BasicPrinter implements SmartDevice {
     public void fax() {
         throw new UnsupportedOperationException("I cannot fax.");
     }
+}</code></pre>
+  </div>
+  <div class="code-tab-content" data-tab-content="csharp">
+    <pre><code class="language-csharp">using System;
+
+public interface ISmartDevice
+{
+    void Print();
+    void Scan();
+    void Fax();
 }
-      </code></pre>
+
+// A basic printer only prints.
+public class BasicPrinter : ISmartDevice
+{
+    public void Print()
+    {
+        Console.WriteLine("Printing...");
+    }
+
+    // VIOLATION: Forced to implement methods it doesn't support.
+    public void Scan()
+    {
+        throw new NotSupportedException("I cannot scan.");
+    }
+
+    public void Fax()
+    {
+        throw new NotSupportedException("I cannot fax.");
+    }
+}</code></pre>
+  </div>
+</div>
 
       <h3>4. Refactored Architecture</h3>
       <div class="diagram-container">
@@ -373,9 +619,13 @@ public class BasicPrinter implements SmartDevice {
 
       <h3>5. Clean Java 21 Implementation</h3>
       <p>Segregated, granular interfaces. Classes compose only what they need.</p>
-      <span class="code-label">Java 21 (Clean)</span>
-      <pre><code>
-public interface Printer {
+      <div class="code-tabs">
+  <div class="code-tabs-header">
+    <button class="code-tab-btn active" data-tab="java">☕ Java 21 (Clean)</button>
+    <button class="code-tab-btn" data-tab="csharp">🔷 C# (Clean)</button>
+  </div>
+  <div class="code-tab-content active" data-tab-content="java">
+    <pre><code class="language-java">public interface Printer {
     void print();
 }
 
@@ -405,8 +655,44 @@ public final class MultiFunctionPrinter implements Printer, Scanner, Fax {
     
     @Override
     public void fax() { System.out.println("Faxing..."); }
+}</code></pre>
+  </div>
+  <div class="code-tab-content" data-tab-content="csharp">
+    <pre><code class="language-csharp">using System;
+
+public interface IPrinter
+{
+    void Print();
 }
-      </code></pre>
+
+public interface IScanner
+{
+    void Scan();
+}
+
+public interface IFax
+{
+    void Fax();
+}
+
+// Client 1: Only needs to print
+public sealed class BasicPrinter : IPrinter
+{
+    public void Print()
+    {
+        Console.WriteLine("Printing document...");
+    }
+}
+
+// Client 2: Needs all features. Composes multiple interfaces.
+public sealed class MultiFunctionPrinter : IPrinter, IScanner, IFax
+{
+    public void Print() => Console.WriteLine("Printing...");
+    public void Scan() => Console.WriteLine("Scanning...");
+    public void Fax() => Console.WriteLine("Faxing...");
+}</code></pre>
+  </div>
+</div>
 
       <h3>6. Hard Interview Questions & Gotchas</h3>
       <div class="callout callout-warning">
@@ -427,9 +713,13 @@ public final class MultiFunctionPrinter implements Printer, Scanner, Fax {
       <p><strong>Code Smell:</strong> The `new` keyword used inside business logic classes for instantiating volatile dependencies (databases, external APIs). Hardcoded instantiations make unit testing impossible without mocking the universe.</p>
 
       <h3>3. Flawed Implementation (Anti-pattern)</h3>
-      <span class="code-label">Java (Anti-pattern)</span>
-      <pre><code>
-public class StripePaymentAPI {
+      <div class="code-tabs">
+  <div class="code-tabs-header">
+    <button class="code-tab-btn active" data-tab="java">☕ Java (Anti-pattern)</button>
+    <button class="code-tab-btn" data-tab="csharp">🔷 C# (Anti-pattern)</button>
+  </div>
+  <div class="code-tab-content active" data-tab-content="java">
+    <pre><code class="language-java">public class StripePaymentAPI {
     public void charge(double amount) { /* HTTP call to Stripe */ }
 }
 
@@ -442,8 +732,28 @@ public class CheckoutService {
         // It is also impossible to unit test this without actually hitting Stripe!
         stripeApi.charge(amount);
     }
+}</code></pre>
+  </div>
+  <div class="code-tab-content" data-tab-content="csharp">
+    <pre><code class="language-csharp">public class StripePaymentApi
+{
+    public void Charge(double amount) { /* HTTP call to Stripe */ }
 }
-      </code></pre>
+
+public class CheckoutService
+{
+    // VIOLATION: Tight coupling to a concrete, low-level detail (Stripe)
+    private StripePaymentApi _stripeApi = new StripePaymentApi();
+
+    public void Checkout(double amount)
+    {
+        // If we want to switch to PayPal, we have to rewrite CheckoutService.
+        // It is also impossible to unit test this without actually hitting Stripe!
+        _stripeApi.Charge(amount);
+    }
+}</code></pre>
+  </div>
+</div>
 
       <h3>4. Refactored Architecture</h3>
       <div class="diagram-container">
@@ -459,9 +769,13 @@ public class CheckoutService {
 
       <h3>5. Clean Java 21 Implementation</h3>
       <p>Using Constructor Injection to inject the abstraction. The framework/container (like Spring) will handle supplying the concrete instance.</p>
-      <span class="code-label">Java 21 (Clean)</span>
-      <pre><code>
-// Abstraction owned by the High-Level module
+      <div class="code-tabs">
+  <div class="code-tabs-header">
+    <button class="code-tab-btn active" data-tab="java">☕ Java 21 (Clean)</button>
+    <button class="code-tab-btn" data-tab="csharp">🔷 C# (Clean)</button>
+  </div>
+  <div class="code-tab-content active" data-tab-content="java">
+    <pre><code class="language-java">// Abstraction owned by the High-Level module
 public interface PaymentProcessor {
     void charge(double amount);
 }
@@ -490,8 +804,47 @@ public final class CheckoutService {
     public void checkout(double amount) {
         paymentProcessor.charge(amount);
     }
+}</code></pre>
+  </div>
+  <div class="code-tab-content" data-tab-content="csharp">
+    <pre><code class="language-csharp">using System;
+
+// Abstraction owned by the High-Level module
+public interface IPaymentProcessor
+{
+    void Charge(double amount);
 }
-      </code></pre>
+
+// Low-level module implementation 1
+public sealed class StripeProcessor : IPaymentProcessor
+{
+    public void Charge(double amount) => Console.WriteLine($"Stripe charge: {amount}");
+}
+
+// Low-level module implementation 2
+public sealed class PayPalProcessor : IPaymentProcessor
+{
+    public void Charge(double amount) => Console.WriteLine($"PayPal charge: {amount}");
+}
+
+// High-level module: completely oblivious to HOW payment happens
+public sealed class CheckoutService
+{
+    private readonly IPaymentProcessor _paymentProcessor;
+
+    // Dependency Injection (Constructor Injection)
+    public CheckoutService(IPaymentProcessor paymentProcessor)
+    {
+        _paymentProcessor = paymentProcessor;
+    }
+
+    public void Checkout(double amount)
+    {
+        _paymentProcessor.Charge(amount);
+    }
+}</code></pre>
+  </div>
+</div>
 
       <h3>6. Hard Interview Questions & Gotchas</h3>
       <div class="callout callout-warning">

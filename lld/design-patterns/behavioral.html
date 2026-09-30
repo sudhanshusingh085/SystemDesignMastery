@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Behavioral Design Patterns — System Design Mastery</title>
   <link rel="stylesheet" href="../../css/style.css">
-  <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.0/dist/mermaid.min.js"></script>
 </head>
 <body>
 
@@ -44,10 +44,24 @@
 
       <h3>The Catastrophic Pain Point It Solves</h3>
       <p>Without the Observer pattern, components that need state updates are forced into <strong>polling loops</strong>:</p>
-      <pre><code>// BAD: Polling Anti-Pattern
+      <div class="code-tabs">
+  <div class="code-tabs-header">
+    <button class="code-tab-btn active" data-tab="java">☕ Java</button>
+    <button class="code-tab-btn" data-tab="csharp">🔷 C#</button>
+  </div>
+  <div class="code-tab-content active" data-tab-content="java">
+    <pre><code class="language-java">// BAD: Polling Anti-Pattern
 while (!order.isDelivered()) {
     Thread.sleep(1000); // Wastes CPU cycles, network bandwidth, creates latency lag
 }</code></pre>
+  </div>
+  <div class="code-tab-content" data-tab-content="csharp">
+    <pre><code class="language-csharp">// BAD: Polling Anti-Pattern
+while (!order.IsDelivered) {
+    Thread.Sleep(1000); // Wastes CPU cycles, network bandwidth, creates latency lag
+}</code></pre>
+  </div>
+</div>
       <p>This burns CPU cycles, floods databases with redundant read queries, and creates an artificial delay between when an event occurs and when consumers react.</p>
 
       <h3>Architectural Decisions &amp; Modifier Deep Dives</h3>
@@ -84,8 +98,13 @@ while (!order.isDelivered()) {
       </div>
 
       <h3>Production-Grade Java 21 Implementation</h3>
-      <span class="code-label">Java 21</span>
-      <pre><code>import java.math.BigDecimal;
+      <div class="code-tabs">
+  <div class="code-tabs-header">
+    <button class="code-tab-btn active" data-tab="java">☕ Java 21</button>
+    <button class="code-tab-btn" data-tab="csharp">🔷 C#</button>
+  </div>
+  <div class="code-tab-content active" data-tab-content="java">
+    <pre><code class="language-java">import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -102,7 +121,7 @@ public interface StockObserver {
 // 3. Subject (Observable)
 public final class StockExchange {
     // Thread-safe copy-on-write registry prevents ConcurrentModificationException
-    private final List&lt;StockObserver&gt; observers = new CopyOnWriteArrayList&lt;&gt;();
+    private final List<StockObserver> observers = new CopyOnWriteArrayList<>();
 
     public void register(StockObserver observer) {
         if (observer != null) {
@@ -145,6 +164,90 @@ public final class MobilePushNotifier implements StockObserver {
         System.out.println("Push Notification: " + event.ticker() + " moved to $" + event.price());
     }
 }</code></pre>
+  </div>
+  <div class="code-tab-content" data-tab-content="csharp">
+    <pre><code class="language-csharp">using System;
+using System.Collections.Generic;
+
+// 1. Immutable Event DTO using C# positional record
+public record StockPriceEvent(string Ticker, decimal Price, DateTimeOffset Timestamp);
+
+// 2. Observer Contract
+public interface IStockObserver
+{
+    void OnPriceUpdate(StockPriceEvent @event);
+}
+
+// 3. Subject (Observable)
+public sealed class StockExchange
+{
+    private readonly List<IStockObserver> _observers = new();
+    private readonly object _lock = new();
+
+    public void Register(IStockObserver observer)
+    {
+        if (observer == null) return;
+        lock (_lock)
+        {
+            _observers.Add(observer);
+        }
+    }
+
+    public void Unregister(IStockObserver observer)
+    {
+        lock (_lock)
+        {
+            _observers.Remove(observer);
+        }
+    }
+
+    public void UpdatePrice(string ticker, decimal price)
+    {
+        var @event = new StockPriceEvent(ticker, price, DateTimeOffset.UtcNow);
+        NotifyObservers(@event);
+    }
+
+    private void NotifyObservers(StockPriceEvent @event)
+    {
+        IStockObserver[] snapshot;
+        lock (_lock)
+        {
+            snapshot = _observers.ToArray(); // snapshot prevents collection modification during enumeration
+        }
+
+        foreach (var observer in snapshot)
+        {
+            try
+            {
+                observer.OnPriceUpdate(@event);
+            }
+            catch (Exception ex)
+            {
+                // Isolate failure so one faulty observer does not crash the notification pipeline
+                Console.Error.WriteLine($"Failed to notify observer: {ex.Message}");
+            }
+        }
+    }
+}
+
+// 4. Concrete Observers
+public sealed class HighFrequencyTradingBot : IStockObserver
+{
+    public void OnPriceUpdate(StockPriceEvent @event)
+    {
+        Console.WriteLine($"HFT Bot analyzing tick: {@event.Ticker} @ ${@event.Price}");
+    }
+}
+
+public sealed class MobilePushNotifier : IStockObserver
+{
+    public void OnPriceUpdate(StockPriceEvent @event)
+    {
+        Console.WriteLine($"Push Notification: {@event.Ticker} moved to ${@event.Price}");
+    }
+}</code></pre>
+  </div>
+</div>
 
       <div class="callout callout-warning">
         <div class="callout-title">📋 How to Answer This in an Interview</div>
@@ -178,29 +281,51 @@ public final class MobilePushNotifier implements StockObserver {
 
       <h3>The Catastrophic Pain Point It Solves</h3>
       <p>Without Strategy, codebases degrade into monstrous, fragile <code>if-else</code> or <code>switch</code> blocks that violate the <strong>Open/Closed Principle</strong>:</p>
-      <pre><code>// BAD: Violates Open/Closed Principle
+      <div class="code-tabs">
+  <div class="code-tabs-header">
+    <button class="code-tab-btn active" data-tab="java">☕ Java</button>
+    <button class="code-tab-btn" data-tab="csharp">🔷 C#</button>
+  </div>
+  <div class="code-tab-content active" data-tab-content="java">
+    <pre><code class="language-java">// BAD: Violates Open/Closed Principle
 public double calculateFee(Order order, String type) {
     if (type.equals("CREDIT_CARD")) return order.amount() * 0.03;
     else if (type.equals("CRYPTO")) return order.amount() * 0.01;
     else if (type.equals("UPI")) return 0.0;
-    // Every new payment method requires modifying and re-testing this core class!
+    throw new IllegalArgumentException("Unknown payment: " + type);
 }</code></pre>
+  </div>
+  <div class="code-tab-content" data-tab-content="csharp">
+    <pre><code class="language-csharp">// BAD: Violates Open/Closed Principle
+public double CalculateFee(Order order, string type) {
+    if (type == "CREDIT_CARD") return order.Amount * 0.03;
+    else if (type == "CRYPTO") return order.Amount * 0.01;
+    else if (type == "UPI") return 0.0;
+    throw new ArgumentException($"Unknown payment: {type}");
+}</code></pre>
+  </div>
+</div>
 
       <h3>Production-Grade Java 21 Implementation</h3>
-      <span class="code-label">Java 21</span>
-      <pre><code>import java.math.BigDecimal;
+      <div class="code-tabs">
+  <div class="code-tabs-header">
+    <button class="code-tab-btn active" data-tab="java">☕ Java 21</button>
+    <button class="code-tab-btn" data-tab="csharp">🔷 C#</button>
+  </div>
+  <div class="code-tab-content active" data-tab-content="java">
+    <pre><code class="language-java">import java.math.BigDecimal;
 
 // 1. Strategy Interface (Functional Interface enables Lambdas)
 @FunctionalInterface
 public interface PricingStrategy {
-    BigDecimal calculatePrice(BigDecimal basePrice);
+    BigDecimal calculateTotal(BigDecimal basePrice);
 }
 
 // 2. Concrete Strategies
 public final class RegularPricingStrategy implements PricingStrategy {
     @Override
-    public BigDecimal calculatePrice(BigDecimal basePrice) {
-        return basePrice;
+    public BigDecimal calculateTotal(BigDecimal basePrice) {
+        return basePrice; // No surcharge
     }
 }
 
@@ -212,27 +337,77 @@ public final class SurgePricingStrategy implements PricingStrategy {
     }
 
     @Override
-    public BigDecimal calculatePrice(BigDecimal basePrice) {
-        return basePrice.multiply(multiplier);
+    public BigDecimal calculateTotal(BigDecimal basePrice) {
+        return basePrice.multiplier;
     }
 }
 
-// 3. Context Class
-public final class RideCheckoutService {
-    private PricingStrategy pricingStrategy;
+// 3. Context
+public final class CheckoutEngine {
+    private PricingStrategy strategy;
 
-    public RideCheckoutService(PricingStrategy initialStrategy) {
-        this.pricingStrategy = initialStrategy;
+    public CheckoutEngine(PricingStrategy initialStrategy) {
+        this.strategy = initialStrategy;
     }
 
-    public void setPricingStrategy(PricingStrategy pricingStrategy) {
-        this.pricingStrategy = pricingStrategy;
+    public void setStrategy(PricingStrategy strategy) {
+        this.strategy = strategy;
     }
 
-    public BigDecimal checkout(BigDecimal baseFare) {
-        return pricingStrategy.calculatePrice(baseFare);
+    public BigDecimal checkout(BigDecimal basePrice) {
+        return strategy.calculateTotal(basePrice);
     }
 }</code></pre>
+  </div>
+  <div class="code-tab-content" data-tab-content="csharp">
+    <pre><code class="language-csharp">using System;
+
+// 1. Strategy Interface (or delegate Func<decimal, decimal>)
+public interface IPricingStrategy
+{
+    decimal CalculateTotal(decimal basePrice);
+}
+
+// 2. Concrete Strategies
+public sealed class RegularPricingStrategy : IPricingStrategy
+{
+    public decimal CalculateTotal(decimal basePrice) => basePrice; // No surcharge
+}
+
+public sealed class SurgePricingStrategy : IPricingStrategy
+{
+    private readonly decimal _multiplier;
+
+    public SurgePricingStrategy(decimal multiplier)
+    {
+        _multiplier = multiplier;
+    }
+
+    public decimal CalculateTotal(decimal basePrice) => basePrice * _multiplier;
+}
+
+// 3. Context
+public sealed class CheckoutEngine
+{
+    private IPricingStrategy _strategy;
+
+    public CheckoutEngine(IPricingStrategy initialStrategy)
+    {
+        _strategy = initialStrategy;
+    }
+
+    public void SetStrategy(IPricingStrategy strategy)
+    {
+        _strategy = strategy;
+    }
+
+    public decimal Checkout(decimal basePrice)
+    {
+        return _strategy.CalculateTotal(basePrice);
+    }
+}</code></pre>
+  </div>
+</div>
 
       <div class="callout callout-warning">
         <div class="callout-title">📋 How to Answer This in an Interview</div>
@@ -255,8 +430,13 @@ public final class RideCheckoutService {
       </div>
 
       <h3>Production-Grade Java 21 Implementation (with Undo Support)</h3>
-      <span class="code-label">Java 21</span>
-      <pre><code>import java.util.ArrayDeque;
+      <div class="code-tabs">
+  <div class="code-tabs-header">
+    <button class="code-tab-btn active" data-tab="java">☕ Java 21</button>
+    <button class="code-tab-btn" data-tab="csharp">🔷 C#</button>
+  </div>
+  <div class="code-tab-content active" data-tab-content="java">
+    <pre><code class="language-java">import java.util.ArrayDeque;
 import java.util.Deque;
 
 // 1. Command Interface
@@ -302,7 +482,7 @@ public final class PlaceBuyOrderCommand implements FinancialCommand {
 
 // 4. Invoker with Undo Stack
 public final class OrderExecutionEngine {
-    private final Deque&lt;FinancialCommand&gt; history = new ArrayDeque&lt;&gt;();
+    private final Deque<FinancialCommand> history = new ArrayDeque<>();
 
     public void executeCommand(FinancialCommand cmd) {
         cmd.execute();
@@ -316,6 +496,78 @@ public final class OrderExecutionEngine {
         }
     }
 }</code></pre>
+  </div>
+  <div class="code-tab-content" data-tab-content="csharp">
+    <pre><code class="language-csharp">using System;
+using System.Collections.Generic;
+
+// 1. Command Interface
+public interface IFinancialCommand
+{
+    void Execute();
+    void Undo();
+}
+
+// 2. Receiver (The Business Object)
+public sealed class TradingAccount
+{
+    public double Balance { get; private set; } = 10000.0;
+
+    public void Deposit(double amount) => Balance += amount;
+    public void Withdraw(double amount) => Balance -= amount;
+}
+
+// 3. Concrete Command
+public sealed class PlaceBuyOrderCommand : IFinancialCommand
+{
+    private readonly TradingAccount _account;
+    private readonly double _cost;
+    private bool _executed = false;
+
+    public PlaceBuyOrderCommand(TradingAccount account, double cost)
+    {
+        _account = account;
+        _cost = cost;
+    }
+
+    public void Execute()
+    {
+        _account.Withdraw(_cost);
+        _executed = true;
+    }
+
+    public void Undo()
+    {
+        if (_executed)
+        {
+            _account.Deposit(_cost);
+            _executed = false;
+        }
+    }
+}
+
+// 4. Invoker with Undo Stack
+public sealed class OrderExecutionEngine
+{
+    private readonly Stack<IFinancialCommand> _history = new();
+
+    public void ExecuteCommand(IFinancialCommand cmd)
+    {
+        cmd.Execute();
+        _history.Push(cmd);
+    }
+
+    public void UndoLast()
+    {
+        if (_history.Count > 0)
+        {
+            IFinancialCommand cmd = _history.Pop();
+            cmd.Undo();
+        }
+    }
+}</code></pre>
+  </div>
+</div>
 
       <div class="callout callout-warning">
         <div class="callout-title">📋 How to Answer This in an Interview</div>
@@ -338,8 +590,13 @@ public final class OrderExecutionEngine {
       </div>
 
       <h3>Production-Grade Java 21 Implementation (Order Lifecycle)</h3>
-      <span class="code-label">Java 21</span>
-      <pre><code>// 1. State Contract
+      <div class="code-tabs">
+  <div class="code-tabs-header">
+    <button class="code-tab-btn active" data-tab="java">☕ Java 21</button>
+    <button class="code-tab-btn" data-tab="csharp">🔷 C#</button>
+  </div>
+  <div class="code-tab-content active" data-tab-content="java">
+    <pre><code class="language-java">// 1. State Contract
 public interface OrderState {
     void handlePayment(OrderContext context);
     void ship(OrderContext context);
@@ -419,6 +676,89 @@ public final class CancelledState implements OrderState {
     @Override
     public void cancel(OrderContext context) { System.out.println("Already cancelled."); }
 }</code></pre>
+  </div>
+  <div class="code-tab-content" data-tab-content="csharp">
+    <pre><code class="language-csharp">using System;
+
+// 1. State Contract
+public interface IOrderState
+{
+    void HandlePayment(OrderContext context);
+    void Ship(OrderContext context);
+    void Cancel(OrderContext context);
+}
+
+// 2. Context Object
+public sealed class OrderContext
+{
+    public IOrderState CurrentState { get; set; }
+
+    public OrderContext()
+    {
+        CurrentState = new CreatedState();
+    }
+
+    public void ProcessPayment() => CurrentState.HandlePayment(this);
+    public void ShipOrder()      => CurrentState.Ship(this);
+    public void CancelOrder()    => CurrentState.Cancel(this);
+}
+
+// 3. Concrete States
+public sealed class CreatedState : IOrderState
+{
+    public void HandlePayment(OrderContext context)
+    {
+        Console.WriteLine("Payment verified. Transitioning to PAID state.");
+        context.CurrentState = new PaidState();
+    }
+
+    public void Ship(OrderContext context)
+    {
+        throw new InvalidOperationException("Cannot ship an unpaid order!");
+    }
+
+    public void Cancel(OrderContext context)
+    {
+        Console.WriteLine("Order cancelled.");
+        context.CurrentState = new CancelledState();
+    }
+}
+
+public sealed class PaidState : IOrderState
+{
+    public void HandlePayment(OrderContext context)
+    {
+        Console.WriteLine("Order is already paid.");
+    }
+
+    public void Ship(OrderContext context)
+    {
+        Console.WriteLine("Order shipped successfully.");
+        context.CurrentState = new ShippedState();
+    }
+
+    public void Cancel(OrderContext context)
+    {
+        Console.WriteLine("Refunding payment and cancelling order.");
+        context.CurrentState = new CancelledState();
+    }
+}
+
+public sealed class ShippedState : IOrderState
+{
+    public void HandlePayment(OrderContext context) => throw new InvalidOperationException("Already shipped.");
+    public void Ship(OrderContext context)          => throw new InvalidOperationException("Already shipped.");
+    public void Cancel(OrderContext context)        => throw new InvalidOperationException("Cannot cancel a shipped order!");
+}
+
+public sealed class CancelledState : IOrderState
+{
+    public void HandlePayment(OrderContext context) => throw new InvalidOperationException("Order is cancelled.");
+    public void Ship(OrderContext context)          => throw new InvalidOperationException("Order is cancelled.");
+    public void Cancel(OrderContext context)        => Console.WriteLine("Already cancelled.");
+}</code></pre>
+  </div>
+</div>
     </section>
 
     <hr>
@@ -436,8 +776,13 @@ public final class CancelledState implements OrderState {
       </div>
 
       <h3>Production-Grade Java 21 Implementation</h3>
-      <span class="code-label">Java 21</span>
-      <pre><code>public abstract class FinancialReportGenerator {
+      <div class="code-tabs">
+  <div class="code-tabs-header">
+    <button class="code-tab-btn active" data-tab="java">☕ Java 21</button>
+    <button class="code-tab-btn" data-tab="csharp">🔷 C#</button>
+  </div>
+  <div class="code-tab-content active" data-tab-content="java">
+    <pre><code class="language-java">public abstract class FinancialReportGenerator {
 
     // Final prevents subclasses from corrupting the mandatory algorithm skeleton
     public final void generateReport() {
@@ -473,6 +818,50 @@ public final class EquityPortfolioReport extends FinancialReportGenerator {
         System.out.println("Rendering equity positions, dividends, and unrealized gains.");
     }
 }</code></pre>
+  </div>
+  <div class="code-tab-content" data-tab-content="csharp">
+    <pre><code class="language-csharp">using System;
+
+public abstract class FinancialReportGenerator
+{
+    // Sealed/Non-virtual prevents subclasses from corrupting the mandatory algorithm skeleton
+    public void GenerateReport()
+    {
+        FetchFinancialData();
+        FormatHeader();
+        GenerateBody();
+        FormatFooter();
+        if (RequiresAuditLog())
+        {
+            AuditExport();
+        }
+    }
+
+    private void FetchFinancialData() => Console.WriteLine("Fetching general ledger entries...");
+    private void FormatHeader()       => Console.WriteLine("Header: Confidential Financial Statement");
+    private void FormatFooter()       => Console.WriteLine("Footer: Page 1 of 1");
+
+    // Primitive operations to be customized by subclasses
+    protected abstract void GenerateBody();
+
+    // Hook method with default implementation
+    protected virtual bool RequiresAuditLog() => true;
+
+    private void AuditExport()
+    {
+        Console.WriteLine("Audit trail recorded in SEC compliance store.");
+    }
+}
+
+public sealed class EquityPortfolioReport : FinancialReportGenerator
+{
+    protected override void GenerateBody()
+    {
+        Console.WriteLine("Rendering equity positions, dividends, and unrealized gains.");
+    }
+}</code></pre>
+  </div>
+</div>
     </section>
 
     <hr>
@@ -490,8 +879,13 @@ public final class EquityPortfolioReport extends FinancialReportGenerator {
       </div>
 
       <h3>Production-Grade Java 21 Implementation</h3>
-      <span class="code-label">Java 21</span>
-      <pre><code>public abstract class TradeValidationHandler {
+      <div class="code-tabs">
+  <div class="code-tabs-header">
+    <button class="code-tab-btn active" data-tab="java">☕ Java 21</button>
+    <button class="code-tab-btn" data-tab="csharp">🔷 C#</button>
+  </div>
+  <div class="code-tab-content active" data-tab-content="java">
+    <pre><code class="language-java">public abstract class TradeValidationHandler {
     private TradeValidationHandler next;
 
     public TradeValidationHandler setNext(TradeValidationHandler next) {
@@ -512,7 +906,7 @@ public final class EquityPortfolioReport extends FinancialReportGenerator {
 public final class AccountBalanceCheckHandler extends TradeValidationHandler {
     @Override
     protected void process(TradeRequest request) {
-        if (request.amount() &gt; request.accountBalance()) {
+        if (request.amount() > request.accountBalance()) {
             throw new IllegalArgumentException("Insufficient funds to execute trade!");
         }
         System.out.println("Funds verification passed.");
@@ -528,6 +922,56 @@ public final class RegulatoryComplianceHandler extends TradeValidationHandler {
         System.out.println("Regulatory compliance passed.");
     }
 }</code></pre>
+  </div>
+  <div class="code-tab-content" data-tab-content="csharp">
+    <pre><code class="language-csharp">using System;
+
+public record TradeRequest(double Amount, double AccountBalance, bool IsRestrictedStock);
+
+public abstract class TradeValidationHandler
+{
+    private TradeValidationHandler? _next;
+
+    public TradeValidationHandler SetNext(TradeValidationHandler next)
+    {
+        _next = next;
+        return next;
+    }
+
+    public void Validate(TradeRequest request)
+    {
+        Process(request);
+        _next?.Validate(request);
+    }
+
+    protected abstract void Process(TradeRequest request);
+}
+
+public sealed class AccountBalanceCheckHandler : TradeValidationHandler
+{
+    protected override void Process(TradeRequest request)
+    {
+        if (request.Amount > request.AccountBalance)
+        {
+            throw new ArgumentException("Insufficient funds to execute trade!");
+        }
+        Console.WriteLine("Funds verification passed.");
+    }
+}
+
+public sealed class RegulatoryComplianceHandler : TradeValidationHandler
+{
+    protected override void Process(TradeRequest request)
+    {
+        if (request.IsRestrictedStock)
+        {
+            throw new InvalidOperationException("Trading restricted symbol violates insider trading rules!");
+        }
+        Console.WriteLine("Regulatory compliance passed.");
+    }
+}</code></pre>
+  </div>
+</div>
     </section>
 
     <div class="page-nav">

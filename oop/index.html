@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>OOP Fundamentals — Complete Deep Dive — System Design Mastery</title>
   <link rel="stylesheet" href="../css/style.css">
-  <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.0/dist/mermaid.min.js"></script>
 </head>
 <body>
 <button class="menu-toggle" aria-label="Toggle menu">☰</button>
@@ -42,9 +42,13 @@
         <p class="caption">Figure 1: Class vs Object</p>
       </div>
 
-      <span class="code-label">Java</span>
-      <pre>
-public class Dog {
+      <div class="code-tabs">
+  <div class="code-tabs-header">
+    <button class="code-tab-btn active" data-tab="java">☕ Java</button>
+    <button class="code-tab-btn" data-tab="csharp">🔷 C#</button>
+  </div>
+  <div class="code-tab-content active" data-tab-content="java">
+    <pre><code class="language-java">public class Dog {
     // Fields (State)
     private String name;
     private String breed;
@@ -71,8 +75,44 @@ public class Main {
 
         myDog.bark(); // Buddy says: Woof!
     }
+}</code></pre>
+  </div>
+  <div class="code-tab-content" data-tab-content="csharp">
+    <pre><code class="language-csharp">public class Dog
+{
+    // Fields (State)
+    private string _name;
+    private string _breed;
+    private int _age;
+
+    // Constructor
+    public Dog(string name, string breed, int age)
+    {
+        _name = name;
+        _breed = breed;
+        _age = age;
+    }
+
+    // Methods (Behavior)
+    public void Bark()
+    {
+        Console.WriteLine($"{_name} says: Woof!");
+    }
 }
-      </pre>
+
+public class Program
+{
+    public static void Main()
+    {
+        // Creating objects (instantiation)
+        Dog myDog = new Dog("Buddy", "Golden Retriever", 3);
+        Dog neighborDog = new Dog("Max", "German Shepherd", 5);
+
+        myDog.Bark(); // Buddy says: Woof!
+    }
+}</code></pre>
+  </div>
+</div>
     </div>
 
     <div class="card">
@@ -93,9 +133,13 @@ public class Main {
         <p class="caption">Figure 2: Encapsulation</p>
       </div>
 
-      <span class="code-label">Java</span>
-      <pre>
-public class BankAccount {
+      <div class="code-tabs">
+  <div class="code-tabs-header">
+    <button class="code-tab-btn active" data-tab="java">☕ Java</button>
+    <button class="code-tab-btn" data-tab="csharp">🔷 C#</button>
+  </div>
+  <div class="code-tab-content active" data-tab-content="java">
+    <pre><code class="language-java">public class BankAccount {
     // Private state: hidden from the outside world
     private double balance;
 
@@ -128,8 +172,51 @@ public class BankAccount {
     public double getBalance() {
         return balance;
     }
-}
-      </pre>
+}</code></pre>
+  </div>
+  <div class="code-tab-content" data-tab-content="csharp">
+    <pre><code class="language-csharp">public class BankAccount
+{
+    // Encapsulated state: private setter, public getter
+    public double Balance { get; private set; }
+
+    public BankAccount(double initialBalance)
+    {
+        if (initialBalance >= 0)
+        {
+            Balance = initialBalance;
+        }
+    }
+
+    // Public method: controlled access to internal state
+    public void Deposit(double amount)
+    {
+        if (amount > 0)
+        {
+            Balance += amount;
+            Console.WriteLine($"Deposited: ${amount}");
+        }
+        else
+        {
+            Console.WriteLine("Invalid deposit amount.");
+        }
+    }
+
+    public void Withdraw(double amount)
+    {
+        if (amount > 0 && Balance >= amount)
+        {
+            Balance -= amount;
+            Console.WriteLine($"Withdrawn: ${amount}");
+        }
+        else
+        {
+            Console.WriteLine("Insufficient funds or invalid amount.");
+        }
+    }
+}</code></pre>
+  </div>
+</div>
     </div>
 
     <div class="card">
@@ -149,9 +236,13 @@ public class BankAccount {
         <p class="caption">Figure 3: Abstraction</p>
       </div>
 
-      <span class="code-label">Java</span>
-      <pre>
-// Abstract class defines the concept but hides implementation
+      <div class="code-tabs">
+  <div class="code-tabs-header">
+    <button class="code-tab-btn active" data-tab="java">☕ Java</button>
+    <button class="code-tab-btn" data-tab="csharp">🔷 C#</button>
+  </div>
+  <div class="code-tab-content active" data-tab-content="java">
+    <pre><code class="language-java">// Abstract class defines the concept but hides implementation
 public abstract class Shape {
     protected String color;
 
@@ -195,8 +286,56 @@ public class Rectangle extends Shape {
     public double area() {
         return length * width;
     }
+}</code></pre>
+  </div>
+  <div class="code-tab-content" data-tab-content="csharp">
+    <pre><code class="language-csharp">// Abstract class defines the concept but hides implementation
+public abstract class Shape
+{
+    protected string Color { get; set; }
+
+    public Shape(string color)
+    {
+        Color = color;
+    }
+
+    // Abstract method: what to do, not how to do it
+    public abstract double Area();
+
+    public void Display()
+    {
+        Console.WriteLine($"This is a {Color} shape.");
+    }
 }
-      </pre>
+
+// Concrete classes provide the specific implementation
+public class Circle : Shape
+{
+    public double Radius { get; }
+
+    public Circle(string color, double radius) : base(color)
+    {
+        Radius = radius;
+    }
+
+    public override double Area() => Math.PI * Radius * Radius;
+}
+
+public class Rectangle : Shape
+{
+    public double Length { get; }
+    public double Width { get; }
+
+    public Rectangle(string color, double length, double width) : base(color)
+    {
+        Length = length;
+        Width = width;
+    }
+
+    public override double Area() => Length * Width;
+}</code></pre>
+  </div>
+</div>
     </div>
 
     <div class="card">
@@ -264,9 +403,13 @@ public class Rectangle extends Shape {
         </ul>
       </div>
 
-      <span class="code-label">Java</span>
-      <pre>
-public class Animal {
+      <div class="code-tabs">
+  <div class="code-tabs-header">
+    <button class="code-tab-btn active" data-tab="java">☕ Java</button>
+    <button class="code-tab-btn" data-tab="csharp">🔷 C#</button>
+  </div>
+  <div class="code-tab-content active" data-tab-content="java">
+    <pre><code class="language-java">public class Animal {
     public void eat() {
         System.out.println("This animal is eating.");
     }
@@ -284,8 +427,36 @@ public class GoldenRetriever extends Dog {
     public void fetch() {
         System.out.println("Fetching the ball!");
     }
+}</code></pre>
+  </div>
+  <div class="code-tab-content" data-tab-content="csharp">
+    <pre><code class="language-csharp">public class Animal
+{
+    public virtual void Eat()
+    {
+        Console.WriteLine("This animal is eating.");
+    }
 }
-      </pre>
+
+// Single Inheritance
+public class Dog : Animal
+{
+    public void Bark()
+    {
+        Console.WriteLine("Woof!");
+    }
+}
+
+// Multilevel Inheritance
+public class GoldenRetriever : Dog
+{
+    public void Fetch()
+    {
+        Console.WriteLine("Fetching the ball!");
+    }
+}</code></pre>
+  </div>
+</div>
     </div>
 
     <div class="card">
@@ -311,9 +482,13 @@ public class GoldenRetriever extends Dog {
         <li><strong>Runtime (Method Overriding):</strong> A subclass provides a specific implementation of a method already provided by its parent class.</li>
       </ul>
 
-      <span class="code-label">Java</span>
-      <pre>
-// 1. Compile-time Polymorphism (Overloading)
+      <div class="code-tabs">
+  <div class="code-tabs-header">
+    <button class="code-tab-btn active" data-tab="java">☕ Java</button>
+    <button class="code-tab-btn" data-tab="csharp">🔷 C#</button>
+  </div>
+  <div class="code-tab-content active" data-tab-content="java">
+    <pre><code class="language-java">// 1. Compile-time Polymorphism (Overloading)
 public class Calculator {
     public int add(int a, int b) {
         return a + b;
@@ -341,38 +516,97 @@ public class Main {
         // shape.area() behaves differently depending on the actual object type
         System.out.println("Area: " + shape.area());
     }
+}</code></pre>
+  </div>
+  <div class="code-tab-content" data-tab-content="csharp">
+    <pre><code class="language-csharp">// 1. Compile-time Polymorphism (Overloading)
+public class Calculator
+{
+    public int Add(int a, int b) => a + b;
+    
+    // Same method name, different parameters
+    public double Add(double a, double b) => a + b;
 }
-      </pre>
+
+// 2. Runtime Polymorphism (Overriding)
+public class Program
+{
+    public static void Main()
+    {
+        // Using the Shape hierarchy from earlier
+        Shape s1 = new Circle("Red", 5.0);
+        Shape s2 = new Rectangle("Blue", 4.0, 5.0);
+
+        // Polymorphic calls: runtime dispatches based on actual instance type
+        PrintArea(s1);
+        PrintArea(s2);
+    }
+
+    public static void PrintArea(Shape shape)
+    {
+        Console.WriteLine($"Area: {shape.Area()}");
+    }
+}</code></pre>
+  </div>
+</div>
 
       <h3>⚠️ The Classic Method Overriding Interview Traps</h3>
       
       <h4>Trap 1: Field Hiding (Variables Are NEVER Polymorphic!)</h4>
       <p>Instance fields are resolved at <strong>compile time based on the reference type</strong>, not the runtime object!</p>
-      <span class="code-label">Java 21</span>
-      <pre>
-class Parent { public int val = 10; }
+      <div class="code-tabs">
+  <div class="code-tabs-header">
+    <button class="code-tab-btn active" data-tab="java">☕ Java</button>
+    <button class="code-tab-btn" data-tab="csharp">🔷 C#</button>
+  </div>
+  <div class="code-tab-content active" data-tab-content="java">
+    <pre><code class="language-java">class Parent { public int val = 10; }
 class Child extends Parent { public int val = 20; }
 
 Parent p = new Child();
-System.out.println(p.val); // PRINTS 10! NOT 20!
-      </pre>
+System.out.println(p.val); // PRINTS 10! NOT 20!</code></pre>
+  </div>
+  <div class="code-tab-content" data-tab-content="csharp">
+    <pre><code class="language-csharp">class Parent { public int Val = 10; }
+class Child : Parent { public new int Val = 20; } // 'new' keyword explicitly hides base field
+
+Parent p = new Child();
+Console.WriteLine(p.Val); // PRINTS 10! Variables bind at compile-time to reference type.</code></pre>
+  </div>
+</div>
 
       <h4>Trap 2: Static Method Hiding (Static Methods Cannot Be Overridden!)</h4>
       <p>Static methods bind at compile time using <code>invokestatic</code>. A static method in a subclass simply <em>hides</em> the parent's method.</p>
-      <span class="code-label">Java 21</span>
-      <pre>
-class Parent { public static void show() { System.out.println("Parent"); } }
+      <div class="code-tabs">
+  <div class="code-tabs-header">
+    <button class="code-tab-btn active" data-tab="java">☕ Java</button>
+    <button class="code-tab-btn" data-tab="csharp">🔷 C#</button>
+  </div>
+  <div class="code-tab-content active" data-tab-content="java">
+    <pre><code class="language-java">class Parent { public static void show() { System.out.println("Parent"); } }
 class Child extends Parent { public static void show() { System.out.println("Child"); } }
 
 Parent p = new Child();
-p.show(); // PRINTS "Parent"!
-      </pre>
+p.show(); // PRINTS "Parent"!</code></pre>
+  </div>
+  <div class="code-tab-content" data-tab-content="csharp">
+    <pre><code class="language-csharp">class Parent { public static void Show() => Console.WriteLine("Parent"); }
+class Child : Parent { public static new void Show() => Console.WriteLine("Child"); }
+
+Parent.Show(); // PRINTS "Parent"! In C#, static methods cannot be called on instances and bind compile-time
+Child.Show();  // PRINTS "Child"!</code></pre>
+  </div>
+</div>
 
       <h4>Trap 3: Constructor Calling Overridden Method (The Uninitialized Field Trap)</h4>
       <p>When a parent constructor invokes a virtual method that the child overrides, the child's method runs <strong>before the child's instance field initializers execute</strong>!</p>
-      <span class="code-label">Java 21</span>
-      <pre>
-class Base {
+      <div class="code-tabs">
+  <div class="code-tabs-header">
+    <button class="code-tab-btn active" data-tab="java">☕ Java</button>
+    <button class="code-tab-btn" data-tab="csharp">🔷 C#</button>
+  </div>
+  <div class="code-tab-content active" data-tab-content="java">
+    <pre><code class="language-java">class Base {
     public Base() { validate(); }
     public void validate() { System.out.println("Base validate"); }
 }
@@ -383,14 +617,37 @@ class Derived extends Base {
         // At this moment, 'code' is still null because Derived constructor hasn't run!
         System.out.println(code.length()); // THROWS NullPointerException!
     }
+}</code></pre>
+  </div>
+  <div class="code-tab-content" data-tab-content="csharp">
+    <pre><code class="language-csharp">class Base
+{
+    public Base() { Validate(); }
+    public virtual void Validate() => Console.WriteLine("Base validate");
 }
-      </pre>
+
+class Derived : Base
+{
+    private string _code = "SECURE";
+
+    public override void Validate()
+    {
+        // In C#, virtual call dispatches to Derived before Derived's constructor body finishes!
+        Console.WriteLine(_code.Length); // High risk of NullReferenceException!
+    }
+}</code></pre>
+  </div>
+</div>
 
       <h4>Trap 4: Covariant Return Types (True Type-Safety Without Downcasting)</h4>
       <p>Introduced in Java 5, a subclass method is permitted to return a <strong>subtype</strong> of the parent method's return type.</p>
-      <span class="code-label">Java 21</span>
-      <pre>
-class Food {}
+      <div class="code-tabs">
+  <div class="code-tabs-header">
+    <button class="code-tab-btn active" data-tab="java">☕ Java</button>
+    <button class="code-tab-btn" data-tab="csharp">🔷 C#</button>
+  </div>
+  <div class="code-tab-content active" data-tab-content="java">
+    <pre><code class="language-java">class Food {}
 class DogFood extends Food {}
 
 class Animal {
@@ -405,8 +662,28 @@ class Dog extends Animal {
 
 // Client Call Site: NO DOWNCASTING NEEDED!
 Dog dog = new Dog();
-DogFood meal = dog.getMeal(); // Completely type-safe without (DogFood) cast!
-      </pre>
+DogFood meal = dog.getMeal(); // Completely type-safe without (DogFood) cast!</code></pre>
+  </div>
+  <div class="code-tab-content" data-tab-content="csharp">
+    <pre><code class="language-csharp">class Food {}
+class DogFood : Food {}
+
+class Animal
+{
+    public virtual Food GetMeal() => new Food();
+}
+
+class Dog : Animal
+{
+    // Covariant Return Type: DogFood is a subtype of Food (C# 9+)
+    public override DogFood GetMeal() => new DogFood();
+}
+
+// Client Call Site: NO DOWNCASTING NEEDED!
+Dog dog = new Dog();
+DogFood meal = dog.GetMeal(); // Completely type-safe without cast!</code></pre>
+  </div>
+</div>
       <p><strong>Under the hood:</strong> The compiler generates a synthetic <code>Bridge Method</code> in bytecode (<code>public synthetic bridge Food getMeal() { return this.getMeal(); }</code>) to ensure binary compatibility with polymorphic calls via <code>Animal a = new Dog(); a.getMeal();</code>.</p>
     </div>
 
@@ -425,9 +702,13 @@ DogFood meal = dog.getMeal(); // Completely type-safe without (DogFood) cast!
         <p class="caption">Figure 6: Association</p>
       </div>
 
-      <span class="code-label">Java</span>
-      <pre>
-public class Student {
+      <div class="code-tabs">
+  <div class="code-tabs-header">
+    <button class="code-tab-btn active" data-tab="java">☕ Java</button>
+    <button class="code-tab-btn" data-tab="csharp">🔷 C#</button>
+  </div>
+  <div class="code-tab-content active" data-tab-content="java">
+    <pre><code class="language-java">public class Student {
     private String name;
     
     public Student(String name) { this.name = name; }
@@ -443,8 +724,28 @@ public class Teacher {
     public void teach(Student student) {
         System.out.println(this.name + " is teaching " + student.getName());
     }
+}</code></pre>
+  </div>
+  <div class="code-tab-content" data-tab-content="csharp">
+    <pre><code class="language-csharp">public class Student
+{
+    public string Name { get; }
+    public Student(string name) => Name = name;
 }
-      </pre>
+
+public class Teacher
+{
+    public string Name { get; }
+    public Teacher(string name) => Name = name;
+
+    // Association: Teacher interacts with Student, but doesn't own them
+    public void Teach(Student student)
+    {
+        Console.WriteLine($"{Name} is teaching {student.Name}");
+    }
+}</code></pre>
+  </div>
+</div>
     </div>
 
     <div class="card">
@@ -462,9 +763,13 @@ public class Teacher {
         <p class="caption">Figure 7: Aggregation</p>
       </div>
 
-      <span class="code-label">Java</span>
-      <pre>
-import java.util.List;
+      <div class="code-tabs">
+  <div class="code-tabs-header">
+    <button class="code-tab-btn active" data-tab="java">☕ Java</button>
+    <button class="code-tab-btn" data-tab="csharp">🔷 C#</button>
+  </div>
+  <div class="code-tab-content active" data-tab-content="java">
+    <pre><code class="language-java">import java.util.List;
 
 public class Professor {
     private String name;
@@ -480,8 +785,31 @@ public class Department {
         this.name = name;
         this.professors = professors;
     }
+}</code></pre>
+  </div>
+  <div class="code-tab-content" data-tab-content="csharp">
+    <pre><code class="language-csharp">using System.Collections.Generic;
+
+public class Professor
+{
+    public string Name { get; }
+    public Professor(string name) => Name = name;
 }
-      </pre>
+
+public class Department
+{
+    public string Name { get; }
+    // Aggregation: Department has Professors, but they are passed in from outside
+    private readonly List<Professor> _professors;
+
+    public Department(string name, List<Professor> professors)
+    {
+        Name = name;
+        _professors = professors;
+    }
+}</code></pre>
+  </div>
+</div>
     </div>
 
     <div class="card">
@@ -499,9 +827,13 @@ public class Department {
         <p class="caption">Figure 8: Composition</p>
       </div>
 
-      <span class="code-label">Java</span>
-      <pre>
-import java.util.ArrayList;
+      <div class="code-tabs">
+  <div class="code-tabs-header">
+    <button class="code-tab-btn active" data-tab="java">☕ Java</button>
+    <button class="code-tab-btn" data-tab="csharp">🔷 C#</button>
+  </div>
+  <div class="code-tab-content active" data-tab-content="java">
+    <pre><code class="language-java">import java.util.ArrayList;
 import java.util.List;
 
 class Room {
@@ -519,8 +851,34 @@ public class House {
         rooms.add(new Room("Living Room"));
         rooms.add(new Room("Bedroom"));
     }
+}</code></pre>
+  </div>
+  <div class="code-tab-content" data-tab-content="csharp">
+    <pre><code class="language-csharp">using System.Collections.Generic;
+
+class Room
+{
+    public string Name { get; }
+    public Room(string name) => Name = name;
 }
-      </pre>
+
+public class House
+{
+    private readonly List<Room> _rooms;
+
+    public House()
+    {
+        // Composition: Rooms are created INSIDE the House.
+        // They die when the House is garbage collected.
+        _rooms = new List<Room>
+        {
+            new Room("Living Room"),
+            new Room("Bedroom")
+        };
+    }
+}</code></pre>
+  </div>
+</div>
     </div>
 
     <div class="card">
@@ -578,29 +936,65 @@ public class House {
       <div class="comparison">
         <div class="side bad">
           <h3>Tightly Coupled (Bad)</h3>
-          <pre>
-// OrderService directly depends on MySQL
+          <div class="code-tabs">
+  <div class="code-tabs-header">
+    <button class="code-tab-btn active" data-tab="java">☕ Java</button>
+    <button class="code-tab-btn" data-tab="csharp">🔷 C#</button>
+  </div>
+  <div class="code-tab-content active" data-tab-content="java">
+    <pre><code class="language-java">// OrderService directly depends on MySQL
 public class OrderService {
     private MySqlDatabase db;
 
     public OrderService() {
         this.db = new MySqlDatabase();
     }
-}
-          </pre>
+}</code></pre>
+  </div>
+  <div class="code-tab-content" data-tab-content="csharp">
+    <pre><code class="language-csharp">// OrderService directly depends on MySQL
+public class OrderService
+{
+    private MySqlDatabase _db;
+
+    public OrderService()
+    {
+        _db = new MySqlDatabase();
+    }
+}</code></pre>
+  </div>
+</div>
         </div>
         <div class="side good">
           <h3>Loosely Coupled (Good)</h3>
-          <pre>
-// OrderService depends on an Interface
+          <div class="code-tabs">
+  <div class="code-tabs-header">
+    <button class="code-tab-btn active" data-tab="java">☕ Java</button>
+    <button class="code-tab-btn" data-tab="csharp">🔷 C#</button>
+  </div>
+  <div class="code-tab-content active" data-tab-content="java">
+    <pre><code class="language-java">// OrderService depends on an Interface
 public class OrderService {
     private Database db;
 
     public OrderService(Database db) {
         this.db = db;
     }
-}
-          </pre>
+}</code></pre>
+  </div>
+  <div class="code-tab-content" data-tab-content="csharp">
+    <pre><code class="language-csharp">// OrderService depends on an Interface
+public class OrderService
+{
+    private readonly IDatabase _db;
+
+    public OrderService(IDatabase db)
+    {
+        _db = db;
+    }
+}</code></pre>
+  </div>
+</div>
         </div>
       </div>
     </div>
@@ -616,27 +1010,66 @@ public class OrderService {
       <div class="comparison">
         <div class="side bad">
           <h3>Low Cohesion (Bad)</h3>
-          <pre>
-public class UserService {
+          <div class="code-tabs">
+  <div class="code-tabs-header">
+    <button class="code-tab-btn active" data-tab="java">☕ Java</button>
+    <button class="code-tab-btn" data-tab="csharp">🔷 C#</button>
+  </div>
+  <div class="code-tab-content active" data-tab-content="java">
+    <pre><code class="language-java">public class UserService {
     public void createUser() { ... }
     public void sendEmail() { ... }
     public void logError() { ... }
     public void connectToDb() { ... }
-}
-          </pre>
+}</code></pre>
+  </div>
+  <div class="code-tab-content" data-tab-content="csharp">
+    <pre><code class="language-csharp">public class UserService
+{
+    public void CreateUser() { /* ... */ }
+    public void SendEmail() { /* ... */ }
+    public void LogError() { /* ... */ }
+    public void ConnectToDb() { /* ... */ }
+}</code></pre>
+  </div>
+</div>
         </div>
         <div class="side good">
           <h3>High Cohesion (Good)</h3>
-          <pre>
-public class UserService {
+          <div class="code-tabs">
+  <div class="code-tabs-header">
+    <button class="code-tab-btn active" data-tab="java">☕ Java</button>
+    <button class="code-tab-btn" data-tab="csharp">🔷 C#</button>
+  </div>
+  <div class="code-tab-content active" data-tab-content="java">
+    <pre><code class="language-java">public class UserService {
     private EmailService emailService;
     private UserRepository repo;
     
     public void createUser() { 
         // delegate to dedicated classes
     }
-}
-          </pre>
+}</code></pre>
+  </div>
+  <div class="code-tab-content" data-tab-content="csharp">
+    <pre><code class="language-csharp">public class UserService
+{
+    private readonly IEmailService _emailService;
+    private readonly IUserRepository _repo;
+
+    public UserService(IEmailService emailService, IUserRepository repo)
+    {
+        _emailService = emailService;
+        _repo = repo;
+    }
+
+    public void CreateUser()
+    {
+        // delegate to dedicated classes
+    }
+}</code></pre>
+  </div>
+</div>
         </div>
       </div>
     </div>

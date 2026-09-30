@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Movie Booking System Design — System Design Mastery</title>
   <link rel="stylesheet" href="../../css/style.css">
-  <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.0/dist/mermaid.min.js"></script>
 </head>
 <body>
 <button class="menu-toggle" aria-label="Toggle menu">☰</button>
@@ -50,9 +50,13 @@
     </div>
 
     <h2>4. Java 21 Code Implementation</h2>
-    <span class="code-label">Java</span>
-    <pre><code>
-import java.util.*;
+<div class="code-tabs">
+  <div class="code-tabs-header">
+    <button class="code-tab-btn active" data-tab="java">☕ Java 21</button>
+    <button class="code-tab-btn" data-tab="csharp">🔷 C#</button>
+  </div>
+  <div class="code-tab-content active" data-tab-content="java">
+    <pre><code class="language-java">import java.util.*;
 import java.util.concurrent.*;
 import java.time.LocalDateTime;
 
@@ -160,8 +164,133 @@ public class Main {
         
         service.bookSeats(new User("U1", "Alice"), show, List.of(s1), new UpiPayment());
     }
+}</code></pre>
+  </div>
+  <div class="code-tab-content" data-tab-content="csharp">
+    <pre><code class="language-csharp">using System;
+using System.Collections.Concurrent;
+using System.Collections.Generic;
+
+public enum SeatType { Regular, Premium, Vip }
+public enum SeatStatus { Available, Locked, Booked }
+
+public class Seat
+{
+    public string Id { get; }
+    public SeatType Type { get; }
+    public SeatStatus Status { get; set; } = SeatStatus.Available;
+    public DateTime? LockExpiryTime { get; set; }
+
+    public Seat(string id, SeatType type)
+    {
+        Id = id;
+        Type = type;
+    }
 }
-    </code></pre>
+
+public class Screen
+{
+    public string Id { get; }
+    public List<Seat> Seats { get; } = new();
+
+    public Screen(string id, int rows, int cols)
+    {
+        Id = id;
+        for (int r = 1; r <= rows; r++)
+        {
+            for (int c = 1; c <= cols; c++)
+            {
+                var type = r == 1 ? SeatType.Vip : r <= 3 ? SeatType.Premium : SeatType.Regular;
+                Seats.Add(new Seat($"R{r}-C{c}", type));
+            }
+        }
+    }
+}
+
+public record Show(string ShowId, string MovieName, Screen Screen, DateTime StartTime);
+
+public class BookingService
+{
+    private readonly object _lock = new();
+
+    // 10-minute hold lock to prevent seat hoarding
+    private readonly TimeSpan _lockDuration = TimeSpan.FromMinutes(10);
+
+    public bool LockSeats(Show show, List<string> seatIds, string userId)
+    {
+        lock (_lock)
+        {
+            var now = DateTime.UtcNow;
+
+            // Verify all requested seats are available or expired lock
+            foreach (var seatId in seatIds)
+            {
+                var seat = show.Screen.Seats.Find(s => s.Id == seatId);
+                if (seat == null) return false;
+
+                if (seat.Status == SeatStatus.Booked) return false;
+                if (seat.Status == SeatStatus.Locked && seat.LockExpiryTime > now) return false;
+            }
+
+            // Lock all seats
+            foreach (var seatId in seatIds)
+            {
+                var seat = show.Screen.Seats.Find(s => s.Id == seatId)!;
+                seat.Status = SeatStatus.Locked;
+                seat.LockExpiryTime = now.Add(_lockDuration);
+            }
+
+            Console.WriteLine($"Seats [{string.Join(", ", seatIds)}] locked for user {userId} for 10 minutes.");
+            return true;
+        }
+    }
+
+    public bool ConfirmBooking(Show show, List<string> seatIds, string userId)
+    {
+        lock (_lock)
+        {
+            var now = DateTime.UtcNow;
+            foreach (var seatId in seatIds)
+            {
+                var seat = show.Screen.Seats.Find(s => s.Id == seatId);
+                if (seat == null || seat.Status != SeatStatus.Locked || seat.LockExpiryTime < now)
+                {
+                    Console.WriteLine("Lock expired or invalid seat. Booking failed.");
+                    return false;
+                }
+            }
+
+            foreach (var seatId in seatIds)
+            {
+                var seat = show.Screen.Seats.Find(s => s.Id == seatId)!;
+                seat.Status = SeatStatus.Booked;
+                seat.LockExpiryTime = null;
+            }
+
+            Console.WriteLine($"Booking CONFIRMED for user {userId} for seats [{string.Join(", ", seatIds)}].");
+            return true;
+        }
+    }
+}
+
+public class Program
+{
+    public static void Main()
+    {
+        var screen = new Screen("SCREEN-1", 5, 5);
+        var show = new Show("SHOW-101", "Inception", screen, DateTime.UtcNow.AddHours(2));
+        var bookingService = new BookingService();
+
+        var desiredSeats = new List<string> { "R1-C1", "R1-C2" };
+        if (bookingService.LockSeats(show, desiredSeats, "User_Alice"))
+        {
+            // Payment processed here...
+            bookingService.ConfirmBooking(show, desiredSeats, "User_Alice");
+        }
+    }
+}</code></pre>
+  </div>
+</div>
 
     <h2>5. Why is this recommended?</h2>
     <p>Using a dedicated <code>SeatLockManager</code> handles concurrency and isolates locking logic from the business workflow, respecting <strong>Single Responsibility Principle</strong>. The <strong>Strategy</strong> pattern for payments prevents a monolithic checkout method.</p>

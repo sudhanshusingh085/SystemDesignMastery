@@ -5,10 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Structural Design Patterns - Exhaustive Masterclass</title>
     <link rel="stylesheet" href="../../css/style.css">
-    <script type="module">
-      import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
-      mermaid.initialize({ startOnLoad: true });
-    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.0/dist/mermaid.min.js"></script>
 </head>
 <body>
 
@@ -45,8 +42,13 @@
             <p>Imagine your interviewer asks you to integrate an old `LegacyXmlBankingApi` into a new `PaymentGateway` interface. The naive approach is to modify the existing `PaymentGateway` to accept XML, or directly instantiate `LegacyXmlBankingApi` in your payment processing service. This fails the Open/Closed Principle immediately. As the system evolves, the realization hits: you need a middleman. You define `PaymentGateway` (the Target), keep `LegacyXmlBankingApi` untouched (the Adaptee), and create `XmlBankingAdapter` that implements `PaymentGateway` and holds a reference to `LegacyXmlBankingApi`.</p>
             
             <h3>PILLAR 4: Production-Grade Java 21 Code</h3>
-<pre><code class="language-java">
-// The Target Interface expected by our modern system
+<div class="code-tabs">
+  <div class="code-tabs-header">
+    <button class="code-tab-btn active" data-tab="java">☕ Java 21</button>
+    <button class="code-tab-btn" data-tab="csharp">🔷 C#</button>
+  </div>
+  <div class="code-tab-content active" data-tab-content="java">
+    <pre><code class="language-java">// The Target Interface expected by our modern system
 public interface PaymentGateway {
     boolean processPayment(String accountId, double amount);
 }
@@ -55,7 +57,7 @@ public interface PaymentGateway {
 final class LegacyXmlBankingApi {
     public String executeTransaction(String xmlPayload) {
         // Complex XML processing...
-        return "&lt;status&gt;SUCCESS&lt;/status&gt;";
+        return "<status>SUCCESS</status>";
     }
 }
 
@@ -73,20 +75,69 @@ public final class BankingAdapter implements PaymentGateway {
     public boolean processPayment(String accountId, double amount) {
         // 1. Translate modern request to legacy format
         String xmlRequest = """
-            &lt;transaction&gt;
-                &lt;account&gt;%s&lt;/account&gt;
-                &lt;amount&gt;%.2f&lt;/amount&gt;
-            &lt;/transaction&gt;
+            <transaction>
+                <account>%s</account>
+                <amount>%.2f</amount>
+            </transaction>
             """.formatted(accountId, amount);
         
         // 2. Delegate to the adaptee
         String xmlResponse = legacyApi.executeTransaction(xmlRequest);
         
         // 3. Translate legacy response to modern return type
-        return xmlResponse.contains("&lt;status&gt;SUCCESS&lt;/status&gt;");
+        return xmlResponse.contains("<status>SUCCESS</status>");
+    }
+}</code></pre>
+  </div>
+  <div class="code-tab-content" data-tab-content="csharp">
+    <pre><code class="language-csharp">using System;
+
+// The Target Interface expected by our modern system
+public interface IPaymentGateway
+{
+    bool ProcessPayment(string accountId, double amount);
+}
+
+// The Adaptee: A legacy 3rd-party system we cannot modify
+internal sealed class LegacyXmlBankingApi
+{
+    public string ExecuteTransaction(string xmlPayload)
+    {
+        // Complex XML processing...
+        return "<status>SUCCESS</status>";
     }
 }
-</code></pre>
+
+// The Object Adapter using composition and modern C# features
+public sealed class BankingAdapter : IPaymentGateway
+{
+    // Encapsulated adaptee, immutable reference
+    private readonly LegacyXmlBankingApi _legacyApi;
+
+    public BankingAdapter(LegacyXmlBankingApi legacyApi)
+    {
+        _legacyApi = legacyApi;
+    }
+
+    public bool ProcessPayment(string accountId, double amount)
+    {
+        // 1. Translate modern request to legacy XML format using raw string literals
+        string xmlRequest = $"""
+            <transaction>
+                <account>{accountId}</account>
+                <amount>{amount:F2}</amount>
+            </transaction>
+            """;
+
+        // 2. Delegate to the adaptee
+        string xmlResponse = _legacyApi.ExecuteTransaction(xmlRequest);
+
+        // 3. Translate legacy response to modern return type
+        return xmlResponse.Contains("<status>SUCCESS</status>", StringComparison.OrdinalIgnoreCase);
+    }
+}</code></pre>
+  </div>
+</div>
 
             <h3>PILLAR 5: The Interviewer's Deep Follow-Up Questions</h3>
             <p><strong>The Grill Round:</strong> "What is the difference between Adapter, Decorator, and Facade?"</p>
@@ -110,8 +161,13 @@ public final class BankingAdapter implements PaymentGateway {
             <p>From naive subclassing (fails at scale) -> to a single base class with a dozen boolean flags (violates Open/Closed and makes the base class huge) -> to Dynamic Composition via Decorator, where we wrap objects at runtime.</p>
 
             <h3>PILLAR 4: Production-Grade Java 21 Code</h3>
-<pre><code class="language-java">
-public sealed interface Beverage permits Espresso, BeverageDecorator {
+<div class="code-tabs">
+  <div class="code-tabs-header">
+    <button class="code-tab-btn active" data-tab="java">☕ Java 21</button>
+    <button class="code-tab-btn" data-tab="csharp">🔷 C#</button>
+  </div>
+  <div class="code-tab-content active" data-tab-content="java">
+    <pre><code class="language-java">public sealed interface Beverage permits Espresso, BeverageDecorator {
     String description();
     double cost();
 }
@@ -130,8 +186,43 @@ public final class Milk extends BeverageDecorator {
     public Milk(Beverage component) { super(component); }
     @Override public String description() { return component.description() + ", Milk"; }
     @Override public double cost() { return component.cost() + 0.50; }
+}</code></pre>
+  </div>
+  <div class="code-tab-content" data-tab-content="csharp">
+    <pre><code class="language-csharp">using System;
+
+public interface IBeverage
+{
+    string Description { get; }
+    double Cost();
 }
-</code></pre>
+
+public sealed record Espresso : IBeverage
+{
+    public string Description => "Espresso";
+    public double Cost() => 1.99;
+}
+
+public abstract class BeverageDecorator : IBeverage
+{
+    protected readonly IBeverage Component;
+    protected BeverageDecorator(IBeverage component)
+    {
+        Component = component;
+    }
+
+    public virtual string Description => Component.Description;
+    public virtual double Cost() => Component.Cost();
+}
+
+public sealed class Milk : BeverageDecorator
+{
+    public Milk(IBeverage component) : base(component) { }
+    public override string Description => $"{Component.Description}, Milk";
+    public override double Cost() => Component.Cost() + 0.50;
+}</code></pre>
+  </div>
+</div>
 
             <h3>PILLAR 5: The Grill Round</h3>
             <p><strong>Trap:</strong> Does order matter in decorators? <strong>Answer:</strong> Generally, the pattern aims to be order-independent for pure additive operations. But if decorators apply discounts (e.g., half-off), the order of wrapping fundamentally changes the mathematical outcome.</p>
@@ -146,8 +237,13 @@ public final class Milk extends BeverageDecorator {
             <p>When clients interact with a myriad of intricate subsystems—like an audio encoder, video decoder, bit-rate allocator, and file writer—the client code becomes massively bloated and tightly coupled. The Facade Pattern provides a simple, high-level interface that shields clients from this internal chaos.</p>
 
             <h3>PILLAR 4: Production-Grade Java 21 Code</h3>
-<pre><code class="language-java">
-// A simplified clean API over complex sub-systems
+<div class="code-tabs">
+  <div class="code-tabs-header">
+    <button class="code-tab-btn active" data-tab="java">☕ Java 21</button>
+    <button class="code-tab-btn" data-tab="csharp">🔷 C#</button>
+  </div>
+  <div class="code-tab-content active" data-tab-content="java">
+    <pre><code class="language-java">// A simplified clean API over complex sub-systems
 public class VideoConverterFacade {
     public File convertVideo(String fileName, String format) {
         VideoFile file = new VideoFile(fileName);
@@ -157,8 +253,30 @@ public class VideoConverterFacade {
         VideoFile intermediateResult = BitrateReader.convert(buffer, destinationCodec);
         return new AudioMixer().fix(intermediateResult);
     }
-}
-</code></pre>
+}</code></pre>
+  </div>
+  <div class="code-tab-content" data-tab-content="csharp">
+    <pre><code class="language-csharp">using System;
+using System.IO;
+
+// A simplified clean API over complex sub-systems
+public class VideoConverterFacade
+{
+    public FileInfo ConvertVideo(string fileName, string format)
+    {
+        var file = new VideoFile(fileName);
+        var sourceCodec = CodecFactory.Extract(file);
+        Codec destinationCodec = format.Equals("mp4", StringComparison.OrdinalIgnoreCase)
+            ? new Mpeg4CompressionCodec()
+            : new OggCompressionCodec();
+
+        var buffer = BitrateReader.Read(file, sourceCodec);
+        var intermediateResult = BitrateReader.Convert(buffer, destinationCodec);
+        return new AudioMixer().Fix(intermediateResult);
+    }
+}</code></pre>
+  </div>
+</div>
 
             <h3>PILLAR 5: The Grill Round</h3>
             <p><strong>Trap:</strong> "Does a Facade prevent clients from accessing subsystems?" <strong>Answer:</strong> "No. A Facade provides a convenient default path. Power users can still bypass the Facade and interact with subsystems directly if they need granular control."</p>

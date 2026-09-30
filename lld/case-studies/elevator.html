@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Design an Elevator System — System Design Mastery</title>
   <link rel="stylesheet" href="../../css/style.css">
-  <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.0/dist/mermaid.min.js"></script>
 </head>
 <body>
 <button class="menu-toggle" aria-label="Toggle menu">☰</button>
@@ -104,9 +104,13 @@
     <p>Handling simultaneous button presses is the hardest part. If a user presses the UP button on floor 3 while the elevator is at floor 2 moving up, the request must be safely injected into the elevator's internal memory without causing a <code>ConcurrentModificationException</code> or race condition. We use <code>ReentrantLock</code> to protect the shared sets (upDestinations and downDestinations) to ensure visibility and atomicity across threads.</p>
     
     <h2>Phase 5: Production-Grade Java 21 Code</h2>
-    <span class="code-label">Java</span>
-    <pre>
-import java.util.*;
+<div class="code-tabs">
+  <div class="code-tabs-header">
+    <button class="code-tab-btn active" data-tab="java">☕ Java 21</button>
+    <button class="code-tab-btn" data-tab="csharp">🔷 C#</button>
+  </div>
+  <div class="code-tab-content active" data-tab-content="java">
+    <pre><code class="language-java">import java.util.*;
 import java.util.concurrent.locks.ReentrantLock;
 
 // PILLAR 2: Enums for type safety and fast comparison
@@ -205,8 +209,173 @@ class ElevatorController {
         ElevatorCar car = strategy.selectElevator(elevators, request);
         car.addDestination(request.floor());
     }
+}</code></pre>
+  </div>
+  <div class="code-tab-content" data-tab-content="csharp">
+    <pre><code class="language-csharp">using System;
+using System.Collections.Generic;
+
+// PILLAR 2: Enums for type safety and clarity
+public enum Direction { Up, Down, Idle }
+public enum ElevatorState { Moving, Idle, Maintenance }
+
+// PILLAR 3: Concrete Elevator Car encapsulating hardware sensors & motor
+public class ElevatorCar
+{
+    private readonly object _lock = new();
+    public int Id { get; }
+    public int CurrentFloor { get; private set; }
+    public Direction CurrentDirection { get; private set; }
+    public ElevatorState State { get; private set; }
+    public SortedSet<int> Destinations { get; } = new();
+
+    public ElevatorCar(int id)
+    {
+        Id = id;
+        CurrentFloor = 0;
+        CurrentDirection = Direction.Idle;
+        State = ElevatorState.Idle;
+    }
+
+    public void AddDestination(int floor)
+    {
+        lock (_lock)
+        {
+            Destinations.Add(floor);
+            UpdateDirection();
+        }
+    }
+
+    private void UpdateDirection()
+    {
+        if (Destinations.Count == 0)
+        {
+            CurrentDirection = Direction.Idle;
+            State = ElevatorState.Idle;
+            return;
+        }
+
+        int next = Destinations.Min;
+        if (next > CurrentFloor)
+        {
+            CurrentDirection = Direction.Up;
+            State = ElevatorState.Moving;
+        }
+        else if (next < CurrentFloor)
+        {
+            CurrentDirection = Direction.Down;
+            State = ElevatorState.Moving;
+        }
+    }
+
+    public void StepSimulation()
+    {
+        lock (_lock)
+        {
+            if (Destinations.Count == 0) return;
+
+            if (CurrentDirection == Direction.Up) CurrentFloor++;
+            else if (CurrentDirection == Direction.Down) CurrentFloor--;
+
+            Console.WriteLine($"[Elevator {Id}] at Floor {CurrentFloor} (Direction: {CurrentDirection})");
+
+            if (Destinations.Contains(CurrentFloor))
+            {
+                Console.WriteLine($"[Elevator {Id}] Doors OPENING at Floor {CurrentFloor}. Passengers board/exit.");
+                Destinations.Remove(CurrentFloor);
+                UpdateDirection();
+            }
+        }
+    }
 }
-    </pre>
+
+// PILLAR 4: Strategy Pattern for dispatching algorithms (LOOK, SCAN, Shortest Seek)
+public interface IDispatchStrategy
+{
+    ElevatorCar SelectElevator(List<ElevatorCar> elevators, int floor, Direction direction);
+}
+
+public class NearestElevatorStrategy : IDispatchStrategy
+{
+    public ElevatorCar SelectElevator(List<ElevatorCar> elevators, int floor, Direction direction)
+    {
+        ElevatorCar? best = null;
+        int minDistance = int.MaxValue;
+
+        foreach (var car in elevators)
+        {
+            if (car.State == ElevatorState.Maintenance) continue;
+
+            // Simple proximity score: distance + penalty if moving opposite direction
+            int distance = Math.Abs(car.CurrentFloor - floor);
+            if (car.CurrentDirection != Direction.Idle && car.CurrentDirection != direction)
+            {
+                distance += 10; // Direction mismatch penalty
+            }
+
+            if (distance < minDistance)
+            {
+                minDistance = distance;
+                best = car;
+            }
+        }
+        return best ?? elevators[0];
+    }
+}
+
+// PILLAR 5: Central Controller managing bank of elevators
+public class ElevatorController
+{
+    private readonly List<ElevatorCar> _elevators;
+    private readonly IDispatchStrategy _strategy;
+
+    public ElevatorController(int numCars, IDispatchStrategy strategy)
+    {
+        _elevators = new List<ElevatorCar>();
+        for (int i = 1; i <= numCars; i++)
+        {
+            _elevators.Add(new ElevatorCar(i));
+        }
+        _strategy = strategy;
+    }
+
+    public void RequestElevator(int floor, Direction direction)
+    {
+        Console.WriteLine($"External Hall Call: Floor {floor}, Direction: {direction}");
+        var selected = _strategy.SelectElevator(_elevators, floor, direction);
+        Console.WriteLine($"Dispatcher assigned Hall Call to Elevator {selected.Id}");
+        selected.AddDestination(floor);
+    }
+
+    public void StepAll()
+    {
+        foreach (var car in _elevators)
+        {
+            car.StepSimulation();
+        }
+    }
+}
+
+public class Program
+{
+    public static void Main()
+    {
+        Console.WriteLine("Initializing Elevator System (2 Cars, 10 Floors)...");
+        var controller = new ElevatorController(2, new NearestElevatorStrategy());
+
+        controller.RequestElevator(5, Direction.Up);
+        controller.RequestElevator(2, Direction.Down);
+
+        // Run simulation steps
+        for (int i = 0; i < 6; i++)
+        {
+            Console.WriteLine($"--- Clock Tick {i + 1} ---");
+            controller.StepAll();
+        }
+    }
+}</code></pre>
+  </div>
+</div>
 
     <h2>Phase 6: Trade-offs & The Interviewer's Deep Follow-Up Questions</h2>
     <div class="callout callout-warning">
