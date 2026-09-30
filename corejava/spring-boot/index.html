@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -118,15 +118,15 @@ public class TradeController {
                 <h3>Pillar 3: Step-by-Step Evolution</h3>
                 <pre class="mermaid">
                 flowchart TD
-                    A[Instantiation (Constructor)] --> B[Populate Properties (Dependency Injection)]
-                    B --> C[BeanNameAware / ApplicationContextAware]
-                    C --> D[BeanPostProcessor preInit]
-                    D --> E[@PostConstruct]
-                    E --> F[InitializingBean afterPropertiesSet]
-                    F --> G[BeanPostProcessor postInit]
-                    G --> H[READY FOR USE]
-                    H --> I[@PreDestroy]
-                    I --> J[DisposableBean destroy]
+                    A["Instantiation (Constructor)"] --> B["Populate Properties (Dependency Injection)"]
+                    B --> C["BeanNameAware / ApplicationContextAware"]
+                    C --> D["BeanPostProcessor preInit"]
+                    D --> E["@PostConstruct"]
+                    E --> F["InitializingBean afterPropertiesSet"]
+                    F --> G["BeanPostProcessor postInit"]
+                    G --> H["READY FOR USE"]
+                    H --> I["@PreDestroy"]
+                    I --> J["DisposableBean destroy"]
                 </pre>
             </div>
 

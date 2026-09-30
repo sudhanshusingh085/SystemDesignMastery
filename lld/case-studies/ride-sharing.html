@@ -56,8 +56,13 @@
     <section class="card">
         <h2>Low-Level Design (Java 21)</h2>
         
-        <span class="code-label">Java</span>
-<pre><code>import java.time.LocalDateTime;
+        <div class="code-tabs">
+  <div class="code-tabs-header">
+    <button class="code-tab-btn active" data-tab="java">☕ Java 21</button>
+    <button class="code-tab-btn" data-tab="csharp">🔷 C#</button>
+  </div>
+  <div class="code-tab-content active" data-tab-content="java">
+    <pre><code class="language-java">import java.time.LocalDateTime;
 import java.util.*;
 
 record Location(double latitude, double longitude) {
@@ -251,6 +256,149 @@ class RideService {
     private void notify(Trip t) { observers.forEach(o -&gt; o.onTripUpdated(t)); }
 }
 </code></pre>
+  </div>
+  <div class="code-tab-content" data-tab-content="csharp">
+    <pre><code class="language-csharp">using System;
+using System.Collections.Generic;
+using System.Linq;
+
+namespace RideSharingSystem;
+
+public record Location(double Latitude, double Longitude)
+{
+    public double DistanceTo(Location other) =>
+        Math.Sqrt(Math.Pow(Latitude - other.Latitude, 2) + Math.Pow(Longitude - other.Longitude, 2));
+}
+
+public record RiderId(string Id);
+public record DriverId(string Id);
+
+public class Rider(RiderId id, string name, Location location)
+{
+    public RiderId Id { get; } = id;
+    public string Name { get; } = name;
+    public Location Location { get; set; } = location;
+}
+
+public class Driver(DriverId id, string name, Location location, double rating)
+{
+    public DriverId Id { get; } = id;
+    public string Name { get; } = name;
+    public Location Location { get; set; } = location;
+    public double Rating { get; set; } = rating;
+    public bool IsAvailable { get; set; } = true;
+}
+
+public enum TripStatus { Requested, DriverAssigned, InProgress, Completed, Cancelled }
+
+public interface ITripState
+{
+    void Handle(Trip trip, TripService service);
+}
+
+public class RequestedState : ITripState
+{
+    public void Handle(Trip trip, TripService service) => Console.WriteLine($"Trip {trip.Id}: Rider requested matching.");
+}
+
+public class DriverAssignedState : ITripState
+{
+    public void Handle(Trip trip, TripService service) => Console.WriteLine($"Trip {trip.Id}: Driver {trip.Driver?.Name} assigned.");
+}
+
+public class InProgressState : ITripState
+{
+    public void Handle(Trip trip, TripService service) => Console.WriteLine($"Trip {trip.Id}: In progress towards destination.");
+}
+
+public class CompletedState : ITripState
+{
+    public void Handle(Trip trip, TripService service) => Console.WriteLine($"Trip {trip.Id}: Completed. Fare charged: ${trip.Fare:F2}");
+}
+
+public class Trip
+{
+    public string Id { get; } = Guid.NewGuid().ToString()[..8];
+    public Rider Rider { get; }
+    public Driver? Driver { get; set; }
+    public Location Pickup { get; }
+    public Location Dropoff { get; }
+    public double Fare { get; set; }
+    public ITripState State { get; set; } = new RequestedState();
+
+    public Trip(Rider rider, Location pickup, Location dropoff)
+    {
+        Rider = rider;
+        Pickup = pickup;
+        Dropoff = dropoff;
+    }
+}
+
+// --- STRATEGY PATTERN: PRICING ---
+public interface IPricingStrategy
+{
+    double CalculateFare(Trip trip);
+}
+
+public class BasePricingStrategy : IPricingStrategy
+{
+    private const double BaseFare = 2.50;
+    private const double PerKmRate = 1.20;
+
+    public double CalculateFare(Trip trip) =>
+        BaseFare + (trip.Pickup.DistanceTo(trip.Dropoff) * PerKmRate);
+}
+
+public class SurgePricingDecorator(IPricingStrategy inner, double surgeMultiplier) : IPricingStrategy
+{
+    public double CalculateFare(Trip trip) => inner.CalculateFare(trip) * surgeMultiplier;
+}
+
+// --- STRATEGY PATTERN: DRIVER MATCHING ---
+public interface IDriverMatchingStrategy
+{
+    Driver? MatchDriver(Trip trip, IEnumerable<Driver> availableDrivers);
+}
+
+public class NearestDriverMatchingStrategy : IDriverMatchingStrategy
+{
+    public Driver? MatchDriver(Trip trip, IEnumerable<Driver> availableDrivers) =>
+        availableDrivers
+            .Where(d => d.IsAvailable)
+            .OrderBy(d => d.Location.DistanceTo(trip.Pickup))
+            .FirstOrDefault();
+}
+
+public class TripService(IPricingStrategy pricingStrategy, IDriverMatchingStrategy matchingStrategy)
+{
+    private readonly List<Driver> _drivers = [];
+
+    public void RegisterDriver(Driver driver) => _drivers.Add(driver);
+
+    public Trip CreateAndMatchTrip(Rider rider, Location pickup, Location dropoff, double surgeMultiplier = 1.0)
+    {
+        var trip = new Trip(rider, pickup, dropoff);
+        
+        IPricingStrategy effectivePricing = surgeMultiplier > 1.0 
+            ? new SurgePricingDecorator(pricingStrategy, surgeMultiplier) 
+            : pricingStrategy;
+
+        trip.Fare = effectivePricing.CalculateFare(trip);
+
+        var matchedDriver = matchingStrategy.MatchDriver(trip, _drivers);
+        if (matchedDriver != null)
+        {
+            matchedDriver.IsAvailable = false;
+            trip.Driver = matchedDriver;
+            trip.State = new DriverAssignedState();
+            trip.State.Handle(trip, this);
+        }
+
+        return trip;
+    }
+}</code></pre>
+  </div>
+</div>
     </section>
 
     <div class="callout callout-info">

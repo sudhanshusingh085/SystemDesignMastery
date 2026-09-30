@@ -3,8 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Java 8+ Features — Functional Architecture in Modern Finance</title>
-    <link rel="stylesheet" href="../../css/style.css">
+    <title>Java 8+ Features — Lambdas, Target Typing, Stream API & Collectors Masterclass</title>
+    <link rel="stylesheet" href="../css/style.css">
     <script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.0/dist/mermaid.min.js"></script>
     <script src="../js/main.js" defer></script>
 </head>
@@ -17,26 +17,31 @@
 
   <main class="main-content">
     <nav class="breadcrumb">
-        <a href="../index.html">Home</a> &gt; <span>04 · Java 8 Features</span>
+        <a href="../index.html">Home</a> &gt; <span>04 · Java 8+ Features</span>
     </nav>
 
     <header>
-        <h1>Java 8+ Features — Functional Architecture in Modern Finance</h1>
-        <p class="subtitle">Mastering Lambdas, Target Typing, Streams, and the java.time API for High-Frequency Trading Systems</p>
+        <h1>Java 8+ Features — The Definitive Streams &amp; Collectors Masterclass</h1>
+        <p class="subtitle">An exhaustive, production-grade guide covering Target Typing, SAM Resolution, every single Stream method, every Collectors utility, Map vs FlatMap, and lock-free functional architecture in finance.</p>
     </header>
 
+    <!-- SECTION 1: PARADIGM SHIFT -->
     <section id="paradigm-shift">
         <h2>1. The Paradigm Shift: Imperative vs Functional Java</h2>
         <p>
-            In high-frequency trading (HFT) and institutional order management systems (OMS), state mutations are the breeding ground for critical concurrency bugs. An imperative loop that modifies a shared <code>List&lt;Trade&gt;</code> or updates an accumulator variable representing total exposure introduces locking bottlenecks and data races. Functional programming in Java 8+ emphasizes <em>immutability</em> and <em>declarative data processing</em>.
+            In electronic trading systems and institutional order management systems (OMS), shared mutable state is the single most common cause of high-impact production outages and race conditions. An imperative loop that mutates shared lists or updates accumulator variables introduces locking bottlenecks, false sharing on CPU caches, and nondeterministic behavior under concurrent loads.
         </p>
         <p>
-            By passing behavior (functions) as data, we can define parallelizable pipelines where each stage operates on an immutable view of the data. At the bytecode level, lambda expressions are <strong>not</strong> compiled into anonymous inner classes (which would pollute the PermGen/Metaspace). Instead, they leverage the <code>invokedynamic</code> instruction introduced in Java 7, dynamically generating the class implementation at runtime via the <code>LambdaMetafactory</code>.
+            Functional programming in Java 8+ shifts the paradigm to <strong>declarative pipelines over immutable data</strong>. Rather than describing <em>how</em> to iterate step-by-step, you declare <em>what</em> transformations and reductions should be applied.
         </p>
         <p>
-            A crucial constraint in lambdas is variable capture. Captured variables must be <strong>effectively final</strong>. If a lambda executed in a thread pool could mutate a local variable from its enclosing scope, it would violate thread safety without explicit synchronization.
+            At the bytecode level, Java lambdas are <strong>not</strong> compiled into anonymous inner classes (which would allocate memory and bloat Metaspace with classes like <code>OrderService$1.class</code>). Instead, they leverage the <code>invokedynamic</code> instruction (JSR 292). The JVM uses <code>LambdaMetafactory</code> to generate an ultra-fast call site linkage at runtime, often achieving the speed of direct native method invocations with zero classloader overhead.
         </p>
-<pre><code class="language-java">// Imperative (Mutable State - Bug Prone)
+        <p>
+            <strong>Variable Capture Rule:</strong> Any local variable referenced inside a lambda must be <strong>effectively final</strong> (assigned once and never changed). If a lambda executed across a worker thread pool could mutate local stack variables, memory consistency would be shattered.
+        </p>
+
+<pre><code class="language-java">// IMPERATIVE (Mutable State - Bug Prone, Hard to Parallelize)
 double totalNotional = 0;
 for (Trade trade : trades) {
     if (trade.getStatus() == TradeStatus.FILLED && "AAPL".equals(trade.getSymbol())) {
@@ -44,7 +49,7 @@ for (Trade trade : trades) {
     }
 }
 
-// Functional (Declarative, Stateless, Parallelizable)
+// FUNCTIONAL (Declarative, Stateless, Thread-Safe, Zero Mutations)
 double totalNotional = trades.stream()
     .filter(t -> t.getStatus() == TradeStatus.FILLED)
     .filter(t -> "AAPL".equals(t.getSymbol()))
@@ -59,12 +64,12 @@ double totalNotional = trades.stream()
         
         <div class="callout callout-info">
             <div class="callout-title">💡 The Core Insight: Lambdas Have No Intrinsic Type!</div>
-            <p>Unlike a literal number (<code>10</code> is an <code>int</code>) or a string (<code>"AAPL"</code> is a <code>String</code>), a lambda expression like <code>trade -> trade.getNotional() > 0</code> <strong>has no type of its own</strong> in isolation!</p>
-            <p>If you type: <code>var x = (trade) -> trade.getNotional() > 0;</code> the Java compiler will immediately fail with: <em>"Cannot infer type: lambda expression requires an explicit target type."</em></p>
+            <p>Unlike a literal primitive (<code>10</code> is an <code>int</code>) or a string (<code>"AAPL"</code> is a <code>String</code>), a lambda expression like <code>trade -&gt; trade.getNotional() &gt; 0</code> <strong>has no type of its own</strong> in isolation!</p>
+            <p>If you type: <code>var x = (trade) -&gt; trade.getNotional() &gt; 0;</code> the Java compiler will immediately reject it: <em>"Cannot infer type: lambda expression requires an explicit target type."</em></p>
         </div>
 
         <h3>The Compiler's Step-by-Step Deduction Process:</h3>
-        <p>How does Java figure out what functional interface your lambda represents? <strong>It figures this out by looking at the surrounding context—specifically, the method you are calling or the variable you are assigning to.</strong> This mechanism is called <strong>Target Typing</strong>.</p>
+        <p>How does the Java compiler figure out what functional interface your lambda represents? <strong>It figures this out by looking at the surrounding context—specifically, the method you are calling or the variable type you are assigning to.</strong> This mechanism is called <strong>Target Typing</strong>.</p>
 
         <div class="mermaid">
 flowchart TD
@@ -83,10 +88,10 @@ flowchart TD
                 <pre><code class="language-java">public Stream&lt;T&gt; filter(Predicate&lt;? super T&gt; predicate);</code></pre>
                 Because <code>T</code> is <code>Trade</code>, the method specifically requires a <code>Predicate&lt;Trade&gt;</code>.
             </li>
-            <li><strong>The "Aha!" Moment:</strong> Because you placed your lambda <code>trade -> trade.getNotional() > 0</code> inside the parentheses of <code>.filter(...)</code>, the compiler says: <em>"Ah! The filter method specifically requires a <code>Predicate&lt;Trade&gt;</code>. I will convert this lambda into a <code>Predicate&lt;Trade&gt;</code>."</em></li>
-            <li><strong>SAM (Single Abstract Method) Verification:</strong> The compiler opens <code>Predicate&lt;Trade&gt;</code> and sees its abstract method:
+            <li><strong>The "Aha!" Moment:</strong> Because you placed your lambda <code>trade -&gt; trade.notional &gt; 0</code> inside the parentheses of <code>.filter(...)</code>, the compiler says: <em>"Ah! The filter method specifically requires a <code>Predicate&lt;Trade&gt;</code>. I will convert this lambda into a <code>Predicate&lt;Trade&gt;</code>."</em></li>
+            <li><strong>SAM (Single Abstract Method) Verification:</strong> The compiler opens <code>Predicate&lt;Trade&gt;</code> and checks its Single Abstract Method:
                 <pre><code class="language-java">boolean test(Trade t);</code></pre>
-                It verifies that your lambda accepts 1 argument (<code>Trade</code>) and returns a <code>boolean</code> (the result of <code>trade.getNotional() > 0</code>). Because the signature matches, compilation succeeds!
+                It verifies that your lambda accepts 1 argument (<code>Trade</code>) and returns a <code>boolean</code> (the result of <code>trade.notional &gt; 0</code>). Because the signature matches, compilation succeeds and bytecode emits an <code>invokedynamic</code> instruction targeting <code>Predicate</code>.
             </li>
         </ol>
 
@@ -97,7 +102,7 @@ flowchart TD
 
         <div class="code-comparison">
             <h4>Option 1: You Write Your Own Custom Interface</h4>
-            <pre><code class="language-java">// 1. You write the custom interface
+            <pre><code class="language-java">// 1. You write the interface
 @FunctionalInterface
 interface DiscountCalculator {
     double applyDiscount(double price); 
@@ -110,7 +115,7 @@ public class CustomDemo {
         
         // 3. You trigger it using your custom method name: applyDiscount()
         double result = halfOff.applyDiscount(100.0);
-        System.out.println("Custom result: $" + result); // $50.0
+        System.out.println("Custom result: $" + result); // Prints: $50.0
     }
 }</code></pre>
 
@@ -119,7 +124,7 @@ public class CustomDemo {
 
 public class BuiltInDemo {
     public static void main(String[] args) {
-        // 1. No interface to write! Just use Java's Function<T, R>.
+        // 1. No interface to write! Just use Java's Function.
         // <Double, Double> means it takes a Double, and returns a Double.
         
         // 2. You define the lambda (looks EXACTLY the same)
@@ -127,10 +132,135 @@ public class BuiltInDemo {
         
         // 3. You trigger it using Java's built-in method name: apply()
         double result = halfOff.apply(100.0);
-        System.out.println("Built-in result: $" + result); // $50.0
+        System.out.println("Built-in result: $" + result); // Prints: $50.0
     }
 }</code></pre>
         </div>
+
+        <hr>
+
+        <h3>Default &amp; Static Methods in Functional Interfaces: Evolution &amp; Composition</h3>
+        <p>A frequent interview trap is: <em>"Can a <code>@FunctionalInterface</code> have more than one method?"</em></p>
+        <p><strong>The Definitive Answer:</strong> <strong>YES.</strong> A functional interface must have <strong>strictly one abstract method (SAM)</strong>. However, it can have an <strong>unlimited number of <code>default</code> methods, <code>static</code> methods</strong>, and public methods overriding <code>java.lang.Object</code> (such as <code>boolean equals(Object)</code>).</p>
+
+        <div class="callout callout-info">
+            <div class="callout-title">💡 Why Did Java 8 Introduce Default Methods?</div>
+            <p><strong>Interface Evolution without Breaking Backward Compatibility:</strong> Prior to Java 8, adding a new method to an interface (like adding <code>forEach()</code> to <code>Iterable</code> or <code>stream()</code> to <code>Collection</code>) would instantly break every single implementation written worldwide! By providing a <code>default</code> implementation, existing implementations automatically inherit the new behavior without modifying a single line of code.</p>
+        </div>
+
+        <h4>1. Enhancing Our Custom <code>DiscountCalculator</code> with Default &amp; Static Methods:</h4>
+        <pre><code class="language-java">package com.bank.mastery;
+
+import java.util.Objects;
+
+@FunctionalInterface
+public interface DiscountCalculator {
+
+    // 1. The Single Abstract Method (SAM)
+    double applyDiscount(double price);
+
+    // 2. Default Method for Method Chaining (Composition):
+    // Applies this discount first, then pipes the result into the 'next' discount
+    default DiscountCalculator andThen(DiscountCalculator next) {
+        Objects.requireNonNull(next, "Next calculator must not be null");
+        return (price) -> next.applyDiscount(this.applyDiscount(price));
+    }
+
+    // 3. Default Method for Business Safeguards (Circuit Breaker / Price Floor):
+    default DiscountCalculator withFloorPrice(double minPrice) {
+        return (price) -> Math.max(minPrice, this.applyDiscount(price));
+    }
+
+    // 4. Static Factory Method:
+    static DiscountCalculator percentageOff(double pct) {
+        return (price) -> price * (1.0 - pct);
+    }
+}
+</code></pre>
+
+        <h4>2. The Execution Flow of Functional Composition:</h4>
+        <p>Notice how default methods return a <strong>new lambda</strong> that wraps both functions. Zero mutable state, zero object allocations until invoked:</p>
+
+        <div class="mermaid">
+flowchart LR
+    Input["Input Price: $100.0"] --> Step1["halfOff.applyDiscount(100.0) -> $50.0"]
+    Step1 --> Step2["loyaltyDiscount.applyDiscount(50.0) -> $40.0"]
+    Step2 --> Step3["withFloorPrice.applyDiscount(40.0) -> Max(45.0, 40.0)"]
+    Step3 --> Output["Final Price: $45.0"]
+        </div>
+
+        <h4>3. Complete Runnable Demonstration:</h4>
+        <pre><code class="language-java">public class CustomDefaultMethodDemo {
+    public static void main(String[] args) {
+        // Factory creation via static method
+        DiscountCalculator halfOff = DiscountCalculator.percentageOff(0.50); // 50% off
+        DiscountCalculator loyaltyCoupon = (price) -> price - 10.0;           // Flat $10 off
+        
+        // Compose using default method .andThen()
+        DiscountCalculator combined = halfOff.andThen(loyaltyCoupon);
+        
+        // Add floor price safeguard using default method .withFloorPrice()
+        DiscountCalculator safeDiscounter = combined.withFloorPrice(45.0);
+
+        // Test 1: $100 -> Half Off ($50) -> Minus $10 ($40) -> Floor enforced ($45)
+        double price1 = safeDiscounter.applyDiscount(100.0);
+        System.out.println("Result for $100 input: $" + price1); // Prints: $45.0
+
+        // Test 2: $200 -> Half Off ($100) -> Minus $10 ($90) -> Above floor ($90)
+        double price2 = safeDiscounter.applyDiscount(200.0);
+        System.out.println("Result for $200 input: $" + price2); // Prints: $90.0
+    }
+}
+</code></pre>
+
+        <h4>4. Standard Built-In Default Methods in Java Library:</h4>
+        <table>
+            <thead>
+                <tr>
+                    <th>Interface</th>
+                    <th>Default Method</th>
+                    <th>Execution Mechanics &amp; Formula</th>
+                    <th>Financial Use Case</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td rowspan="3"><strong><code>Predicate&lt;T&gt;</code></strong></td>
+                    <td><code>p1.and(p2)</code></td>
+                    <td>Short-circuiting logical AND: <code>(t) -> p1.test(t) && p2.test(t)</code></td>
+                    <td>Combine risk rules: <code>isEquity.and(isLiquid).and(isNotBlacklisted)</code></td>
+                </tr>
+                <tr>
+                    <td><code>p1.or(p2)</code></td>
+                    <td>Short-circuiting logical OR: <code>(t) -> p1.test(t) || p2.test(t)</code></td>
+                    <td>Order routing: <code>isVipClient.or(isHighNotional)</code></td>
+                </tr>
+                <tr>
+                    <td><code>p1.negate()</code></td>
+                    <td>Logical NOT: <code>(t) -> !p1.test(t)</code></td>
+                    <td>Inverting filter: <code>isCancelled.negate()</code> (only active orders)</td>
+                </tr>
+                <tr>
+                    <td rowspan="2"><strong><code>Function&lt;T, R&gt;</code></strong></td>
+                    <td><code>f.andThen(g)</code></td>
+                    <td>Executes <code>f</code> first, then pipes output to <code>g</code>: <code>g(f(x))</code></td>
+                    <td>Currency conversion: <code>toEur.andThen(applyExchangeFee)</code></td>
+                </tr>
+                <tr>
+                    <td><code>f.compose(g)</code></td>
+                    <td>Executes <code>g</code> first, then pipes output to <code>f</code>: <code>f(g(x))</code></td>
+                    <td>Mathematical modeling: <code>square.compose(plusOne)</code></td>
+                </tr>
+                <tr>
+                    <td><strong><code>Comparator&lt;T&gt;</code></strong></td>
+                    <td><code>c1.thenComparing(c2)</code></td>
+                    <td>If <code>c1.compare() != 0</code> return result; else evaluate <code>c2</code></td>
+                    <td>Order Book sorting: <code>byPrice.reversed().thenComparing(byTimestamp)</code></td>
+                </tr>
+            </tbody>
+        </table>
+
+        <hr>
 
         <h3>The Big 4 Built-In Functional Interfaces Cheatsheet</h3>
         <table>
@@ -146,217 +276,616 @@ public class BuiltInDemo {
                 <tr>
                     <td><strong><code>Predicate&lt;T&gt;</code></strong></td>
                     <td><code>boolean test(T t)</code></td>
-                    <td>Condition / Filter (Returns boolean)</td>
-                    <td>Pre-trade compliance check: <code>trade -&gt; trade.getQty() &lt;= 50000</code></td>
+                    <td>Condition check / Filter (Takes <code>T</code>, returns boolean)</td>
+                    <td>Validating trade limits: <code>t -&gt; t.notional &gt; 1_000_000</code></td>
                 </tr>
                 <tr>
                     <td><strong><code>Function&lt;T, R&gt;</code></strong></td>
                     <td><code>R apply(T t)</code></td>
-                    <td>Transform (Takes T, transforms to R)</td>
-                    <td>Currency conversion: <code>usdAmount -&gt; usdAmount * fxRate</code></td>
+                    <td>Transformation / Map (Takes <code>T</code>, returns <code>R</code>)</td>
+                    <td>Extracting price: <code>Trade::getPrice</code></td>
                 </tr>
                 <tr>
                     <td><strong><code>Consumer&lt;T&gt;</code></strong></td>
                     <td><code>void accept(T t)</code></td>
-                    <td>Side-effect (Consumes data, returns void)</td>
-                    <td>Logging to Kafka/Audit store: <code>trade -&gt; kafkaProducer.send(trade)</code></td>
+                    <td>Side-effect / Action (Takes <code>T</code>, returns nothing)</td>
+                    <td>Publishing to Kafka: <code>trade -&gt; kafkaProducer.send(trade)</code></td>
                 </tr>
                 <tr>
                     <td><strong><code>Supplier&lt;T&gt;</code></strong></td>
                     <td><code>T get()</code></td>
-                    <td>Factory / Lazy Generator (Takes nothing, returns T)</td>
-                    <td>Generating FIX ClOrdId: <code>() -&gt; UUID.randomUUID().toString()</code></td>
+                    <td>Factory / Lazy Generation (Takes nothing, returns <code>T</code>)</td>
+                    <td>Generating UUID: <code>UUID::randomUUID</code></td>
                 </tr>
                 <tr>
                     <td><strong><code>BiFunction&lt;T, U, R&gt;</code></strong></td>
                     <td><code>R apply(T t, U u)</code></td>
-                    <td>2-argument transform (Takes T and U, returns R)</td>
-                    <td>Calculating P&amp;L: <code>(entryPrice, exitPrice) -&gt; exitPrice - entryPrice</code></td>
+                    <td>Two-argument transform (Takes <code>T</code> and <code>U</code>, returns <code>R</code>)</td>
+                    <td>Pricing formula: <code>(qty, price) -&gt; qty * price</code></td>
                 </tr>
                 <tr>
                     <td><strong><code>UnaryOperator&lt;T&gt;</code></strong></td>
                     <td><code>T apply(T t)</code></td>
                     <td>Same-type transform (Specialized <code>Function&lt;T, T&gt;</code>)</td>
-                    <td>Applying market fee: <code>price -&gt; price * 1.002</code></td>
+                    <td>Applying exchange fee: <code>price -&gt; price * 1.0002</code></td>
+                </tr>
+                <tr>
+                    <td><strong><code>BinaryOperator&lt;T&gt;</code></strong></td>
+                    <td><code>T apply(T t1, T t2)</code></td>
+                    <td>Accumulator / Reduction (Specialized <code>BiFunction&lt;T, T, T&gt;</code>)</td>
+                    <td>Aggregating notional: <code>(n1, n2) -&gt; n1 + n2</code></td>
+                </tr>
+            </tbody>
+        </table>
+    </section>
+
+    <!-- SECTION 3: COMPLETE STREAM API REFERENCE -->
+    <section id="stream-methods">
+        <h2>3. Complete Stream API Reference: Every Method in <code>java.util.stream.Stream</code></h2>
+
+        <p>A Stream represents a lazily-evaluated sequence of elements supporting sequential and parallel aggregate operations. Streams do <strong>not</strong> store data; they carry values from a source (a collection, array, I/O channel) through a pipeline of computational steps.</p>
+
+        <h3>1. Stream Creation Methods</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>Method Signature</th>
+                    <th>Behavior</th>
+                    <th>Code Example</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><code>Collection.stream()</code></td>
+                    <td>Creates a sequential stream from any Collection (List, Set, Queue).</td>
+                    <td><code>trades.stream()</code></td>
+                </tr>
+                <tr>
+                    <td><code>Collection.parallelStream()</code></td>
+                    <td>Creates a multi-threaded stream backed by the shared <code>ForkJoinPool.commonPool()</code>.</td>
+                    <td><code>orders.parallelStream()</code></td>
+                </tr>
+                <tr>
+                    <td><code>Arrays.stream(T[] array)</code></td>
+                    <td>Creates a stream from an array (overloaded for primitives: int[], long[], double[]).</td>
+                    <td><code>Arrays.stream(new String[]{"AAPL", "MSFT"})</code></td>
+                </tr>
+                <tr>
+                    <td><code>Stream.of(T... values)</code></td>
+                    <td>Creates a stream from explicit varargs.</td>
+                    <td><code>Stream.of("EURUSD", "GBPUSD", "USDJPY")</code></td>
+                </tr>
+                <tr>
+                    <td><code>Stream.iterate(seed, hasNext, next)</code></td>
+                    <td>(Java 9+) Finite infinite stream generator with termination predicate.</td>
+                    <td><code>Stream.iterate(1, n -&gt; n &lt;= 10, n -&gt; n * 2)</code></td>
+                </tr>
+                <tr>
+                    <td><code>Stream.generate(Supplier&lt;T&gt; s)</code></td>
+                    <td>Creates an infinite stream where each element is generated by the supplier.</td>
+                    <td><code>Stream.generate(MarketTick::fetchNext).limit(100)</code></td>
+                </tr>
+                <tr>
+                    <td><code>Stream.concat(Stream a, Stream b)</code></td>
+                    <td>Concatenates two streams lazily.</td>
+                    <td><code>Stream.concat(bids.stream(), asks.stream())</code></td>
+                </tr>
+                <tr>
+                    <td><code>IntStream.range(start, end)</code></td>
+                    <td>Generates sequential primitive int stream [start, end) exclusive.</td>
+                    <td><code>IntStream.range(0, 100)</code></td>
                 </tr>
             </tbody>
         </table>
 
-        <div class="callout callout-warning">
-            <div class="callout-title">⚡ High-Frequency Trading Performance Tip: Avoid Autoboxing with Primitives!</div>
-            <p>Using <code>Predicate&lt;Double&gt;</code> causes the JVM to constantly box <code>double</code> into <code>Double</code> objects on every tick, destroying L1 CPU cache and generating massive Garbage Collection churn. Always use the built-in primitive specializations:</p>
-            <ul>
-                <li><code>DoublePredicate</code> (method: <code>boolean test(double val)</code>)</li>
-                <li><code>IntPredicate</code>, <code>LongPredicate</code></li>
-                <li><code>DoubleFunction&lt;R&gt;</code>, <code>ToDoubleFunction&lt;T&gt;</code></li>
-                <li><code>DoubleConsumer</code>, <code>DoubleSupplier</code></li>
-            </ul>
-        </div>
+        <h3>2. Stateless Intermediate Operations (Lazy)</h3>
+        <p>Stateless operations process each element independently without retaining information about previously processed elements. They do not block downstream elements.</p>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>Method</th>
+                    <th>Transformation Concept</th>
+                    <th>Production Finance Example</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><code>filter(Predicate&lt;T&gt;)</code></td>
+                    <td>Eliminates elements that do not satisfy the condition.</td>
+                    <td><code>.filter(trade -&gt; trade.getNotional() &gt; 1_000_000)</code></td>
+                </tr>
+                <tr>
+                    <td><code>map(Function&lt;T, R&gt;)</code></td>
+                    <td>1-to-1 transformation of each element.</td>
+                    <td><code>.map(Trade::getExecutionReport)</code></td>
+                </tr>
+                <tr>
+                    <td><code>flatMap(Function&lt;T, Stream&lt;R&gt;&gt;)</code></td>
+                    <td>1-to-Many flattening of nested streams into a single flat stream.</td>
+                    <td><code>.flatMap(portfolio -&gt; portfolio.getPositions().stream())</code></td>
+                </tr>
+                <tr>
+                    <td><code>mapToInt() / mapToLong() / mapToDouble()</code></td>
+                    <td>Unboxes objects to primitive streams (<code>IntStream</code>, etc.) eliminating GC allocations.</td>
+                    <td><code>.mapToDouble(Trade::getPrice)</code></td>
+                </tr>
+                <tr>
+                    <td><code>peek(Consumer&lt;T&gt;)</code></td>
+                    <td>Performs side-effect action on each element (primarily for logging/debugging) without mutating stream.</td>
+                    <td><code>.peek(t -&gt; log.debug("Processing trade: {}", t.getId()))</code></td>
+                </tr>
+                <tr>
+                    <td><code>unordered()</code></td>
+                    <td>Explicitly removes ordering constraints, boosting parallel stream throughput.</td>
+                    <td><code>.unordered().parallel()</code></td>
+                </tr>
+            </tbody>
+        </table>
+
+        <h3>3. Stateful Intermediate Operations (May Buffer Elements)</h3>
+        <p>Stateful operations require knowledge of previously encountered elements. They may need to buffer all elements in memory before producing any output.</p>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>Method</th>
+                    <th>State Mechanism</th>
+                    <th>Gotcha / Performance Implication</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><code>distinct()</code></td>
+                    <td>Uses an internal <code>HashSet</code> to deduplicate items via <code>equals()</code> and <code>hashCode()</code>.</td>
+                    <td>Memory scales with distinct elements. Never call on an infinite stream without <code>limit()</code>!</td>
+                </tr>
+                <tr>
+                    <td><code>sorted()</code></td>
+                    <td>Buffers the <strong>entire</strong> stream into an array and runs TimSort ($O(N \log N)$).</td>
+                    <td>Completely blocks the pipeline until upstream finishes. Cannot run on infinite streams!</td>
+                </tr>
+                <tr>
+                    <td><code>sorted(Comparator&lt;T&gt;)</code></td>
+                    <td>Buffers and sorts stream using a custom comparator.</td>
+                    <td><code>.sorted(Comparator.comparingDouble(Trade::getPrice).reversed())</code></td>
+                </tr>
+                <tr>
+                    <td><code>limit(long maxSize)</code></td>
+                    <td>Short-circuiting: truncates stream to length <code>maxSize</code>.</td>
+                    <td>Once <code>maxSize</code> elements pass, pipeline cancels upstream processing.</td>
+                </tr>
+                <tr>
+                    <td><code>skip(long n)</code></td>
+                    <td>Discards the first <code>n</code> elements, passing the rest.</td>
+                    <td>Combined with <code>limit()</code> for pagination: <code>.skip(offset).limit(pageSize)</code>.</td>
+                </tr>
+                <tr>
+                    <td><code>takeWhile(Predicate&lt;T&gt;)</code></td>
+                    <td>(Java 9+) Short-circuiting: takes elements while predicate is true; terminates immediately on first false.</td>
+                    <td>Ideal for sorted feeds: <code>.takeWhile(tick -&gt; tick.getTimestamp() &lt; marketClose)</code></td>
+                </tr>
+                <tr>
+                    <td><code>dropWhile(Predicate&lt;T&gt;)</code></td>
+                    <td>(Java 9+) Drops elements while predicate is true; streams all remaining elements after first false.</td>
+                    <td>Skips stale morning ticks: <code>.dropWhile(tick -&gt; tick.getTimestamp() &lt; marketOpen)</code></td>
+                </tr>
+            </tbody>
+        </table>
+
+        <h3>4. Terminal Operations (Eager vs Short-Circuiting)</h3>
+        <p>Terminal operations trigger the execution of the entire pipeline. Once invoked, the stream is <strong>consumed and closed</strong>.</p>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>Category</th>
+                    <th>Method</th>
+                    <th>Return Type</th>
+                    <th>Description</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td rowspan="6"><strong>Eager Reduction</strong></td>
+                    <td><code>collect(Collector)</code></td>
+                    <td><code>R</code></td>
+                    <td>Transforms stream into a Collection, Map, or aggregated scalar.</td>
+                </tr>
+                <tr>
+                    <td><code>reduce(identity, accumulator)</code></td>
+                    <td><code>T</code></td>
+                    <td>Iterative fold: combines elements into a single accumulated result.</td>
+                </tr>
+                <tr>
+                    <td><code>count()</code></td>
+                    <td><code>long</code></td>
+                    <td>Returns count of elements.</td>
+                </tr>
+                <tr>
+                    <td><code>min(Comparator) / max(Comparator)</code></td>
+                    <td><code>Optional&lt;T&gt;</code></td>
+                    <td>Finds minimum/maximum element based on Comparator.</td>
+                </tr>
+                <tr>
+                    <td><code>forEach(Consumer)</code></td>
+                    <td><code>void</code></td>
+                    <td>Executes action on each element (order not guaranteed in parallel).</td>
+                </tr>
+                <tr>
+                    <td><code>forEachOrdered(Consumer)</code></td>
+                    <td><code>void</code></td>
+                    <td>Guarantees encounter-order execution even in parallel streams.</td>
+                </tr>
+                <tr>
+                    <td rowspan="5"><strong>Short-Circuiting</strong></td>
+                    <td><code>anyMatch(Predicate)</code></td>
+                    <td><code>boolean</code></td>
+                    <td>Returns <code>true</code> as soon as ANY element matches predicate.</td>
+                </tr>
+                <tr>
+                    <td><code>allMatch(Predicate)</code></td>
+                    <td><code>boolean</code></td>
+                    <td>Returns <code>false</code> as soon as ANY element fails predicate.</td>
+                </tr>
+                <tr>
+                    <td><code>noneMatch(Predicate)</code></td>
+                    <td><code>boolean</code></td>
+                    <td>Returns <code>false</code> as soon as ANY element matches predicate.</td>
+                </tr>
+                <tr>
+                    <td><code>findFirst()</code></td>
+                    <td><code>Optional&lt;T&gt;</code></td>
+                    <td>Returns the first element in encounter order.</td>
+                </tr>
+                <tr>
+                    <td><code>findAny()</code></td>
+                    <td><code>Optional&lt;T&gt;</code></td>
+                    <td>Returns any element (optimized for maximum parallel throughput).</td>
+                </tr>
+            </tbody>
+        </table>
     </section>
 
-    <!-- SECTION 3: STREAM INTERNALS -->
-    <section id="stream-internals">
-        <h2>3. Stream API Internals (Intermediate vs Terminal Operations)</h2>
-        <p>
-            A Stream is a pipeline of computational operations. Crucially, streams are <strong>lazy</strong>. Intermediate operations (like <code>filter</code> or <code>map</code>) do not execute until a terminal operation (like <code>collect</code>, <code>sum</code>, or <code>findFirst</code>) is invoked.
-        </p>
-        <p>
-            Furthermore, intermediate operations can be <em>short-circuiting</em>. Operations like <code>limit()</code>, <code>anyMatch()</code>, or <code>findFirst()</code> will halt the pipeline execution the moment the condition is satisfied, preventing unnecessary computation over massive market data feeds.
-        </p>
+    <!-- SECTION 4: EXHAUSTIVE COLLECTORS REFERENCE -->
+    <section id="collectors-encyclopedia">
+        <h2>4. The Collectors Encyclopedia: Every Single Method in <code>java.util.stream.Collectors</code></h2>
 
-        <div class="mermaid">
-flowchart LR
-    A["List&lt;Trade&gt;"] -->|Stream Source| B["Filter: status == FILLED"]
-    B -->|Intermediate| C["Map: getNotional"]
-    C -->|Intermediate| D["Filter: notional &gt; 1M"]
-    D -->|Terminal| E((sum))
-    
-    style A fill:#2e2e2e,stroke:#fff,stroke-width:2px
-    style E fill:#8b0000,stroke:#fff,stroke-width:2px
-        </div>
+        <p>The <code>Collectors</code> class implements <code>Collector&lt;T, A, R&gt;</code> (combining <code>supplier()</code>, <code>accumulator()</code>, <code>combiner()</code>, <code>finisher()</code>, and <code>characteristics()</code>). Below is the comprehensive reference of every collector method in Java.</p>
 
-<pre><code class="language-java">// Calculating Value-at-Risk (VaR) across filtered equities
-// Execution is lazy: The filters won't run until .sum() is called.
-double totalVaR = portfolio.getPositions().stream()
-    .filter(pos -> AssetClass.EQUITY.equals(pos.getAssetClass()))
-    .filter(pos -> pos.getMarketValue().compareTo(BigDecimal.valueOf(1_000_000)) > 0)
-    .mapToDouble(Position::calculateVaR) // Heavy quantitative computation
-    .sum();
-</code></pre>
-    </section>
-
-    <!-- SECTION 4: MAP VS FLATMAP -->
-    <section id="map-vs-flatmap">
-        <h2>4. <code>map()</code> vs <code>flatMap()</code> (The Most Frequently Asked Stream Question)</h2>
-        <p>
-            In complex trading systems, data is deeply nested. You often deal with a <code>List&lt;Portfolio&gt;</code>, where each <code>Portfolio</code> contains a <code>List&lt;Position&gt;</code>, and each <code>Position</code> contains a <code>List&lt;Trade&gt;</code>.
-        </p>
+        <h3>1. Collection Accumulators</h3>
         <ul>
-            <li><strong><code>map()</code></strong> is a 1-to-1 transformation. If you apply <code>map(Portfolio::getTrades)</code>, you get a <code>Stream&lt;List&lt;Trade&gt;&gt;</code>. This is generally useless if you want to filter all trades.</li>
-            <li><strong><code>flatMap()</code></strong> is a 1-to-Many flattening operation. It requires the mapping function to return a <code>Stream</code>, and it "flattens" those streams into a single continuous stream of elements.</li>
+            <li><strong><code>toList()</code>:</strong> Collects into a mutable <code>ArrayList</code>:
+                <pre><code class="language-java">List&lt;Trade&gt; list = trades.stream().collect(Collectors.toList());</code></pre>
+            </li>
+            <li><strong><code>toUnmodifiableList()</code> (Java 10+):</strong> Collects into an unmodifiable, immutable List:
+                <pre><code class="language-java">List&lt;Trade&gt; immutable = trades.stream().collect(Collectors.toUnmodifiableList());</code></pre>
+            </li>
+            <li><strong><code>toSet()</code> / <code>toUnmodifiableSet()</code>:</strong> Collects into a <code>HashSet</code> (or unmodifiable Set), deduplicating elements:
+                <pre><code class="language-java">Set&lt;String&gt; symbols = trades.stream().map(Trade::getSymbol).collect(Collectors.toSet());</code></pre>
+            </li>
+            <li><strong><code>toCollection(Supplier)</code>:</strong> Collects into a custom, developer-specified Collection implementation:
+                <pre><code class="language-java">TreeSet&lt;Trade&gt; sortedSet = trades.stream()
+    .collect(Collectors.toCollection(() -> new TreeSet<>(Comparator.comparing(Trade::getPrice))));</code></pre>
+            </li>
         </ul>
 
-<pre><code class="language-java">List&lt;Portfolio&gt; firmPortfolios = riskService.getAllPortfolios();
+        <h3>2. Map Collectors (With Key Collisions &amp; Custom Map Types)</h3>
+        <ul>
+            <li><strong><code>toMap(keyMapper, valueMapper)</code>:</strong>
+                <pre><code class="language-java">// WARNING: Throws IllegalStateException if duplicate keys exist!
+Map&lt;String, Trade&gt; map = trades.stream()
+    .collect(Collectors.toMap(Trade::getId, Function.identity()));</code></pre>
+            </li>
+            <li><strong><code>toMap(keyMapper, valueMapper, mergeFunction)</code>:</strong> Safely handles key collisions using a binary merge operator:
+                <pre><code class="language-java">// On collision, keep the trade with the latest timestamp:
+Map&lt;String, Trade&gt; latestTrades = trades.stream()
+    .collect(Collectors.toMap(
+        Trade::getSymbol,
+        Function.identity(),
+        (existing, replacement) -> replacement.getTimestamp() > existing.getTimestamp() ? replacement : existing
+    ));</code></pre>
+            </li>
+            <li><strong><code>toMap(keyMapper, valueMapper, mergeFunction, mapFactory)</code>:</strong> Directs output into a custom Map (e.g. <code>TreeMap</code>):
+                <pre><code class="language-java">TreeMap&lt;String, Trade&gt; sortedMap = trades.stream()
+    .collect(Collectors.toMap(
+        Trade::getSymbol, Function.identity(), (a, b) -> a, TreeMap::new
+    ));</code></pre>
+            </li>
+            <li><strong><code>toConcurrentMap(...)</code>:</strong> Thread-safe collection directly into a <code>ConcurrentHashMap</code> for high-throughput parallel streams.</li>
+        </ul>
 
-// WRONG: Using map creates nested streams
-// Stream&lt;List&lt;Trade&gt;&gt; nested = firmPortfolios.stream().map(Portfolio::getTrades);
+        <h3>3. String Joining</h3>
+        <ul>
+            <li><strong><code>joining()</code>:</strong> Concatenates strings into a single contiguous string.</li>
+            <li><strong><code>joining(delimiter)</code>:</strong> Concatenates with delimiter (e.g., CSV row: <code>"AAPL,MSFT,TSLA"</code>).</li>
+            <li><strong><code>joining(delimiter, prefix, suffix)</code>:</strong> Formats with wrappers:
+                <pre><code class="language-java">String fixTags = tags.stream().collect(Collectors.joining("|", "BEGIN|", "|END"));</code></pre>
+            </li>
+        </ul>
 
-// CORRECT: Using flatMap to yield Stream&lt;Trade&gt;
-List&lt;Trade&gt; largeTradesAcrossFirm = firmPortfolios.stream()
-    .flatMap(portfolio -> portfolio.getTrades().stream())
-    .filter(trade -> trade.getQuantity() > 100_000)
-    .collect(Collectors.toList());
-</code></pre>
+        <h3>4. Numeric Aggregates &amp; Statistics</h3>
+        <ul>
+            <li><strong><code>counting()</code>:</strong> Counts elements matching the stream.</li>
+            <li><strong><code>summingInt() / summingLong() / summingDouble()</code>:</strong> Computes the mathematical sum of mapped values.</li>
+            <li><strong><code>averagingInt() / averagingLong() / averagingDouble()</code>:</strong> Calculates the arithmetic mean.</li>
+            <li><strong><code>summarizingDouble()</code>:</strong> Returns a <code>DoubleSummaryStatistics</code> object containing <code>count</code>, <code>sum</code>, <code>min</code>, <code>max</code>, and <code>average</code> computed in a single pass:
+                <pre><code class="language-java">DoubleSummaryStatistics stats = trades.stream()
+    .collect(Collectors.summarizingDouble(Trade::getPrice));
+System.out.printf("Count: %d, Min: %.2f, Max: %.2f, Avg: %.2f, Sum: %.2f%n",
+    stats.getCount(), stats.getMin(), stats.getMax(), stats.getAverage(), stats.getSum());</code></pre>
+            </li>
+        </ul>
 
-        <div class="callout callout-info">
-            <div class="callout-title">📋 How to Answer This in an Interview</div>
-            <p><strong>Q: "What is the exact difference between map and flatMap?"</strong></p>
-            <p><strong>Script:</strong> "<code>map</code> transforms a single input into a single output, maintaining the stream's structural depth. If I map a <code>Portfolio</code> to its <code>List&lt;Trade&gt;</code>, I end up with a <code>Stream&lt;List&lt;Trade&gt;&gt;</code>. <code>flatMap</code>, on the other hand, transforms a single input into <em>multiple</em> outputs (a Stream) and merges them into the top-level stream. In an OMS, if I need to calculate aggregate firm-wide exposure, I use <code>flatMap</code> to extract all trades from all portfolios into a single, unified <code>Stream&lt;Trade&gt;</code> for seamless downstream aggregation."</p>
-        </div>
-    </section>
-
-    <!-- SECTION 5: ADVANCED COLLECTORS -->
-    <section id="advanced-collectors">
-        <h2>5. Advanced Collectors (<code>java.util.stream.Collectors</code>)</h2>
-        <p>
-            Terminal operations often require restructuring the processed stream back into collections or complex aggregates. The <code>Collectors</code> utility class provides highly optimized, thread-safe reduction operations.
-        </p>
-        
-<pre><code class="language-java">// 1. Grouping: Aggregate trades by Currency Pair for FX exposure
-Map&lt;String, List&lt;Trade&gt;&gt; tradesByCcy = trades.stream()
-    .collect(Collectors.groupingBy(Trade::getCurrencyPair));
-
-// 2. Partitioning: Splitting an order book into BUY vs SELL sides
-Map&lt;Boolean, List&lt;Order&gt;&gt; orderSides = orders.stream()
-    .collect(Collectors.partitioningBy(o -> o.getSide() == Side.BUY));
-
-// 3. Downstream Collectors: Calculating average execution price per symbol
-Map&lt;String, Double&gt; vwapBySymbol = executions.stream()
+        <h3>5. Grouping &amp; Partitioning (The Enterprise Workhorses)</h3>
+        <ul>
+            <li><strong><code>groupingBy(classifier)</code>:</strong> Partitions elements into a <code>Map&lt;K, List&lt;T&gt;&gt;</code>:
+                <pre><code class="language-java">Map&lt;String, List&lt;Trade&gt;&gt; bySymbol = trades.stream()
+    .collect(Collectors.groupingBy(Trade::getSymbol));</code></pre>
+            </li>
+            <li><strong><code>groupingBy(classifier, downstreamCollector)</code>:</strong> Applies a secondary reduction to the values of each group:
+                <pre><code class="language-java">// Total trading volume per asset class:
+Map&lt;AssetClass, Double&gt; volumeByAsset = trades.stream()
     .collect(Collectors.groupingBy(
-        Execution::getSymbol,
-        Collectors.averagingDouble(Execution::getPrice)
-    ));
-</code></pre>
-    </section>
+        Trade::getAssetClass,
+        Collectors.summingDouble(Trade::getNotional)
+    ));</code></pre>
+            </li>
+            <li><strong><code>groupingBy(classifier, mapFactory, downstreamCollector)</code>:</strong> Enforces specific map implementation (e.g. <code>TreeMap</code>):
+                <pre><code class="language-java">TreeMap&lt;String, Long&gt; tradeCountBySymbolSorted = trades.stream()
+    .collect(Collectors.groupingBy(Trade::getSymbol, TreeMap::new, Collectors.counting()));</code></pre>
+            </li>
+            <li><strong><code>partitioningBy(Predicate)</code>:</strong> Special 2-bucket map keyed by <code>Boolean</code> (always contains both <code>true</code> and <code>false</code> keys):
+                <pre><code class="language-java">Map&lt;Boolean, List&lt;Order&gt;&gt; splitOrders = orders.stream()
+    .collect(Collectors.partitioningBy(Order::isBuySide));</code></pre>
+            </li>
+        </ul>
 
-    <!-- SECTION 6: OPTIONAL BEST PRACTICES -->
-    <section id="optional">
-        <h2>6. <code>Optional&lt;T&gt;</code> Best Practices &amp; Anti-Patterns</h2>
-        <p>
-            <code>Optional</code> was introduced strictly as a return type for methods that might not return a value, explicitly signaling to the caller that the result might be absent. It forces the caller to handle the null case, eradicating the dreaded <code>NullPointerException</code>.
-        </p>
-        <p>
-            <strong>Anti-Pattern:</strong> Calling <code>optional.get()</code> without checking <code>isPresent()</code> is identical to dereferencing a null pointer. Never use <code>Optional</code> as a class field or a method parameter (it adds unnecessary object allocation overhead and memory footprint).
-        </p>
-
-<pre><code class="language-java">public Optional&lt;Security&gt; lookupSecurity(String ricCode) {
-    return securityMaster.findByRic(ricCode);
-}
-
-// BAD: Will throw NoSuchElementException if missing
-Security sec = lookupSecurity("VOD.L").get(); 
-
-// GOOD: Idiomatic usage
-Security sec = lookupSecurity("VOD.L")
-    .orElseThrow(() -> new MarketDataException("Security not found in Security Master"));
-
-// GOOD: Lazy evaluation with orElseGet (prevents expensive API calls if present)
-Security sec = lookupSecurity("VOD.L")
-    .orElseGet(() -> bloombergService.fetchSecurity("VOD.L"));
-</code></pre>
-    </section>
-
-    <!-- SECTION 7: METHOD REFERENCES -->
-    <section id="method-references">
-        <h2>7. Method References</h2>
-        <p>
-            Method references (<code>::</code>) provide a shorthand syntax for lambdas that do nothing but call an existing method. They make code more readable.
-        </p>
+        <h3>6. Advanced Downstream Adapters</h3>
         <ul>
-            <li><strong>Static:</strong> <code>Math::abs</code> (equivalent to <code>x -> Math.abs(x)</code>)</li>
-            <li><strong>Instance (Bound):</strong> <code>auditLogger::log</code> (equivalent to <code>t -> auditLogger.log(t)</code>)</li>
-            <li><strong>Instance (Unbound):</strong> <code>Trade::getSymbol</code> (equivalent to <code>t -> t.getSymbol()</code>)</li>
-            <li><strong>Constructor:</strong> <code>Order::new</code> (equivalent to <code>() -> new Order()</code>)</li>
+            <li><strong><code>mapping(mapper, downstream)</code>:</strong> Transforms elements <em>before</em> handing them to downstream collector:
+                <pre><code class="language-java">// Group by symbol, but collect only a Set of Trader IDs:
+Map&lt;String, Set&lt;String&gt;&gt; tradersPerSymbol = trades.stream()
+    .collect(Collectors.groupingBy(
+        Trade::getSymbol,
+        Collectors.mapping(Trade::getTraderId, Collectors.toSet())
+    ));</code></pre>
+            </li>
+            <li><strong><code>flatMapping(mapper, downstream)</code> (Java 9+):</strong> Flattens nested collections before downstream collection:
+                <pre><code class="language-java">Map&lt;String, Set&lt;String&gt;&gt; tagsPerTrader = trades.stream()
+    .collect(Collectors.groupingBy(
+        Trade::getTraderId,
+        Collectors.flatMapping(t -> t.getComplianceTags().stream(), Collectors.toSet())
+    ));</code></pre>
+            </li>
+            <li><strong><code>filtering(predicate, downstream)</code> (Java 9+):</strong>
+                <p><strong>Crucial Architectural Distinction:</strong> If you use <code>stream().filter()</code> before <code>groupingBy</code>, symbols that have zero matching trades are <em>omitted completely</em> from the map. Using <code>Collectors.filtering()</code> retains the group key with an empty list!</p>
+                <pre><code class="language-java">Map&lt;String, List&lt;Trade&gt;&gt; largeTrades = trades.stream()
+    .collect(Collectors.groupingBy(
+        Trade::getSymbol,
+        Collectors.filtering(t -> t.getNotional() > 1_000_000, Collectors.toList())
+    ));</code></pre>
+            </li>
+            <li><strong><code>collectingAndThen(downstream, finisher)</code>:</strong> Transforms the result of the downstream collector immediately upon completion:
+                <pre><code class="language-java">// Group by symbol and find highest priced trade, extracting from Optional:
+Map&lt;String, Trade&gt; highestPriceTrade = trades.stream()
+    .collect(Collectors.groupingBy(
+        Trade::getSymbol,
+        Collectors.collectingAndThen(
+            Collectors.maxBy(Comparator.comparingDouble(Trade::getPrice)),
+            Optional::get
+        )
+    ));</code></pre>
+            </li>
+            <li><strong><code>teeing(collector1, collector2, merger)</code> (Java 12+):</strong>
+                <p>Runs <strong>two independent collectors</strong> over the stream simultaneously in a single pass, then merges their results using a BiFunction!</p>
+                <pre><code class="language-java">// Calculate Spread = Max Price - Min Price in a SINGLE stream pass:
+Double spread = trades.stream()
+    .collect(Collectors.teeing(
+        Collectors.minBy(Comparator.comparingDouble(Trade::getPrice)),
+        Collectors.maxBy(Comparator.comparingDouble(Trade::getPrice)),
+        (minOpt, maxOpt) -> maxOpt.get().getPrice() - minOpt.get().getPrice()
+    ));</code></pre>
+            </li>
         </ul>
     </section>
 
-    <!-- SECTION 8: JAVA.TIME API -->
-    <section id="java-time">
-        <h2>8. Modern Date/Time API (<code>java.time</code>) for Electronic Trading</h2>
-        <p>
-            Prior to Java 8, <code>java.util.Date</code> and <code>java.util.Calendar</code> were a disaster. They were mutable (causing massive thread-safety issues in concurrent pricing engines) and had bizarre zero-indexed months.
-        </p>
-        <p>
-            The <code>java.time</code> package (JSR-310) is immutable, thread-safe, and nanosecond-precise (critical for FIX timestamping). Core classes include <code>Instant</code> (machine time), <code>LocalDate</code> (date without timezone), and <code>ZonedDateTime</code> (time with offset and rules).
-        </p>
+    <!-- SECTION 5: FULL RUNNABLE EXAMPLES -->
+    <section id="runnable-demos">
+        <h2>5. Complete, Runnable Production Demonstration Code</h2>
 
-<pre><code class="language-java">// Calculating T+2 Settlement Date
-LocalDate tradeDate = LocalDate.now(ZoneId.of("America/New_York"));
-LocalDate settlementDate = tradeDate.plusDays(2);
+        <p>The following two self-contained classes can be compiled and executed directly with <code>javac</code> and <code>java</code> in Java 17/21.</p>
 
-// In reality, settlement skips weekends
-if (settlementDate.getDayOfWeek() == DayOfWeek.SATURDAY) {
-    settlementDate = settlementDate.plusDays(2);
-} else if (settlementDate.getDayOfWeek() == DayOfWeek.SUNDAY) {
-    settlementDate = settlementDate.plusDays(1);
+        <h3>1. Complete Streams Masterclass Demo (<code>AllStreamsDemo.java</code>)</h3>
+        <pre><code class="language-java">package com.bank.mastery;
+
+import java.util.*;
+import java.util.stream.*;
+
+public class AllStreamsDemo {
+
+    public record Trade(String id, String symbol, double price, int qty, boolean filled) {
+        public double notional() { return price * qty; }
+    }
+
+    public static void main(String[] args) {
+        List<Trade> trades = List.of(
+            new Trade("T-1", "AAPL", 180.50, 1000, true),
+            new Trade("T-2", "MSFT", 420.00, 500, true),
+            new Trade("T-3", "AAPL", 182.00, 2000, true),
+            new Trade("T-4", "TSLA", 250.00, 1500, false),
+            new Trade("T-5", "GOOGL", 175.00, 800, true),
+            new Trade("T-6", "MSFT", 418.50, 300, true)
+        );
+
+        System.out.println("=== 1. FILTER & MAP & SUM ===");
+        double aaplNotional = trades.stream()
+            .filter(Trade::filled)
+            .filter(t -> "AAPL".equals(t.symbol()))
+            .mapToDouble(Trade::notional)
+            .sum();
+        System.out.printf("AAPL Total Notional: $%,.2f%n", aaplNotional);
+
+        System.out.println("
+=== 2. DISTINCT & SORTED ===");
+        List<String> activeSymbols = trades.stream()
+            .map(Trade::symbol)
+            .distinct()
+            .sorted()
+            .toList();
+        System.out.println("Unique symbols sorted: " + activeSymbols);
+
+        System.out.println("
+=== 3. FLATMAP (Nested Order Books) ===");
+        Map<String, List<Trade>> book = Map.of(
+            "DESK-A", List.of(trades.get(0), trades.get(1)),
+            "DESK-B", List.of(trades.get(2), trades.get(3))
+        );
+        List<String> flatTradeIds = book.values().stream()
+            .flatMap(Collection::stream)
+            .map(Trade::id)
+            .toList();
+        System.out.println("Flattened trade IDs: " + flatTradeIds);
+
+        System.out.println("
+=== 4. SHORT-CIRCUITING (anyMatch, findFirst) ===");
+        boolean hasUnfilled = trades.stream().anyMatch(t -> !t.filled());
+        System.out.println("Contains unfilled orders? " + hasUnfilled);
+
+        Trade firstLarge = trades.stream()
+            .filter(t -> t.notional() > 200_000)
+            .findFirst()
+            .orElseThrow();
+        System.out.println("First large trade (>200k): " + firstLarge.id() + " Notional: $" + firstLarge.notional());
+
+        System.out.println("
+=== 5. TAKEWHILE & DROPWHILE (Java 9+) ===");
+        List<Integer> ticks = List.of(100, 102, 105, 110, 95, 108);
+        List<Integer> rising = ticks.stream().takeWhile(p -> p >= 100).toList();
+        System.out.println("Ticks before first dip: " + rising);
+    }
 }
-// Note: A real implementation would query a HolidayCalendar service
+</code></pre>
+
+        <h3>2. Complete Collectors Masterclass Demo (<code>AllCollectorsDemo.java</code>)</h3>
+        <pre><code class="language-java">package com.bank.mastery;
+
+import java.util.*;
+import java.util.function.Function;
+import java.util.stream.Collectors;
+
+public class AllCollectorsDemo {
+
+    public record Execution(String id, String symbol, String desk, double notional) {}
+
+    public static void main(String[] args) {
+        List<Execution> execs = List.of(
+            new Execution("E1", "AAPL", "DESK-1", 150_000),
+            new Execution("E2", "MSFT", "DESK-1", 280_000),
+            new Execution("E3", "AAPL", "DESK-2", 400_000),
+            new Execution("E4", "GOOG", "DESK-2", 90_000),
+            new Execution("E5", "AAPL", "DESK-1", 320_000),
+            new Execution("E6", "MSFT", "DESK-2", 510_000)
+        );
+
+        System.out.println("=== 1. GROUPING BY & COUNT ===");
+        Map<String, Long> countPerSymbol = execs.stream()
+            .collect(Collectors.groupingBy(Execution::symbol, Collectors.counting()));
+        System.out.println("Executions per symbol: " + countPerSymbol);
+
+        System.out.println("
+=== 2. GROUPING BY & SUMMING NOTIONAL ===");
+        Map<String, Double> notionalPerSymbol = execs.stream()
+            .collect(Collectors.groupingBy(Execution::symbol, Collectors.summingDouble(Execution::notional)));
+        System.out.println("Notional per symbol: " + notionalPerSymbol);
+
+        System.out.println("
+=== 3. MULTI-LEVEL GROUPING (Desk -> Symbol) ===");
+        Map<String, Map<String, List<Execution>>> deskSymbolHierarchy = execs.stream()
+            .collect(Collectors.groupingBy(
+                Execution::desk,
+                Collectors.groupingBy(Execution::symbol)
+            ));
+        System.out.println("Hierarchical grouping: " + deskSymbolHierarchy);
+
+        System.out.println("
+=== 4. PARTITIONING BY (High Value > $300k) ===");
+        Map<Boolean, List<Execution>> partitioned = execs.stream()
+            .collect(Collectors.partitioningBy(e -> e.notional() >= 300_000));
+        System.out.println("High-value trades count: " + partitioned.get(true).size());
+        System.out.println("Standard trades count: " + partitioned.get(false).size());
+
+        System.out.println("
+=== 5. SUMMARIZING STATISTICS ===");
+        DoubleSummaryStatistics stats = execs.stream()
+            .collect(Collectors.summarizingDouble(Execution::notional));
+        System.out.printf("Summary: Count=%d, Min=%.1f, Max=%.1f, Avg=%.1f%n",
+            stats.getCount(), stats.getMin(), stats.getMax(), stats.getAverage());
+
+        System.out.println("
+=== 6. TEEING COLLECTOR (Java 12+) ===");
+        // Calculate the ratio between maximum execution and minimum execution in a single pass:
+        Double maxMinRatio = execs.stream().collect(Collectors.teeing(
+            Collectors.minBy(Comparator.comparingDouble(Execution::notional)),
+            Collectors.maxBy(Comparator.comparingDouble(Execution::notional)),
+            (min, max) -> max.orElseThrow().notional() / min.orElseThrow().notional()
+        ));
+        System.out.printf("Max-to-Min ratio: %.2fx%n", maxMinRatio);
+    }
+}
 </code></pre>
     </section>
 
-    <!-- SECTION 9: GRILL ROUND -->
+    <!-- SECTION 6: MAP VS FLATMAP -->
+    <section id="map-vs-flatmap">
+        <h2>6. <code>map()</code> vs <code>flatMap()</code> (Deep Dive)</h2>
+        <p>
+            In enterprise systems, domain entities are deeply nested: an <code>Exchange</code> has multiple <code>Portfolios</code>, each containing multiple <code>Orders</code>, each containing multiple <code>Fills</code>.
+        </p>
+        <ul>
+            <li><strong><code>map(Function&lt;T, R&gt;)</code>:</strong> Performs a 1-to-1 transformation. It transforms each item into another item. If the mapper function returns a Collection or Stream, you get a nested stream: <code>Stream&lt;List&lt;Fill&gt;&gt;</code>.</li>
+            <li><strong><code>flatMap(Function&lt;T, Stream&lt;R&gt;&gt;)</code>:</strong> Performs a 1-to-Many transformation. The mapper returns a <code>Stream&lt;R&gt;</code> for each item, and <code>flatMap</code> flattens those individual streams into a single unified <code>Stream&lt;R&gt;</code>.</li>
+        </ul>
+
+<pre><code class="language-java">// WRONG: map creates nested collections
+List<List<Trade>> nested = portfolios.stream()
+    .map(Portfolio::getTrades)
+    .toList();
+
+// CORRECT: flatMap flattens all trades into a single continuous stream
+List<Trade> allTrades = portfolios.stream()
+    .flatMap(portfolio -> portfolio.getTrades().stream())
+    .filter(trade -> trade.notional() > 1_000_000)
+    .toList();
+</code></pre>
+    </section>
+
+    <!-- SECTION 7: OPTIONAL -->
+    <section id="optional">
+        <h2>7. <code>Optional&lt;T&gt;</code> Best Practices &amp; Memory Traps</h2>
+        <p>
+            <code>Optional</code> is a single-value container designed <em>strictly as a return type</em> for methods that may not produce a value.
+        </p>
+        <ul>
+            <li><strong>Anti-Pattern 1: Calling <code>.get()</code> blindly:</strong> <code>optional.get()</code> throws <code>NoSuchElementException</code> if empty, defeating the entire purpose of <code>Optional</code>. Always use <code>orElse()</code>, <code>orElseGet()</code>, or <code>orElseThrow()</code>.</li>
+            <li><strong>Anti-Pattern 2: <code>Optional</code> as a field:</strong> <code>Optional</code> does not implement <code>java.io.Serializable</code>. Using it as a field breaks Hibernate/JPA, RMI, and distributed caches like Redis or Hazelcast. Furthermore, it adds 16 bytes of heap overhead per instance.</li>
+            <li><strong>Anti-Pattern 3: <code>orElse()</code> vs <code>orElseGet()</code>:</strong> <code>orElse(expensiveCall())</code> executes the fallback method <em>eagerly</em> even if the Optional is present! <code>orElseGet(() -&gt; expensiveCall())</code> executes the supplier <em>lazily</em> only if absent.</li>
+        </ul>
+    </section>
+
+    <!-- SECTION 8: GRILL ROUND -->
     <section id="grill-round">
         <div class="callout callout-warning">
             <div class="callout-title">🎯 Interviewer Follow-Up Questions (The Grill Round)</div>
             
-            <p><strong>1. "Can a Stream be reused after calling a terminal operation?"</strong></p>
-            <p><strong>Answer:</strong> "Absolutely not. Once a terminal operation (like <code>collect</code> or <code>findFirst</code>) is invoked, the stream is considered consumed and closed. Attempting to reuse it will throw an <code>IllegalStateException</code>. If we need to process the same dataset multiple times, we must either create a new Stream from the source collection or materialize the stream into a new collection."</p>
+            <p><strong>1. "Why should you never use parallelStream() in an order routing service?"</strong></p>
+            <p><strong>Answer:</strong> "<code>parallelStream()</code> uses the shared JVM-wide <code>ForkJoinPool.commonPool()</code>. In an enterprise system, if multiple threads run parallel streams containing blocking I/O (database queries, REST calls, socket writes), all worker threads in the common pool become blocked. This starves other services running on the same JVM. Furthermore, the overhead of splitting and merging streams exceeds the sequential execution time for collections with fewer than ~10,000 elements."</p>
             
-            <p><strong>2. "When should you NOT use parallel streams (<code>.parallelStream()</code>) in an execution engine?"</strong></p>
-            <p><strong>Answer:</strong> "Parallel streams use the shared JVM <code>ForkJoinPool.commonPool()</code>. In a latency-sensitive trading system, blocking I/O operations (like database calls or network requests) inside a parallel stream will starve this shared pool, degrading performance across the entire application. They should only be used for CPU-bound computations on large, easily partitionable datasets (like massive arrays or ArrayLists), and even then, only after rigorous JMH benchmarking."</p>
-            
-            <p><strong>3. "Why shouldn't you use <code>Optional</code> as a field in an Entity class (e.g., <code>class Trade { Optional&lt;String&gt; traderId; }</code>)?"</strong></p>
-            <p><strong>Answer:</strong> "<code>Optional</code> is not <code>Serializable</code>, which breaks JPA, Hibernate, and distributed caching mechanisms like Hazelcast or Redis. Furthermore, it adds 16 bytes of object header overhead per instance. For a cache holding millions of trades, this causes severe memory bloat. Fields should just be nullable, and getters should return <code>Optional</code> if we want to enforce safety at the API boundary."</p>
+            <p><strong>2. "Can a Stream be reused after calling a terminal operation?"</strong></p>
+            <p><strong>Answer:</strong> "No. Once a terminal operation is invoked, the underlying pipeline is consumed and closed. Attempting to invoke another intermediate or terminal operation on the same Stream instance throws an <code>IllegalStateException: stream has already been operated upon or closed</code>. You must generate a fresh Stream from the source collection."</p>
+
+            <p><strong>3. "What is the difference between findFirst() and findAny()?"</strong></p>
+            <p><strong>Answer:</strong> "<code>findFirst()</code> strictly honors the stream's encounter order, returning the very first element. In parallel streams, this forces synchronization across worker threads, hurting parallel throughput. <code>findAny()</code> allows the runtime to return the first element found by <em>any</em> worker thread, maximizing parallel performance when specific order does not matter."</p>
         </div>
     </section>
 
@@ -364,6 +893,5 @@ if (settlementDate.getDayOfWeek() == DayOfWeek.SATURDAY) {
 </div>
 
 <button class="scroll-top" aria-label="Scroll to top">↑</button>
-<script src="../js/main.js"></script>
 </body>
 </html>

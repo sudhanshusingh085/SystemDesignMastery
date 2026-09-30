@@ -59,8 +59,13 @@
     <section class="card">
         <h2>Low-Level Design (Java 21)</h2>
         
-        <span class="code-label">Java</span>
-<pre><code>import java.time.LocalDateTime;
+        <div class="code-tabs">
+  <div class="code-tabs-header">
+    <button class="code-tab-btn active" data-tab="java">☕ Java 21</button>
+    <button class="code-tab-btn" data-tab="csharp">🔷 C#</button>
+  </div>
+  <div class="code-tab-content active" data-tab-content="java">
+    <pre><code class="language-java">import java.time.LocalDateTime;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -244,6 +249,70 @@ public class Main {
     }
 }
 </code></pre>
+  </div>
+  <div class="code-tab-content" data-tab-content="csharp">
+    <pre><code class="language-csharp">using System;
+using System.Threading.Tasks;
+
+namespace PaymentSystem;
+
+public record PaymentRequest(string TransactionId, decimal Amount, string Currency, string SourceAccount, string DestAccount);
+public record PaymentResponse(string TransactionId, bool Success, string Message, string GatewayRef);
+
+public interface IPaymentGateway
+{
+    Task<PaymentResponse> ProcessAsync(PaymentRequest request);
+}
+
+public class StripeGateway : IPaymentGateway
+{
+    public async Task<PaymentResponse> ProcessAsync(PaymentRequest request)
+    {
+        await Task.Delay(100); // Simulate network I/O
+        return new PaymentResponse(request.TransactionId, true, "Processed via Stripe", $"str_{Guid.NewGuid()}");
+    }
+}
+
+public class PayPalGateway : IPaymentGateway
+{
+    public async Task<PaymentResponse> ProcessAsync(PaymentRequest request)
+    {
+        await Task.Delay(120);
+        return new PaymentResponse(request.TransactionId, true, "Processed via PayPal", $"pp_{Guid.NewGuid()}");
+    }
+}
+
+// Factory Pattern
+public static class PaymentGatewayFactory
+{
+    public static IPaymentGateway GetGateway(string method) => method.ToLowerInvariant() switch
+    {
+        "stripe" => new StripeGateway(),
+        "paypal" => new PayPalGateway(),
+        _ => throw new NotSupportedException($"Payment method '{method}' is not supported.")
+    };
+}
+
+// Payment Orchestrator with Idempotency
+public class PaymentProcessor
+{
+    private readonly ConcurrentDictionary<string, PaymentResponse> _processedTransactions = new();
+
+    public async Task<PaymentResponse> ExecutePaymentAsync(string gatewayName, PaymentRequest request)
+    {
+        // 1. Idempotency Check
+        if (_processedTransactions.TryGetValue(request.TransactionId, out var existing))
+            return existing;
+
+        var gateway = PaymentGatewayFactory.GetGateway(gatewayName);
+        var response = await gateway.ProcessAsync(request);
+
+        _processedTransactions.TryAdd(request.TransactionId, response);
+        return response;
+    }
+}</code></pre>
+  </div>
+</div>
     </section>
     
     <div class="callout callout-info">

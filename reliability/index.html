@@ -164,11 +164,11 @@ public class BulkheadExecutor {
 <p>Automatically switching to a redundant or standby system upon failure.</p>
 <div class="diagram-container">
 <div class="mermaid">
-graph LR
-    A[Client] -->|Traffic| B[Load Balancer]
-    B -->|Primary (Active)| C[Server 1]
-    B -.->|Failover (Passive)| D[Server 2]
-    C -.->|Heartbeat fails| B
+flowchart LR
+    A["Client"] -->|Traffic| B["Load Balancer"]
+    B -->|"Primary (Active)"| C["Server 1"]
+    B -.->|"Failover (Passive)"| D["Server 2"]
+    C -.->|"Heartbeat fails"| B
 </div>
 <p class="caption">Figure 2: Active-Passive Failover</p>
 </div>

@@ -254,13 +254,13 @@ OPTION (MAXRECURSION 100); -- Protects against infinite loops from circular refe
 
       <div class="mermaid">
 flowchart LR
-    subgraph NormalizedRows [Normalized Rows (Source)]
+    subgraph NormalizedRows ["Normalized Rows (Source)"]
         R1["Acc 101 | Tech | $50k"]
         R2["Acc 101 | Finance | $30k"]
         R3["Acc 102 | Tech | $80k"]
     end
     NormalizedRows --> PivotEngine["PIVOT Operator"]
-    subgraph PivotedGrid [Pivoted Output Grid]
+    subgraph PivotedGrid ["Pivoted Output Grid"]
         G1["AccID | Tech_Val | Finance_Val"]
         G2["101   | $50k     | $30k"]
         G3["102   | $80k     | $0"]

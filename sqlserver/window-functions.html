@@ -120,13 +120,13 @@ FROM Orders;
 
       <div class="mermaid">
 flowchart TD
-    subgraph GroupByPattern [GROUP BY AccountID]
+    subgraph GroupByPattern ["GROUP BY AccountID"]
         R1["Row 1: Acc 101, $500"] --> Agg["SUM()"]
         R2["Row 2: Acc 101, $300"] --> Agg
         R3["Row 3: Acc 101, $200"] --> Agg
         Agg --> Out1["Output: Exactly 1 row (Acc 101, $1000)"]
     end
-    subgraph PartitionByPattern [SUM() OVER (PARTITION BY AccountID)]
+    subgraph PartitionByPattern ["SUM() OVER (PARTITION BY AccountID)"]
         P1["Row 1: Acc 101, $500"] --> W1["Output Row 1: Acc 101, $500 | AccTotal: $1000"]
         P2["Row 2: Acc 101, $300"] --> W2["Output Row 2: Acc 101, $300 | AccTotal: $1000"]
         P3["Row 3: Acc 101, $200"] --> W3["Output Row 3: Acc 101, $200 | AccTotal: $1000"]

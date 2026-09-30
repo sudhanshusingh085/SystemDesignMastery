@@ -117,10 +117,10 @@
       <div class="diagram-container">
         <div class="mermaid">
           flowchart TD
-            App[Application Layer] --> Router{Shard Router\n(Hash on User_ID)}
-            Router --> S1[(Shard 1\nIDs ending in 0,1,2)]
-            Router --> S2[(Shard 2\nIDs ending in 3,4,5)]
-            Router --> S3[(Shard 3\nIDs ending in 6,7,8,9)]
+            App["Application Layer"] --> Router{"Shard Router<br/>(Hash on User_ID)"}
+            Router --> S1[("Shard 1<br/>IDs ending in 0,1,2")]
+            Router --> S2[("Shard 2<br/>IDs ending in 3,4,5")]
+            Router --> S3[("Shard 3<br/>IDs ending in 6,7,8,9")]
         </div>
         <p class="caption">Figure 1: Hash-based sharding distributing data evenly.</p>
       </div>

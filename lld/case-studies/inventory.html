@@ -61,8 +61,13 @@
     <section class="card">
         <h2>Low-Level Design (Java 21)</h2>
         
-        <span class="code-label">Java</span>
-<pre><code>import java.time.LocalDateTime;
+        <div class="code-tabs">
+  <div class="code-tabs-header">
+    <button class="code-tab-btn active" data-tab="java">☕ Java 21</button>
+    <button class="code-tab-btn" data-tab="csharp">🔷 C#</button>
+  </div>
+  <div class="code-tab-content active" data-tab-content="java">
+    <pre><code class="language-java">import java.time.LocalDateTime;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.locks.ReentrantLock;
@@ -260,6 +265,62 @@ class InventoryService {
     // Facade methods...
 }
 </code></pre>
+  </div>
+  <div class="code-tab-content" data-tab-content="csharp">
+    <pre><code class="language-csharp">using System;
+using System.Collections.Concurrent;
+
+namespace InventorySystem;
+
+public record Product(string Sku, string Name, decimal Price);
+
+public class InventoryService
+{
+    private readonly ConcurrentDictionary<string, int> _stock = new();
+    private readonly ConcurrentDictionary<string, int> _reserved = new();
+
+    public void AddStock(string sku, int quantity)
+    {
+        _stock.AddOrUpdate(sku, quantity, (_, current) => current + quantity);
+    }
+
+    public bool ReserveStock(string sku, int quantity)
+    {
+        while (true)
+        {
+            int currentStock = _stock.GetOrAdd(sku, 0);
+            int currentReserved = _reserved.GetOrAdd(sku, 0);
+            int available = currentStock - currentReserved;
+
+            if (available < quantity) return false;
+
+            // Attempt CAS update on reserved count
+            if (_reserved.TryUpdate(sku, currentReserved + quantity, currentReserved))
+                return true;
+        }
+    }
+
+    public bool ConfirmOrderDeduction(string sku, int quantity)
+    {
+        lock (_stock)
+        {
+            if (_reserved.TryGetValue(sku, out int res) && res >= quantity)
+            {
+                _reserved[sku] = res - quantity;
+                _stock[sku] -= quantity;
+                return true;
+            }
+            return false;
+        }
+    }
+
+    public void ReleaseReservation(string sku, int quantity)
+    {
+        _reserved.AddOrUpdate(sku, 0, (_, current) => Math.Max(0, current - quantity));
+    }
+}</code></pre>
+  </div>
+</div>
     </section>
 
     <div class="callout callout-warn">

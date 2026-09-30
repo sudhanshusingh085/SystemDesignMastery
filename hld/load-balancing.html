@@ -85,13 +85,13 @@
       <div class="diagram-container">
         <div class="mermaid">
           flowchart LR
-            U1[User 1] --> LB{Load Balancer\n(Nginx)}
-            U2[User 2] --> LB
-            U3[User 3] --> LB
+            U1["User 1"] --> LB{"Load Balancer<br/>(Nginx)"}
+            U2["User 2"] --> LB
+            U3["User 3"] --> LB
             
-            LB -- "Request 1" --> S1((Server 1\nHealthy))
-            LB -- "Request 2" --> S2((Server 2\nHealthy))
-            LB -. "Failing Health Check" .-> S3((Server 3\nDown))
+            LB -- "Request 1" --> S1(("Server 1<br/>Healthy"))
+            LB -- "Request 2" --> S2(("Server 2<br/>Healthy"))
+            LB -.->|"Failing Health Check"| S3(("Server 3<br/>Down"))
             
             style S3 fill:#ffcccc,stroke:#ff0000
         </div>

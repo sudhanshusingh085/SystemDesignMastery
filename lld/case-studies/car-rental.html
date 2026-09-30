@@ -50,8 +50,13 @@
     </div>
 
     <h2>4. Java 21 Code Implementation</h2>
-    <span class="code-label">Java</span>
-    <pre><code>
+    <div class="code-tabs">
+  <div class="code-tabs-header">
+    <button class="code-tab-btn active" data-tab="java">☕ Java 21</button>
+    <button class="code-tab-btn" data-tab="csharp">🔷 C#</button>
+  </div>
+  <div class="code-tab-content active" data-tab-content="java">
+    <pre><code class="language-java">
 import java.util.*;
 import java.time.LocalDate;
 
@@ -180,6 +185,101 @@ public class Main {
     }
 }
     </code></pre>
+  </div>
+  <div class="code-tab-content" data-tab-content="csharp">
+    <pre><code class="language-csharp">using System;
+using System.Collections.Generic;
+using System.Linq;
+
+namespace CarRentalSystem;
+
+public enum VehicleType { Sedan, Suv, Luxury, Van, Truck }
+public enum ReservationStatus { Pending, Active, Completed, Cancelled }
+
+public interface IVehicle
+{
+    string LicensePlate { get; }
+    double DailyRate { get; }
+    VehicleType Type { get; }
+}
+
+public record Sedan(string LicensePlate, double DailyRate) : IVehicle
+{
+    public VehicleType Type => VehicleType.Sedan;
+}
+
+public record Suv(string LicensePlate, double DailyRate) : IVehicle
+{
+    public VehicleType Type => VehicleType.Suv;
+}
+
+public record LuxuryCar(string LicensePlate, double DailyRate) : IVehicle
+{
+    public VehicleType Type => VehicleType.Luxury;
+}
+
+public record User(string Id, string Name, string DriverLicense);
+
+public class Reservation(string id, User user, IVehicle vehicle, DateTime start, DateTime end)
+{
+    public string Id { get; } = id;
+    public User User { get; } = user;
+    public IVehicle Vehicle { get; } = vehicle;
+    public DateTime StartDate { get; } = start;
+    public DateTime EndDate { get; } = end;
+    public ReservationStatus Status { get; set; } = ReservationStatus.Pending;
+
+    public double CalculateTotal()
+    {
+        int days = Math.Max(1, (int)(EndDate - StartDate).TotalDays);
+        return days * Vehicle.DailyRate;
+    }
+}
+
+public class CarRentalSystem
+{
+    private readonly List<IVehicle> _inventory = [];
+    private readonly List<Reservation> _reservations = [];
+    private readonly object _lock = new();
+
+    public void AddVehicle(IVehicle vehicle) => _inventory.Add(vehicle);
+
+    public IEnumerable<IVehicle> SearchAvailable(VehicleType type, DateTime start, DateTime end)
+    {
+        lock (_lock)
+        {
+            var reservedPlates = _reservations
+                .Where(r => r.Status is ReservationStatus.Pending or ReservationStatus.Active)
+                .Where(r => start < r.EndDate && end > r.StartDate)
+                .Select(r => r.Vehicle.LicensePlate)
+                .ToHashSet();
+
+            return _inventory
+                .Where(v => v.Type == type && !reservedPlates.Contains(v.LicensePlate))
+                .ToList();
+        }
+    }
+
+    public Reservation? BookVehicle(User user, IVehicle vehicle, DateTime start, DateTime end)
+    {
+        lock (_lock)
+        {
+            bool isAvailable = SearchAvailable(vehicle.Type, start, end)
+                .Any(v => v.LicensePlate == vehicle.LicensePlate);
+
+            if (!isAvailable) return null;
+
+            var reservation = new Reservation(Guid.NewGuid().ToString()[..8], user, vehicle, start, end)
+            {
+                Status = ReservationStatus.Active
+            };
+            _reservations.Add(reservation);
+            return reservation;
+        }
+    }
+}</code></pre>
+  </div>
+</div>
 
     <h2>5. Why is this recommended?</h2>
     <p>The <strong>Factory Pattern</strong> centralizes object creation, making it easy to add new vehicle types. Using <strong>Sealed Interfaces</strong> ensures that any switch statement checking vehicle types is exhaustive at compile time, preventing runtime bugs.</p>

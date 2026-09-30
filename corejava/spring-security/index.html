@@ -1,12 +1,12 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Spring Security — Protecting Financial Applications</title>
-    <link rel="stylesheet" href="../../css/style.css">
-    
-  <script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.0/dist/mermaid.min.js"></script>
+    <title>Spring Security Mastery — Architecture, Filter Chains, AuthN/AuthZ Flows & Production Engineering</title>
+    <link rel="stylesheet" href="../css/style.css">
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.0/dist/mermaid.min.js"></script>
+    <script src="../js/main.js" defer></script>
 </head>
 <body>
 
@@ -16,93 +16,725 @@
   <aside class="sidebar" id="sidebar"></aside>
 
   <main class="main-content">
-<nav class="breadcrumb">
-        <a href="../index.html">Home</a> &gt; <span>Spring Security Deep Dive</span>
+    <nav class="breadcrumb">
+        <a href="../index.html">Home</a> &gt; <span>12 · Spring Security Mastery</span>
     </nav>
 
     <header>
-        <h1>Spring Security — Protecting Financial Applications</h1>
-        <p class="subtitle">Zero-trust architecture, OAuth 2.0, and JWTs in Banking</p>
+        <h1>Spring Security 6+ &amp; Java 21: The Architectural Masterclass</h1>
+        <p class="subtitle">An exhaustive, stage-by-stage deep dive into the Servlet Container bridge, the 18 canonical filters, Authentication (AuthN), Authorization (AuthZ), Exception Translation, ThreadLocal concurrency, and production-grade zero-trust financial architecture.</p>
     </header>
 
+    <!-- SECTION 1: ARCHITECTURAL FOUNDATION -->
+    <section id="servlet-bridge">
+        <h2>1. The Ground-Zero Architecture: Bridging Servlet Container to Spring ApplicationContext</h2>
+
+        <p><strong>The Core Engineering Problem:</strong> Enterprise web applications execute inside a Servlet Container (such as Apache Tomcat, Eclipse Jetty, or Undertow). The Servlet Container is written according to the Java Servlet Specification (Jakarta EE). It manages threads and runs Servlet <code>Filter</code> instances. However, the Servlet Container knows <em>absolutely nothing</em> about Spring's <code>ApplicationContext</code>, Spring beans, dependency injection, or database connection pools.</p>
+
+        <p>If you attempted to write security checks directly inside individual Spring MVC controllers, unauthenticated requests would already have traversed model binding, file uploading, and JSON deserialization, exposing your application to Remote Code Execution (RCE) and Denial of Service (DoS). Security <strong>must</strong> execute at the edge—before the request ever touches the <code>DispatcherServlet</code>.</p>
+
+        <h3>The Architectural Bridge: DelegatingFilterProxy &amp; FilterChainProxy</h3>
+        <p>Spring Security bridges the standard Jakarta Servlet container and Spring's bean ecosystem using two indispensable architectural components:</p>
+
+        <ul>
+            <li><strong><code>DelegatingFilterProxy</code>:</strong> A standard Jakarta Servlet Filter registered directly with the Servlet container (either via <code>web.xml</code> or automatically configured by Spring Boot's embedded Tomcat). Its sole responsibility is to act as a bridge: when an HTTP request arrives, it looks up a specific Spring Bean in the Spring <code>WebApplicationContext</code> named <code>springSecurityFilterChain</code> and delegates all filter calls to it.</li>
+            <li><strong><code>FilterChainProxy</code>:</strong> A Spring Bean managed by Spring IoC. It wraps and orchestrates one or more <code>SecurityFilterChain</code> instances. It is the central nervous system of Spring Security. It determines which security filter chain matches the incoming HTTP request by consulting each chain's <code>RequestMatcher</code>.</li>
+            <li><strong><code>SecurityFilterChain</code>:</strong> An interface representing an ordered collection of Spring Security filters that should be applied to a specific set of URLs (e.g. one chain for <code>/api/**</code> using stateless JWT, and a separate chain for <code>/admin/**</code> using form login and sessions).</li>
+        </ul>
+
+        <div class="mermaid">
+flowchart TD
+    Client["Client HTTP Request"] --> SC["Servlet Container (Tomcat / Jetty)"]
+    subgraph ServletPipeline ["Jakarta Servlet Container World"]
+        SC --> F1["LoggingFilter"]
+        F1 --> DFP["DelegatingFilterProxy (Standard Servlet Filter)"]
+    end
     
-        <!-- Topic 1: SecurityFilterChain -->
-        <section class="topic-section" id="security-filter-chain">
-            <h2>1. SecurityFilterChain & Architecture</h2>
-            <div class="pillar pillar-1">
-                <h3>Pillar 1: Ground-Zero Theory & The Pain Point</h3>
-                <p>Spring Security acts as a massive bouncer before requests ever reach your <code>DispatcherServlet</code>. It operates entirely on Servlet <code>Filter</code>s. Without it, you would manually check headers, cookies, and tokens in every single controller. The <code>SecurityFilterChain</code> is an ordered list of these filters. If a request fails a filter (e.g., missing JWT), it is rejected with a 401/403 before your application logic even knows it existed.</p>
-            </div>
-            
-            <div class="pillar pillar-3">
-                <h3>Pillar 3: Step-by-Step Evolution</h3>
-                <pre class="mermaid">
-                flowchart LR
-                    A[Client Request] --> B[DelegatingFilterProxy]
-                    B --> C[FilterChainProxy]
-                    C --> D[SecurityContextPersistenceFilter]
-                    D --> E[UsernamePasswordAuthenticationFilter / JwtAuthenticationFilter]
-                    E --> F[AuthorizationFilter]
-                    F --> G[DispatcherServlet (Controllers)]
-                </pre>
-            </div>
+    DFP -->|"Delegates via bean name 'springSecurityFilterChain'"| FCP["FilterChainProxy (Spring Managed Bean)"]
+    
+    subgraph SpringSecurityWorld ["Spring Security Managed World (IoC)"]
+        FCP --> Router{"RequestMatcher Evaluation"}
+        Router -->|"Pattern: /api/**"| SFC1["SecurityFilterChain 1: API (Stateless JWT)"]
+        Router -->|"Pattern: /actuator/**"| SFC2["SecurityFilterChain 2: Actuator (mTLS / Basic)"]
+        Router -->|"Pattern: /**"| SFC3["SecurityFilterChain 3: Web UI (Session / OAuth2)"]
+    end
+    
+    SFC1 -->|"All Security Filters Pass"| DS["DispatcherServlet (Spring MVC Controller)"]
+        </div>
 
-            <div class="pillar pillar-5">
-                <div class="interview-box">
-                    <h4>📋 How to Answer This in an Interview</h4>
-                    <p><strong>Q: "How does SecurityFilterChain work?"</strong></p>
-                    <p><em>Candidate:</em> "Spring Security hooks into the standard Servlet Filter API via a <code>DelegatingFilterProxy</code>. This proxy delegates work to a Spring Bean called <code>FilterChainProxy</code>. The <code>FilterChainProxy</code> manages one or more <code>SecurityFilterChain</code>s. Each chain is a sequence of highly specialized filters—some handle CORS, some extract JWTs, some handle authentication (AuthN), and finally, the AuthorizationFilter handles access control (AuthZ). If all filters pass, the request proceeds to the DispatcherServlet."</p>
-                </div>
-            </div>
-        </section>
+        <div class="callout interview-script">
+            <h3>📋 Interview Script: "How does Spring Security hook into the Servlet Container?"</h3>
+            <p><strong>Candidate Answer:</strong> "Spring Security integrates with the Servlet container via <code>DelegatingFilterProxy</code>. Because the Servlet container initializes filters independently of the Spring <code>ApplicationContext</code>, <code>DelegatingFilterProxy</code> acts as a standard Servlet Filter that delegates the actual work to a Spring-managed bean named <code>springSecurityFilterChain</code>, which is an instance of <code>FilterChainProxy</code>. The <code>FilterChainProxy</code> holds a list of <code>SecurityFilterChain</code> beans and selects the appropriate chain based on <code>RequestMatcher</code> criteria. Once selected, the request passes through the ordered security filters in that chain. Only after all security filters pass does the request proceed down the servlet filter chain to Spring's <code>DispatcherServlet</code>."</p>
+        </div>
+    </section>
 
-        <!-- Topic 4: JWT -->
-        <section class="topic-section" id="jwt">
-            <h2>4. JWT Structure, Creation, Validation</h2>
-            <div class="pillar pillar-1">
-                <h3>Pillar 1: Ground-Zero Theory</h3>
-                <p>JSON Web Tokens (JWT) are a stateless, cryptographically verifiable way to transmit claims between parties. Traditional session management requires storing session IDs in a central database (Redis) which introduces a network hop and scalability limits. JWTs solve this because the server only needs its private/public key to verify the token's authenticity.</p>
-            </div>
+    <!-- SECTION 2: THE 18 CANONICAL FILTERS -->
+    <section id="canonical-filters">
+        <h2>2. The Canonical Filter Order: Stage-by-Stage Breakdown</h2>
+
+        <p>The order of filters in a <code>SecurityFilterChain</code> is non-negotiable. If an authorization filter ran before an authentication filter, the system would reject every request as anonymous! In Spring Security 6+, the framework enforces a rigid, predefined ordering.</p>
+
+        <p>Below is the complete sequence of standard Spring Security filters from first to last, with their exact architectural purpose:</p>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>Order</th>
+                    <th>Filter Class</th>
+                    <th>Stage &amp; Architectural Responsibility</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>1</td>
+                    <td><code>DisableEncodeUrlFilter</code></td>
+                    <td>Prevents the Servlet container from appending the <code>jsessionid</code> to URLs in redirects, mitigating session hijacking via URL query parameters.</td>
+                </tr>
+                <tr>
+                    <td>2</td>
+                    <td><code>ForceEagerSessionCreationFilter</code></td>
+                    <td>Forces eager creation of the <code>HttpSession</code> if configured, ensuring session IDs exist early.</td>
+                </tr>
+                <tr>
+                    <td>3</td>
+                    <td><code>ChannelProcessingFilter</code></td>
+                    <td>Enforces transport-layer security protocols (e.g., redirecting insecure <code>http://</code> traffic to <code>https://</code>).</td>
+                </tr>
+                <tr>
+                    <td>4</td>
+                    <td><code>WebAsyncManagerIntegrationFilter</code></td>
+                    <td>Integrates the <code>SecurityContext</code> with the Spring MVC <code>WebAsyncManager</code> to allow asynchronous controller methods (e.g. returning <code>Callable</code> or <code>DeferredResult</code>) to access the caller's security credentials.</td>
+                </tr>
+                <tr>
+                    <td>5</td>
+                    <td><code>SecurityContextHolderFilter</code></td>
+                    <td><strong>(Modern replacement for legacy <code>SecurityContextPersistenceFilter</code> in Spring Security 6)</strong> Loads the <code>SecurityContext</code> from the <code>SecurityContextRepository</code> (e.g., HTTP Session or request cache) and populates the <code>SecurityContextHolder</code> for the current thread. Clears the context upon request completion.</td>
+                </tr>
+                <tr>
+                    <td>6</td>
+                    <td><code>HeaderWriterFilter</code></td>
+                    <td>Injects crucial HTTP security response headers into every response: <code>X-Content-Type-Options: nosniff</code>, <code>X-Frame-Options: DENY</code> (clickjacking prevention), <code>Strict-Transport-Security</code> (HSTS), and <code>Content-Security-Policy</code> (CSP).</td>
+                </tr>
+                <tr>
+                    <td>7</td>
+                    <td><code>CorsFilter</code></td>
+                    <td>Intercepts cross-origin requests. Intercepts HTTP <code>OPTIONS</code> pre-flight requests and responds with allowed origins, headers, and HTTP methods before authentication runs.</td>
+                </tr>
+                <tr>
+                    <td>8</td>
+                    <td><code>CsrfFilter</code></td>
+                    <td>Enforces Cross-Site Request Forgery protection for state-changing HTTP methods (<code>POST</code>, <code>PUT</code>, <code>DELETE</code>, <code>PATCH</code>) using the Synchronizer Token Pattern. (Typically disabled in purely stateless REST APIs using JWTs).</td>
+                </tr>
+                <tr>
+                    <td>9</td>
+                    <td><code>LogoutFilter</code></td>
+                    <td>Monitors requests matching the logout URL (e.g., <code>/logout</code>). Clears the <code>SecurityContext</code>, invalidates the HTTP session, deletes cookies, and invokes configured logout handlers.</td>
+                </tr>
+                <tr>
+                    <td>10</td>
+                    <td><code>OAuth2AuthorizationRequestRedirectFilter</code></td>
+                    <td>Initiates OAuth2 / OpenID Connect login flows by redirecting the user's browser to the external Identity Provider (e.g., Okta, Auth0, Google) with PKCE parameters.</td>
+                </tr>
+                <tr>
+                    <td>11</td>
+                    <td><code>Saml2WebSsoAuthenticationFilter</code> / <code>OAuth2LoginAuthenticationFilter</code></td>
+                    <td>Handles enterprise federated SSO callbacks (SAML assertion consumption or OAuth2 authorization code exchange).</td>
+                </tr>
+                <tr>
+                    <td>12</td>
+                    <td><code>UsernamePasswordAuthenticationFilter</code></td>
+                    <td>Handles traditional form logins. Intercepts <code>POST /login</code>, extracts <code>username</code> and <code>password</code> parameters, creates an unauthenticated token, and passes it to the <code>AuthenticationManager</code>.</td>
+                </tr>
+                <tr>
+                    <td>13</td>
+                    <td><code>BearerTokenAuthenticationFilter</code> / Custom <code>JwtAuthenticationFilter</code></td>
+                    <td>Extracts the <code>Authorization: Bearer &lt;token&gt;</code> header in stateless microservice APIs, validates cryptographic signatures, and establishes authentication.</td>
+                </tr>
+                <tr>
+                    <td>14</td>
+                    <td><code>BasicAuthenticationFilter</code></td>
+                    <td>Extracts and decodes <code>Authorization: Basic base64(user:pass)</code> headers for automated or legacy integration endpoints.</td>
+                </tr>
+                <tr>
+                    <td>15</td>
+                    <td><code>RequestCacheAwareFilter</code></td>
+                    <td>Reconstructs the original requested URL that triggered an authentication challenge, allowing post-login redirection back to the user's intended page.</td>
+                </tr>
+                <tr>
+                    <td>16</td>
+                    <td><code>SecurityContextHolderAwareRequestFilter</code></td>
+                    <td>Wraps the native <code>HttpServletRequest</code> with a wrapper that implements standard Servlet methods: <code>request.isUserInRole("ADMIN")</code> and <code>request.getUserPrincipal()</code> based on the active <code>SecurityContext</code>.</td>
+                </tr>
+                <tr>
+                    <td>17</td>
+                    <td><code>AnonymousAuthenticationFilter</code></td>
+                    <td>Ensures the <code>SecurityContextHolder</code> is never <code>null</code>. If no prior filter authenticated the user, this filter creates and assigns an <code>AnonymousAuthenticationToken</code> with authority <code>ROLE_ANONYMOUS</code>.</td>
+                </tr>
+                <tr>
+                    <td>18</td>
+                    <td><code>SessionManagementFilter</code></td>
+                    <td>Enforces session fixation protection (e.g., migrating session attributes to a fresh session ID upon login) and concurrent session control (e.g., maximum 1 active session per user).</td>
+                </tr>
+                <tr>
+                    <td>19</td>
+                    <td><code>ExceptionTranslationFilter</code></td>
+                    <td>Does not perform security checks itself; it catches Spring Security exceptions thrown downstream by <code>AuthorizationFilter</code>. Translates <code>AuthenticationException</code> into an HTTP 401 challenge (via <code>AuthenticationEntryPoint</code>) and translates <code>AccessDeniedException</code> into an HTTP 403 response (via <code>AccessDeniedHandler</code>).</td>
+                </tr>
+                <tr>
+                    <td>20</td>
+                    <td><code>AuthorizationFilter</code></td>
+                    <td><strong>(Modern replacement for legacy <code>FilterSecurityInterceptor</code> in Spring Security 6)</strong> The final gatekeeper. Evaluates whether the current <code>Authentication</code> in the <code>SecurityContextHolder</code> possesses the required authorities, roles, or attributes to access the target URL. Throws <code>AccessDeniedException</code> if unauthorized.</td>
+                </tr>
+            </tbody>
+        </table>
+    </section>
+
+    <!-- SECTION 3: AUTHENTICATION FLOW -->
+    <section id="authn-lifecycle">
+        <h2>3. Stage-by-Stage Authentication (AuthN) Lifecycle: First Principles</h2>
+
+        <p>Authentication is the process of verifying <strong>who</strong> the principal is. In Spring Security, this is orchestrated through an elegant decoupled pipeline involving six core interfaces:</p>
+
+        <div class="mermaid">
+sequenceDiagram
+    autonumber
+    actor Client as Client App
+    participant Filter as Jwt / UsernamePassword Filter
+    participant AM as AuthenticationManager (ProviderManager)
+    participant AP as AuthenticationProvider (Dao / Jwt)
+    participant UDS as UserDetailsService
+    participant PE as PasswordEncoder / JWT Verifier
+    participant SCH as SecurityContextHolder
+    participant SCR as SecurityContextRepository
+
+    Client->>Filter: HTTP Request with Credentials
+    Note over Filter: Stage 1: Extract credentials & create unauthenticated token
+    Filter->>AM: authenticate(UnauthenticatedToken)
+    Note over AM: Stage 2: Loop through providers via supports()
+    AM->>AP: authenticate(UnauthenticatedToken)
+    
+    opt If Database / DAO Provider
+        AP->>UDS: loadUserByUsername(username)
+        UDS-->>AP: UserDetails (with password hash & authorities)
+        AP->>PE: matches(rawPassword, encodedHash)
+        PE-->>AP: true / false
+    end
+    
+    opt If JWT Provider
+        AP->>PE: verifySignature(rsaPublicKey) & validateClaims(exp, iss)
+        PE-->>AP: valid claims
+    end
+    
+    Note over AP: Stage 3: Create authenticated token with Principal & Authorities
+    AP-->>AM: Fully Authenticated Token (isAuthenticated = true)
+    AM-->>Filter: Authenticated Token
+    Filter->>SCH: getContext().setAuthentication(authToken)
+    Filter->>SCR: saveContext(context, request, response)
+    Filter->>Filter: chain.doFilter(request, response)
+        </div>
+
+        <h3>The 9 Distinct Stages of the Authentication Process:</h3>
+        <ol>
+            <li><strong>Stage 1 (Interception):</strong> The authentication filter (e.g. <code>UsernamePasswordAuthenticationFilter</code> or custom <code>JwtAuthenticationFilter</code>) intercepts the HTTP request matching its configured pattern.</li>
+            <li><strong>Stage 2 (Token Materialization):</strong> The filter extracts raw credentials (username/password or Bearer token) and instantiates an <strong>unauthenticated</strong> <code>Authentication</code> token.
+                <br><em>Key property:</em> <code>token.isAuthenticated() == false</code>.
+            </li>
+            <li><strong>Stage 3 (Manager Delegation):</strong> The filter delegates the unauthenticated token to the configured <code>AuthenticationManager</code> (by default, <code>ProviderManager</code>):
+                <pre><code class="language-java">Authentication authResult = this.authenticationManager.authenticate(authRequest);</code></pre>
+            </li>
+            <li><strong>Stage 4 (Provider Selection):</strong> <code>ProviderManager</code> maintains a <code>List&lt;AuthenticationProvider&gt;</code>. It iterates through the list, calling <code>provider.supports(token.getClass())</code>. The first provider that returns <code>true</code> is selected (e.g. <code>DaoAuthenticationProvider</code> for username/password, or <code>JwtAuthenticationProvider</code> for JWTs). If none match, it delegates to its parent <code>AuthenticationManager</code>.</li>
+            <li><strong>Stage 5 (Identity Lookup):</strong> The provider calls the <code>UserDetailsService.loadUserByUsername(username)</code> to fetch the authoritative user record from the database, LDAP, or cache, returning a <code>UserDetails</code> instance.</li>
+            <li><strong>Stage 6 (Cryptographic Verification):</strong>
+                <ul>
+                    <li><strong>For Passwords:</strong> The provider invokes <code>PasswordEncoder.matches(rawPassword, userDetails.getPassword())</code>. It uses an adaptive slow hashing algorithm (BCrypt, Argon2, or PBKDF2) to protect against rainbow table and brute-force attacks.</li>
+                    <li><strong>For JWTs:</strong> The provider verifies the digital signature (e.g. RSA-256 using the auth server's public key) and verifies standard claims (<code>exp</code> expiration, <code>nbf</code> not before, <code>iss</code> issuer, <code>aud</code> audience).</li>
+                </ul>
+            </li>
+            <li><strong>Stage 7 (Authenticated Token Construction):</strong> If verification succeeds, the provider constructs a brand new, <strong>fully authenticated</strong> <code>Authentication</code> token (e.g. <code>UsernamePasswordAuthenticationToken</code>):
+                <pre><code class="language-java">UsernamePasswordAuthenticationToken authenticatedToken = 
+    UsernamePasswordAuthenticationToken.authenticated(
+        userDetails, // Principal
+        null,        // Sensitive credentials erased for security!
+        userDetails.getAuthorities() // Collection of GrantedAuthority
+    );</code></pre>
+                <em>Key property:</em> <code>token.isAuthenticated() == true</code>.
+            </li>
+            <li><strong>Stage 8 (SecurityContext Publication):</strong> The filter stores the authenticated token into the current thread's context:
+                <pre><code class="language-java">SecurityContext context = SecurityContextHolder.createEmptyContext();
+context.setAuthentication(authenticatedToken);
+SecurityContextHolder.setContext(context);</code></pre>
+            </li>
+            <li><strong>Stage 9 (Persistence):</strong> The <code>SecurityContextRepository</code> saves the context (in <code>HttpSession</code> for stateful session applications, or in request attributes for stateless APIs). The filter calls <code>chain.doFilter(request, response)</code> to proceed downstream.</li>
+        </ol>
+    </section>
+
+    <!-- SECTION 4: AUTHORIZATION FLOW -->
+    <section id="authz-lifecycle">
+        <h2>4. Stage-by-Stage Authorization (AuthZ) Lifecycle: Access Decision Mechanics</h2>
+
+        <p>Authorization is the process of answering: <strong>Does this authenticated principal have permission to execute this operation or view this data?</strong></p>
+
+        <p>Spring Security 6 modernized authorization by replacing the legacy <code>AccessDecisionManager</code> and <code>AccessDecisionVoter</code> architecture with the streamlined, highly composable <code>AuthorizationManager&lt;T&gt;</code> interface.</p>
+
+        <div class="mermaid">
+flowchart TD
+    Req["Incoming HTTP Request"] --> AF["AuthorizationFilter (Final Security Filter)"]
+    AF --> SCH["SecurityContextHolder.getContext().getAuthentication()"]
+    SCH --> AM["AuthorizationManager<RequestAuthorizationContext>"]
+    
+    subgraph RuleEvaluation ["Authorization Decision Matrix"]
+        AM --> Check1{"Is path permitAll()?"}
+        Check1 -- Yes --> Allow["AuthorizationDecision(true)"]
+        Check1 -- No --> Check2{"Is user authenticated?"}
+        Check2 -- No --> Deny["AuthorizationDecision(false)"]
+        Check2 -- Yes --> Check3{"Has required Role or Authority?"}
+        Check3 -- Yes --> Allow
+        Check3 -- No --> Deny
+    end
+    
+    Allow --> DS["DispatcherServlet -> Controller Execution"]
+    Deny --> Throws["Throws AccessDeniedException"]
+    Throws --> ETF["ExceptionTranslationFilter Catches Exception"]
+        </div>
+
+        <h3>Role vs Authority: The Critical Architectural Distinction</h3>
+        <ul>
+            <li><strong><code>GrantedAuthority</code>:</strong> A fine-grained, string-based permission (e.g. <code>"trade:execute"</code>, <code>"order:cancel"</code>, <code>"SCOPE_read"</code>). When you check <code>hasAuthority("trade:execute")</code>, Spring Security looks for an exact string match in <code>auth.getAuthorities()</code>.</li>
+            <li><strong><code>Role</code>:</strong> A high-level collection of permissions representing a user persona (e.g. <code>"TRADER"</code>, <code>"COMPLIANCE_OFFICER"</code>, <code>"ADMIN"</code>). In Spring Security, roles are simply <code>GrantedAuthority</code> instances that start with the prefix <code>ROLE_</code>!
+                <br>When you write <code>hasRole("TRADER")</code>, Spring automatically prepends <code>ROLE_</code> and checks for <code>ROLE_TRADER</code> in the authority list.
+            </li>
+        </ul>
+
+        <h3>Method-Level Security Architecture (Spring AOP)</h3>
+        <p>Web-layer URL authorization (<code>requestMatchers("/api/trades/**").hasRole("TRADER")</code>) provides perimeter defense. However, robust zero-trust architecture requires <strong>Defense in Depth</strong> via method-level security. Even if a URL mapping changes or a controller method is invoked internally by an async worker, method-level security prevents unauthorized execution.</p>
+
+        <p>Method security is enabled via <code>@EnableMethodSecurity</code> in Spring Security 6+. It uses Spring AOP proxies to intercept method invocations:</p>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>Annotation</th>
+                    <th>Evaluation Phase</th>
+                    <th>Real-World Finance Use Case</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><code>@PreAuthorize</code></td>
+                    <td><strong>Before</strong> method executes. Evaluates SpEL (Spring Expression Language). If false, aborts immediately without running business logic.</td>
+                    <td>Verifying trade limits: <code>@PreAuthorize("#order.notional &lt;= 5000000 or hasRole('RISK_DIRECTOR')")</code></td>
+                </tr>
+                <tr>
+                    <td><code>@PostAuthorize</code></td>
+                    <td><strong>After</strong> method executes. Can inspect the returned object using the special variable <code>returnObject</code>.</td>
+                    <td>Data segregation: <code>@PostAuthorize("returnObject.accountId == authentication.principal.accountId")</code></td>
+                </tr>
+                <tr>
+                    <td><code>@PreFilter</code></td>
+                    <td><strong>Before</strong> method executes. Filters elements out of an input collection parameter based on SpEL criteria.</td>
+                    <td>Stripping trades that belong to accounts the trader is not licensed to manage.</td>
+                </tr>
+                <tr>
+                    <td><code>@PostFilter</code></td>
+                    <td><strong>After</strong> method executes. Filters elements out of a returned collection based on SpEL criteria.</td>
+                    <td>Sanitizing multi-client trade ledgers before returning to a client portal.</td>
+                </tr>
+            </tbody>
+        </table>
+    </section>
+
+    <!-- SECTION 5: EXCEPTION TRANSLATION -->
+    <section id="exception-translation">
+        <h2>5. Exception Translation &amp; The Error Lifecycle</h2>
+
+        <p>Standard Java Web applications handle errors via Servlet container error pages or Spring MVC's <code>@ControllerAdvice</code>. However, because Spring Security operates <em>before</em> the <code>DispatcherServlet</code>, standard <code>@ExceptionHandler</code> methods in controllers <strong>cannot catch security filter exceptions!</strong></p>
+
+        <p>The <code>ExceptionTranslationFilter</code> bridges this gap by acting as a <code>try-catch</code> wrapper around the remaining filter chain (specifically protecting <code>AuthorizationFilter</code>):</p>
+
+        <div class="mermaid">
+flowchart TD
+    ETF["ExceptionTranslationFilter"] --> TryBlock["try { chain.doFilter(req, res); }"]
+    TryBlock --> Downstream["Downstream Filters (AuthorizationFilter, Controller)"]
+    
+    Downstream -.->|"Catches AuthenticationException"| HandleAuthN["Handle AuthenticationException"]
+    Downstream -.->|"Catches AccessDeniedException"| HandleAuthZ["Handle AccessDeniedException"]
+    
+    HandleAuthN --> CleanContext["Clear SecurityContextHolder"]
+    CleanContext --> EntryPoint["AuthenticationEntryPoint.commence()"]
+    EntryPoint --> Resp401["HTTP 401 Unauthorized + WWW-Authenticate header"]
+    
+    HandleAuthZ --> CheckAnon{"Is user Anonymous?"}
+    CheckAnon -- "Yes (Not logged in yet)" --> EntryPoint
+    CheckAnon -- "No (Logged in, but forbidden)" --> ADH["AccessDeniedHandler.handle()"]
+    ADH --> Resp403["HTTP 403 Forbidden + RFC 7807 ProblemDetail JSON"]
+        </div>
+
+        <h3>The Golden Rule: 401 Unauthorized vs 403 Forbidden</h3>
+        <ul>
+            <li><strong>401 Unauthorized (Unauthenticated):</strong> The user has not provided valid credentials (missing token, expired token, malformed signature). The server cannot determine who is making the request. <em>Resolution: Handled by <code>AuthenticationEntryPoint</code>.</em></li>
+            <li><strong>403 Forbidden (Unauthorized):</strong> The server knows exactly who the user is (they are authenticated as "TRADER_BOB"), but the user does not possess the requisite privilege to access the resource (Bob tried to approve a $50M wire transfer, which requires <code>ROLE_COMPLIANCE_DIRECTOR</code>). <em>Resolution: Handled by <code>AccessDeniedHandler</code>.</em></li>
+        </ul>
+    </section>
+
+    <!-- SECTION 6: CONCURRENCY & THREADLOCAL -->
+    <section id="concurrency-threadlocal">
+        <h2>6. Concurrency, ThreadLocal &amp; Virtual Threads in Spring Security</h2>
+
+        <p>By default, Spring Security binds the authenticated principal to the active thread using a Java <code>ThreadLocal</code>. This is encapsulated within <code>SecurityContextHolder</code>.</p>
+
+        <h3>The Three SecurityContextHolder Strategies</h3>
+        <pre><code class="language-java">// Strategy 1: ThreadLocal (Default)
+SecurityContextHolder.setStrategyName(SecurityContextHolder.MODE_THREADLOCAL);
+
+// Strategy 2: InheritableThreadLocal (Copies to child threads upon spawn)
+SecurityContextHolder.setStrategyName(SecurityContextHolder.MODE_INHERITABLETHREADLOCAL);
+
+// Strategy 3: Global (Single static instance across entire JVM - for desktop GUI apps)
+SecurityContextHolder.setStrategyName(SecurityContextHolder.MODE_GLOBAL);</code></pre>
+
+        <h3>⚠️ The Concurrency Pitfall: Thread Pools &amp; Leaks</h3>
+        <p>In modern high-performance Java applications, threads are never spawned manually; they are managed by <strong>ThreadPools</strong> (e.g. <code>ExecutorService</code>, Spring's <code>@Async</code>, or HTTP connection pools). This breaks <code>MODE_INHERITABLETHREADLOCAL</code>!</p>
+        <p>Because worker threads in a pool are created once and reused across hundreds of unrelated user requests, an inherited <code>ThreadLocal</code> will remain on that worker thread indefinitely! This causes <strong>Security Context Bleed</strong>: User B's background job might execute under the security credentials of User A who triggered an earlier task on the same pool thread!</p>
+
+        <h4>The Production Solution: SecurityContext Propagation</h4>
+        <pre><code class="language-java">// Wrap your ExecutorService so the calling thread's SecurityContext 
+// is safely snapshotted and propagated to the worker thread for the duration of the task:
+ExecutorService delegateExecutor = Executors.newFixedThreadPool(10);
+ExecutorService secureExecutor = new DelegatingSecurityContextExecutorService(delegateExecutor);
+
+// Or in Spring Boot configuration:
+@Bean
+public TaskDecorator securityContextPropagatingTaskDecorator() {
+    return new SecurityContextPropagatingTaskDecorator();
+}</code></pre>
+
+        <h3>Java 21 Virtual Threads (Project Loom) &amp; Spring Security 6</h3>
+        <p>Virtual threads are lightweight, user-mode threads managed by the JVM rather than the operating system. Thousands of virtual threads can be mounted on a single OS carrier thread.</p>
+        <p>In Spring Security 6+, <code>SecurityContextHolderFilter</code> explicitly clears the <code>ThreadLocal</code> in a <code>finally</code> block on every single request. Because virtual threads are cheap and short-lived (one virtual thread per HTTP request), <code>MODE_THREADLOCAL</code> remains completely safe, highly performant, and does not pin the underlying carrier thread.</p>
+    </section>
+
+    <!-- SECTION 7: PRODUCTION-GRADE CODE -->
+    <section id="production-code">
+        <h2>7. Production-Grade Java 21 &amp; Spring Boot 3.3+ Implementation</h2>
+
+        <p>The following is an architectural implementation of a zero-trust financial trading API using modern Spring Boot 3.3+, Java 21 records, stateless JWT authentication, and method-level security.</p>
+
+        <h3>1. Complete Modern Security Configuration (<code>SecurityConfig.java</code>)</h3>
+        <pre><code class="language-java">package com.bank.trading.security;
+
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
+import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
+import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.cors.CorsConfigurationSource;
+import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
+
+import java.util.List;
+
+@Configuration
+@EnableWebSecurity
+@EnableMethodSecurity(prePostEnabled = true) // Enables @PreAuthorize & @PostAuthorize
+public class SecurityConfig {
+
+    private final JwtAuthenticationFilter jwtAuthFilter;
+    private final DelegatedAuthenticationEntryPoint authEntryPoint;
+    private final DelegatedAccessDeniedHandler accessDeniedHandler;
+
+    public SecurityConfig(JwtAuthenticationFilter jwtAuthFilter,
+                          DelegatedAuthenticationEntryPoint authEntryPoint,
+                          DelegatedAccessDeniedHandler accessDeniedHandler) {
+        this.jwtAuthFilter = jwtAuthFilter;
+        this.authEntryPoint = authEntryPoint;
+        this.accessDeniedHandler = accessDeniedHandler;
+    }
+
+    @Bean
+    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+        return http
+            // 1. Disable CSRF for stateless REST APIs using Bearer tokens
+            .csrf(AbstractHttpConfigurer::disable)
             
-            <div class="pillar pillar-4">
-                <h3>Pillar 4: Production-Grade Java 21 Code</h3>
-                <pre><code class="language-java">
+            // 2. Configure Strict CORS
+            .cors(cors -> cors.configurationSource(corsConfigurationSource()))
+            
+            // 3. Stateless Session Management: Never create an HttpSession
+            .sessionManagement(session -> 
+                session.sessionCreationPolicy(SessionCreationPolicy.STATELESS)
+            )
+            
+            // 4. Exception Handling: Custom RFC 7807 ProblemDetail responses
+            .exceptionHandling(exceptions -> exceptions
+                .authenticationEntryPoint(authEntryPoint) // 401 Handler
+                .accessDeniedHandler(accessDeniedHandler)     // 403 Handler
+            )
+            
+            // 5. URL-Level Authorization Rules
+            .authorizeHttpRequests(auth -> auth
+                .requestMatchers("/api/v1/auth/**", "/actuator/health").permitAll()
+                .requestMatchers("/api/v1/admin/**").hasRole("ADMIN")
+                .requestMatchers("/api/v1/trades/**").hasAnyRole("TRADER", "PORTFOLIO_MANAGER")
+                .anyRequest().authenticated()
+            )
+            
+            // 6. Inject custom JWT Filter before UsernamePasswordAuthenticationFilter
+            .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class)
+            .build();
+    }
+
+    @Bean
+    public PasswordEncoder passwordEncoder() {
+        // BCrypt with work factor of 12 (4096 rounds of hashing)
+        return new BCryptPasswordEncoder(12);
+    }
+
+    @Bean
+    public CorsConfigurationSource corsConfigurationSource() {
+        CorsConfiguration config = new CorsConfiguration();
+        config.setAllowedOrigins(List.of("https://trading.bank.com"));
+        config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
+        config.setAllowedHeaders(List.of("Authorization", "Content-Type", "X-Request-ID"));
+        config.setAllowCredentials(true);
+        config.setMaxAge(3600L); // Cache preflight response for 1 hour
+
+        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+        source.registerCorsConfiguration("/**", config);
+        return source;
+    }
+}</code></pre>
+
+        <h3>2. Production Custom JWT Filter (<code>JwtAuthenticationFilter.java</code>)</h3>
+        <pre><code class="language-java">package com.bank.trading.security;
+
+import jakarta.servlet.FilterChain;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import org.springframework.lang.NonNull;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.context.SecurityContext;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
+import org.springframework.stereotype.Component;
+import org.springframework.util.StringUtils;
+import org.springframework.web.filter.OncePerRequestFilter;
+
+import java.io.IOException;
+
 @Component
-public sealed class JwtTokenProvider permits InternalJwtTokenProvider {
-    private final RSAPrivateKey privateKey;
-    private final RSAPublicKey publicKey;
+public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
-    public String generateToken(Authentication auth) {
-        var user = (CustomUserDetails) auth.getPrincipal();
-        Instant now = Instant.now();
+    private final JwtTokenService tokenService;
+    private final UserDetailsService userDetailsService;
+
+    public JwtAuthenticationFilter(JwtTokenService tokenService, 
+                                   UserDetailsService userDetailsService) {
+        this.tokenService = tokenService;
+        this.userDetailsService = userDetailsService;
+    }
+
+    @Override
+    protected void doFilterInternal(@NonNull HttpServletRequest request,
+                                    @NonNull HttpServletResponse response,
+                                    @NonNull FilterChain filterChain) 
+                                    throws ServletException, IOException {
         
-        return Jwts.builder()
-                .subject(user.getUsername())
-                .claim("roles", user.getAuthorities())
-                .claim("trader_id", user.getTraderId())
-                .issuer("finance-auth-server")
-                .issuedAt(Date.from(now))
-                .expiration(Date.from(now.plusSeconds(3600)))
-                .signWith(privateKey)
-                .compact();
+        String authHeader = request.getHeader("Authorization");
+
+        // 1. Verify Bearer header presence
+        if (!StringUtils.hasText(authHeader) || !authHeader.startsWith("Bearer ")) {
+            filterChain.doFilter(request, response);
+            return;
+        }
+
+        String jwt = authHeader.substring(7);
+
+        try {
+            // 2. Validate token signature and extract username
+            String username = tokenService.extractUsername(jwt);
+
+            // 3. If valid and not already authenticated in this thread
+            if (username != null && SecurityContextHolder.getContext().getAuthentication() == null) {
+                UserDetails userDetails = this.userDetailsService.loadUserByUsername(username);
+
+                if (tokenService.isTokenValid(jwt, userDetails)) {
+                    // 4. Create fully authenticated token
+                    UsernamePasswordAuthenticationToken authToken = 
+                        new UsernamePasswordAuthenticationToken(
+                            userDetails, 
+                            null, 
+                            userDetails.getAuthorities()
+                        );
+                    
+                    authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+
+                    // 5. Populate SecurityContext
+                    SecurityContext context = SecurityContextHolder.createEmptyContext();
+                    context.setAuthentication(authToken);
+                    SecurityContextHolder.setContext(context);
+                }
+            }
+        } catch (Exception ex) {
+            // Clear context if token is malformed/expired
+            SecurityContextHolder.clearContext();
+            logger.warn("JWT authentication failed: " + ex.getMessage());
+        }
+
+        filterChain.doFilter(request, response);
+    }
+}</code></pre>
+
+        <h3>3. Method-Level Security on Critical Financial Service</h3>
+        <pre><code class="language-java">package com.bank.trading.service;
+
+import com.bank.trading.model.TradeOrder;
+import org.springframework.security.access.prepost.PostAuthorize;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.stereotype.Service;
+
+import java.math.BigDecimal;
+
+@Service
+public class OrderExecutionService {
+
+    /**
+     * Defense-in-Depth Method Authorization:
+     * 1. Principal must have ROLE_TRADER
+     * 2. If trade notional exceeds $1,000,000, principal must also have authority 'trade:high-value'
+     * 3. Trader can only execute trades for their assigned trading desk ID
+     */
+    @PreAuthorize("hasRole('TRADER') and " +
+                  "(#order.notional < 1000000 or hasAuthority('trade:high-value')) and " +
+                  "#order.deskId == authentication.principal.deskId")
+    public TradeResult executeOrder(TradeOrder order) {
+        // High-frequency order execution logic
+        return new TradeResult(order.orderId(), "FILLED", order.price());
+    }
+
+    /**
+     * Post-Authorization:
+     * Inspects the returned trade result. Guarantees that even if executed,
+     * the result is only returned if the executing client matches the order owner.
+     */
+    @PostAuthorize("returnObject.accountId == authentication.principal.accountId")
+    public TradeOrder getOrderDetails(String orderId) {
+        return orderRepository.findById(orderId);
+    }
+}</code></pre>
+
+        <h3>4. Custom RFC 7807 Standard Error Handlers (401 &amp; 403)</h3>
+        <pre><code class="language-java">package com.bank.trading.security;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.http.ProblemDetail;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.core.AuthenticationException;
+import org.springframework.security.web.AuthenticationEntryPoint;
+import org.springframework.security.web.access.AccessDeniedHandler;
+import org.springframework.stereotype.Component;
+
+import java.io.IOException;
+import java.net.URI;
+import java.time.Instant;
+
+@Component
+public class DelegatedAuthenticationEntryPoint implements AuthenticationEntryPoint {
+
+    private final ObjectMapper mapper = new ObjectMapper();
+
+    @Override
+    public void commence(HttpServletRequest request, HttpServletResponse response,
+                         AuthenticationException authException) throws IOException {
+        
+        response.setStatus(HttpStatus.UNAUTHORIZED.value());
+        response.setContentType(MediaType.APPLICATION_PROBLEM_JSON_VALUE);
+        response.setHeader("WWW-Authenticate", "Bearer error=\"invalid_token\"");
+
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+            HttpStatus.UNAUTHORIZED, 
+            authException.getMessage()
+        );
+        problem.setTitle("Authentication Required");
+        problem.setType(URI.create("https://bank.com/errors/unauthorized"));
+        problem.setProperty("timestamp", Instant.now());
+        problem.setProperty("path", request.getRequestURI());
+
+        response.getWriter().write(mapper.writeValueAsString(problem));
     }
 }
-                </code></pre>
-            </div>
-            
-            <div class="pillar pillar-5">
-                <div class="interview-box">
-                    <h4>🎯 Interviewer Follow-Up Questions</h4>
-                    <p><strong>Q: "When API Gateway generates a JWT token and forwards to microservice A, should A validate the token again?"</strong></p>
-                    <p><em>A:</em> "YES. This is the principle of Defense in Depth. While the API Gateway validates the signature and expiry to prevent bad traffic from entering the network, Microservice A must also validate the token. The Gateway shouldn't know the intricate business roles required for every endpoint in Service A. Service A validates the JWT to extract claims and enforce method-level authorization (AuthZ) using <code>@PreAuthorize</code>."</p>
-                </div>
-            </div>
-        </section>
+
+@Component
+public class DelegatedAccessDeniedHandler implements AccessDeniedHandler {
+
+    private final ObjectMapper mapper = new ObjectMapper();
+
+    @Override
+    public void handle(HttpServletRequest request, HttpServletResponse response,
+                       AccessDeniedException accessDeniedException) throws IOException {
+        
+        response.setStatus(HttpStatus.FORBIDDEN.value());
+        response.setContentType(MediaType.APPLICATION_PROBLEM_JSON_VALUE);
+
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+            HttpStatus.FORBIDDEN, 
+            "Insufficient permissions to execute this financial operation."
+        );
+        problem.setTitle("Forbidden Access");
+        problem.setType(URI.create("https://bank.com/errors/forbidden"));
+        problem.setProperty("timestamp", Instant.now());
+        problem.setProperty("path", request.getRequestURI());
+
+        response.getWriter().write(mapper.writeValueAsString(problem));
+    }
+}</code></pre>
+    </section>
+
+    <!-- SECTION 8: INTERVIEW GRILL ROUND -->
+    <section id="interview-mastery">
+        <h2>8. The Principal Engineer's Interview Grill: Spring Security</h2>
+
+        <div class="callout interview-script">
+            <h3>Q1: "Why did Spring Security 6 deprecate SecurityContextPersistenceFilter in favor of SecurityContextHolderFilter?"</h3>
+            <p><strong>Senior Answer:</strong> "<code>SecurityContextPersistenceFilter</code> used to automatically save the <code>SecurityContext</code> back to the <code>HttpSession</code> at the end of every request. This caused major concurrency problems in async and reactive workflows, as well as race conditions where multiple parallel requests from the same user session would overwrite each other's security context. <code>SecurityContextHolderFilter</code> decouples context loading from automatic persistence. In Spring Security 6, you must explicitly call <code>securityContextRepository.saveContext(context, request, response)</code> when you mutate the context (e.g. after successful login), preventing accidental overwrites and unnecessary session writes on read-only requests."</p>
+        </div>
+
+        <div class="callout interview-script">
+            <h3>Q2: "What is the difference between hasRole('ADMIN') and hasAuthority('ADMIN')?"</h3>
+            <p><strong>Senior Answer:</strong> "<code>hasAuthority('ADMIN')</code> checks for an exact match against the string <code>'ADMIN'</code> in the user's <code>GrantedAuthority</code> list. <code>hasRole('ADMIN')</code> automatically prepends the prefix <code>'ROLE_'</code> and checks for <code>'ROLE_ADMIN'</code>. If your database stores authorities as <code>'ROLE_ADMIN'</code>, calling <code>hasAuthority('ROLE_ADMIN')</code> and <code>hasRole('ADMIN')</code> are equivalent, but calling <code>hasAuthority('ADMIN')</code> will fail."</p>
+        </div>
+
+        <div class="callout interview-script">
+            <h3>Q3: "If our API Gateway already verifies JWT tokens, should downstream microservices validate them again?"</h3>
+            <p><strong>Senior Answer:</strong> "<strong>Yes, absolutely.</strong> This is the fundamental tenet of <strong>Zero-Trust Architecture and Defense in Depth</strong>. Relying solely on the API Gateway assumes the internal network is completely secure (perimeter security). If an attacker breaches the internal perimeter (via a SSRF vulnerability, a rogue pod, or a compromised sidecar), they could send unauthenticated requests directly to the microservice. Furthermore, the API Gateway does not have domain-level knowledge to enforce method-level business authorization rules (such as checking if trader Bob is assigned to Desk 402). Downstream microservices must validate the JWT signature (or verify the gateway's mTLS certificate and cryptographic claims) and enforce local access control."</p>
+        </div>
+
+        <div class="callout interview-script">
+            <h3>Q4: "Why does PasswordEncoder use BCrypt or Argon2 instead of SHA-256 or MD5?"</h3>
+            <p><strong>Senior Answer:</strong> "SHA-256 and MD5 are <em>cryptographic hash functions</em> designed for high throughput (hashing gigabytes of data per second). This makes them catastrophic for password storage, as modern GPUs can calculate billions of SHA-256 hashes per second, making brute-force and rainbow table attacks trivial. BCrypt and Argon2 are <em>adaptive key-derivation functions</em>. They include built-in random salting (thwarting pre-computed rainbow tables) and have an adjustable work factor (cost parameter). In BCrypt, increasing the log rounds by 1 doubles the calculation time, allowing engineers to tune the hashing duration to ~100ms per attempt. This imposes a negligible delay on legitimate users, but makes offline brute-force attacks computationally impossible."</p>
+        </div>
+
+        <div class="callout interview-script">
+            <h3>Q5: "How does Spring Security prevent timing attacks during password and token verification?"</h3>
+            <p><strong>Senior Answer:</strong> "A standard string comparison (<code>str1.equals(str2)</code>) is short-circuiting: it returns <code>false</code> the moment the first non-matching character is found. An attacker measuring HTTP response times down to nanoseconds can deduce the first character of a hash, then the second, and so on. Spring Security's <code>PasswordEncoder</code> and cryptographic validators use constant-time comparisons, implemented via <code>MessageDigest.isEqual(byte[] digesta, byte[] digestb)</code>. This method always compares every single byte using a bitwise XOR accumulator, ensuring the execution time is completely invariant to how many characters matched."</p>
+        </div>
+    </section>
+
   </main>
 </div>
 
 <button class="scroll-top" aria-label="Scroll to top">↑</button>
-<script src="../../js/main.js"></script>
 </body>
 </html>
-

@@ -61,8 +61,13 @@
     </div>
 
     <h2>Java 21 Implementation</h2>
-    <span class="code-label">Java</span>
-    <pre>
+    <div class="code-tabs">
+  <div class="code-tabs-header">
+    <button class="code-tab-btn active" data-tab="java">☕ Java 21</button>
+    <button class="code-tab-btn" data-tab="csharp">🔷 C#</button>
+  </div>
+  <div class="code-tab-content active" data-tab-content="java">
+    <pre><code class="language-java">
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
@@ -201,7 +206,91 @@ public class Main {
         lib.borrowBook("M01", "123");
     }
 }
-    </pre>
+    </code></pre>
+  </div>
+  <div class="code-tab-content" data-tab-content="csharp">
+    <pre><code class="language-csharp">using System;
+using System.Collections.Concurrent;
+using System.Collections.Generic;
+using System.Linq;
+
+namespace LibrarySystem;
+
+public enum BookStatus { Available, Loaned, Lost }
+
+public record BookItem(string Barcode, string Title, string Author, string Isbn)
+{
+    public BookStatus Status { get; set; } = BookStatus.Available;
+}
+
+public record Member(string MemberId, string Name, string Email);
+
+public class LoanRecord(string loanId, string barcode, string memberId, DateTime issueDate, DateTime dueDate)
+{
+    public string LoanId { get; } = loanId;
+    public string Barcode { get; } = barcode;
+    public string MemberId { get; } = memberId;
+    public DateTime IssueDate { get; } = issueDate;
+    public DateTime DueDate { get; } = dueDate;
+    public DateTime? ReturnDate { get; set; }
+}
+
+public class LibraryService
+{
+    private readonly ConcurrentDictionary<string, BookItem> _books = new();
+    private readonly ConcurrentDictionary<string, Member> _members = new();
+    private readonly ConcurrentDictionary<string, LoanRecord> _activeLoans = new();
+    private const int MaxBorrowLimit = 5;
+    private const int LoanDurationDays = 14;
+
+    public void AddBook(BookItem book) => _books[book.Barcode] = book;
+    public void RegisterMember(Member member) => _members[member.MemberId] = member;
+
+    public LoanRecord? CheckoutBook(string barcode, string memberId)
+    {
+        if (!_books.TryGetValue(barcode, out var book) || book.Status != BookStatus.Available)
+            return null;
+
+        int currentLoanCount = _activeLoans.Values.Count(l => l.MemberId == memberId && l.ReturnDate == null);
+        if (currentLoanCount >= MaxBorrowLimit)
+            return null;
+
+        lock (book)
+        {
+            if (book.Status != BookStatus.Available) return null;
+            book.Status = BookStatus.Loaned;
+
+            var loan = new LoanRecord(
+                Guid.NewGuid().ToString()[..8],
+                barcode,
+                memberId,
+                DateTime.UtcNow,
+                DateTime.UtcNow.AddDays(LoanDurationDays)
+            );
+            _activeLoans[loan.LoanId] = loan;
+            return loan;
+        }
+    }
+
+    public bool ReturnBook(string loanId)
+    {
+        if (!_activeLoans.TryGetValue(loanId, out var loan) || loan.ReturnDate != null)
+            return false;
+
+        if (_books.TryGetValue(loan.Barcode, out var book))
+        {
+            lock (book)
+            {
+                loan.ReturnDate = DateTime.UtcNow;
+                book.Status = BookStatus.Available;
+                return true;
+            }
+        }
+        return false;
+    }
+}</code></pre>
+  </div>
+</div>
 
     <div class="page-nav">
       <a href="elevator.html" class="prev"><span class="label">← Previous</span><span class="title">Elevator System</span></a>

@@ -223,10 +223,10 @@
             LB[Load Balancer]
             APIG[API Gateway]
             
-            subgroup
-            S1[User Service]
-            S2[Product Service]
-            S3[Order Service]
+            subgraph Services ["Microservices"]
+            S1["User Service"]
+            S2["Product Service"]
+            S3["Order Service"]
             end
             
             Cache[(Redis Cache)]

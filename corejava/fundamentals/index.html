@@ -1,13 +1,12 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Java Fundamentals — The Bedrock of Financial Systems</title>
-    <link rel="stylesheet" href="../../css/style.css">
+    <link rel="stylesheet" href="../css/style.css">
     <script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.0/dist/mermaid.min.js"></script>
-    
-    
+    <script src="../js/main.js" defer></script>
 </head>
 <body>
 
@@ -38,25 +37,25 @@
             <h3>Architectural Layout</h3>
             <div class="mermaid">
             flowchart TD
-                subgraph JDK [Java Development Kit (JDK)]
+                subgraph JDK ["Java Development Kit (JDK)"]
                     direction TB
-                    Compiler[javac]
-                    Tools[Diagnostic Tools: jmap, jcmd, JFR]
-                    subgraph JRE [Java Runtime Environment (JRE)]
+                    Compiler["javac"]
+                    Tools["Diagnostic Tools: jmap, jcmd, JFR"]
+                    subgraph JRE ["Java Runtime Environment (JRE)"]
                         direction TB
-                        Libs[Core Libraries: java.lang, java.util]
-                        subgraph JVM [Java Virtual Machine (JVM)]
+                        Libs["Core Libraries: java.lang, java.util"]
+                        subgraph JVM ["Java Virtual Machine (JVM)"]
                             direction TB
-                            ClassLoader[Class Loader Subsystem]
-                            subgraph MemoryArea [Runtime Data Areas]
-                                Heap[Heap]
-                                Stack[Thread Stacks]
-                                Metaspace[Metaspace]
+                            ClassLoader["Class Loader Subsystem"]
+                            subgraph MemoryArea ["Runtime Data Areas"]
+                                Heap["Heap"]
+                                Stack["Thread Stacks"]
+                                Metaspace["Metaspace"]
                             end
-                            subgraph ExecutionEngine [Execution Engine]
-                                Interpreter[Interpreter]
-                                JIT[JIT Compiler: C1/C2]
-                                GC[Garbage Collector: ZGC/G1]
+                            subgraph ExecutionEngine ["Execution Engine"]
+                                Interpreter["Interpreter"]
+                                JIT["JIT Compiler: C1/C2"]
+                                GC["Garbage Collector: ZGC/G1"]
                             end
                             ClassLoader --> MemoryArea
                             MemoryArea --> ExecutionEngine
@@ -174,16 +173,16 @@ public class FinancialDataTypes {
             flowchart LR
                 subgraph Stack ["Stack Memory (Thread)"]
                     direction TB
-                    Caller[Caller Frame\nOrder order = Addr:0x123]
-                    Method[Method Frame\nOrder param = Addr:0x123]
+                    Caller["Caller Frame<br/>Order order = Addr:0x123"]
+                    Method["Method Frame<br/>Order param = Addr:0x123"]
                 end
                 subgraph Heap ["Heap Memory"]
-                    Obj1("Order Object\n{id='T-1', status=NEW}\n[Addr:0x123]")
-                    Obj2("New Order Object\n{id='T-2', status=REJECTED}\n[Addr:0x999]")
+                    Obj1["Order Object<br/>id='T-1', status=NEW<br/>Addr:0x123"]
+                    Obj2["New Order Object<br/>id='T-2', status=REJECTED<br/>Addr:0x999"]
                 end
                 Caller -->|Points to| Obj1
                 Method -->|Points to| Obj1
-                Method -.->|Reassignment changes \nonly local variable| Obj2
+                Method -.->|Reassignment changes only local variable| Obj2
             </div>
 
 <pre><code>package com.bank.core.memory;
@@ -435,7 +434,7 @@ public final class ExecutionReport {
 </div>
 
 <button class="scroll-top" aria-label="Scroll to top">↑</button>
-<script src="../../js/main.js"></script>
+<script src="../js/main.js"></script>
 </body>
 </html>
 

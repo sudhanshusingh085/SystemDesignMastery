@@ -74,8 +74,13 @@
     </div>
 
     <h2>4. Java 21 Implementation</h2>
-    <span class="code-label">Java</span>
-    <pre>
+    <div class="code-tabs">
+  <div class="code-tabs-header">
+    <button class="code-tab-btn active" data-tab="java">☕ Java 21</button>
+    <button class="code-tab-btn" data-tab="csharp">🔷 C#</button>
+  </div>
+  <div class="code-tab-content active" data-tab-content="java">
+    <pre><code class="language-java">
 import java.util.List;
 import java.util.ArrayList;
 
@@ -275,7 +280,61 @@ public class Main {
         game.playMove(new Position(1, 4), new Position(3, 4)); // White e4
     }
 }
-    </pre>
+    </code></pre>
+  </div>
+  <div class="code-tab-content" data-tab-content="csharp">
+    <pre><code class="language-csharp">using System;
+using System.Collections.Generic;
+
+namespace ChessSystem;
+
+public enum Color { White, Black }
+public record Position(int Row, int Col);
+
+public abstract class Piece(Color color, Position position)
+{
+    public Color Color { get; } = color;
+    public Position Position { get; set; } = position;
+    public abstract bool CanMove(Position target, Piece?[,] board);
+}
+
+public class Rook(Color color, Position position) : Piece(color, position)
+{
+    public override bool CanMove(Position target, Piece?[,] board)
+    {
+        if (Position.Row != target.Row && Position.Col != target.Col) return false;
+        var dest = board[target.Row, target.Col];
+        return dest == null || dest.Color != Color;
+    }
+}
+
+public class Board
+{
+    private readonly Piece?[,] _grid = new Piece?[8, 8];
+
+    public Board() => InitializeBoard();
+
+    private void InitializeBoard()
+    {
+        _grid[0, 0] = new Rook(Color.White, new Position(0, 0));
+        _grid[7, 0] = new Rook(Color.Black, new Position(7, 0));
+    }
+
+    public bool MakeMove(Position from, Position to, Color playerColor)
+    {
+        var piece = _grid[from.Row, from.Col];
+        if (piece == null || piece.Color != playerColor) return false;
+
+        if (!piece.CanMove(to, _grid)) return false;
+
+        piece.Position = to;
+        _grid[to.Row, to.Col] = piece;
+        _grid[from.Row, from.Col] = null;
+        return true;
+    }
+}</code></pre>
+  </div>
+</div>
 
     <h2>5. Why is it recommended / When to use it?</h2>
     <p>This object-oriented structure is highly extensible. By making <code>Piece</code> abstract and using Polymorphism, adding new fairy chess pieces or modifying movement rules becomes trivial. The use of a <code>MoveValidator</code> ensures the <code>ChessGame</code> class doesn't become a "God Class" filled with complex logic.</p>

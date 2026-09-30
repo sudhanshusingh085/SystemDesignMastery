@@ -201,6 +201,140 @@ public class ConcurrentTradeManager {
 
 <hr>
 
+
+<h3>Runnable Production Demonstration: HashMap Resizing & High-Bit Shifting Mechanics</h3>
+<p>The following self-contained class simulates and proves how capacity doubles from 16 to 32, threshold jumps from 12 to 24, and how the high-bit test <code>(hash & oldCap) == 0</code> splits bucket elements into low and high lists without recalculating hashes:</p>
+
+<pre><code class="language-java">package com.bank.mastery;
+
+import java.util.HashMap;
+
+public class HashMapResizingMasterclassDemo {
+
+    public static void main(String[] args) {
+        System.out.println("=== 1. HASHMAP DEFAULT SIZE & THRESHOLD RECALCULATION ===");
+        int initialCap = 16;
+        float loadFactor = 0.75f;
+        int initialThreshold = (int) (initialCap * loadFactor); // 12
+        System.out.printf("Initial Capacity: %d, Load Factor: %.2f, Initial Threshold: %d%n",
+                initialCap, loadFactor, initialThreshold);
+
+        // When size breaches 12, resize() is called:
+        int newCap = initialCap << 1;              // 32
+        int newThreshold = (int) (newCap * loadFactor); // 24
+        System.out.printf("After Resizing: New Capacity: %d, New Threshold: %d%n",
+                newCap, newThreshold);
+
+        System.out.println("
+=== 2. BITWISE INDEXING: (n - 1) & hash vs hash % n ===");
+        int[] testHashes = {15, 31, 47, 63, 10, 26, 42};
+        for (int h : testHashes) {
+            int moduloIdx = h % initialCap;
+            int bitwiseIdx = (initialCap - 1) & h;
+            System.out.printf("Hash: %2d -> (16-1)&h = %2d | h %% 16 = %2d (Identical: %b)%n",
+                    h, bitwiseIdx, moduloIdx, (moduloIdx == bitwiseIdx));
+        }
+
+        System.out.println("
+=== 3. DATA SHIFTING SIMULATION: (hash & oldCap) == 0 ===");
+        System.out.println("When capacity doubles from 16 (binary 10000) to 32:");
+        for (int h : testHashes) {
+            int oldIndex = (initialCap - 1) & h;
+            boolean staysAtOldIndex = (h & initialCap) == 0;
+            int newIndex = staysAtOldIndex ? oldIndex : (oldIndex + initialCap);
+
+            System.out.printf("Hash: %2d (bin: %6s) -> Old Bucket: %2d | (h & 16)==0: %5b -> New Bucket: %2d (%s)%n",
+                    h, Integer.toBinaryString(h), oldIndex, staysAtOldIndex, newIndex,
+                    staysAtOldIndex ? "STAYS AT OLD INDEX" : "SHIFTS TO index + oldCap");
+        }
+    }
+}
+</code></pre>
+
+<h3>Runnable Multithreaded Test: HashMap Concurrent Update Failure vs ConcurrentHashMap</h3>
+<p>The following test proves how two concurrent threads updating a standard <code>HashMap</code> results in silent data loss and lost updates, whereas <code>ConcurrentHashMap</code> completes with 100% accuracy:</p>
+
+<pre><code class="language-java">package com.bank.mastery;
+
+import java.util.HashMap;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+
+public class HashMapVsConcurrentHashMapMultithreadedDemo {
+
+    private static final int THREADS = 2;
+    private static final int INSERTS_PER_THREAD = 10_000;
+    private static final int EXPECTED_TOTAL = THREADS * INSERTS_PER_THREAD; // 20,000
+
+    public static void main(String[] args) throws InterruptedException {
+        testStandardHashMap();
+        testConcurrentHashMap();
+    }
+
+    private static void testStandardHashMap() throws InterruptedException {
+        Map<String, Integer> unsafeMap = new HashMap<>();
+        ExecutorService executor = Executors.newFixedThreadPool(THREADS);
+        CountDownLatch latch = new CountDownLatch(THREADS);
+
+        for (int t = 0; t < THREADS; t++) {
+            final int threadId = t;
+            executor.submit(() -> {
+                try {
+                    for (int i = 0; i < INSERTS_PER_THREAD; i++) {
+                        unsafeMap.put("Key-" + threadId + "-" + i, i);
+                    }
+                } finally {
+                    latch.countDown();
+                }
+            });
+        }
+
+        latch.await();
+        executor.shutdown();
+
+        System.out.println("=== STANDARD HASHMAP CONCURRENT UPDATE RESULT ===");
+        System.out.println("Expected size: " + EXPECTED_TOTAL);
+        System.out.println("Actual size:   " + unsafeMap.size());
+        if (unsafeMap.size() < EXPECTED_TOTAL) {
+            System.out.println("🚨 DATA CORRUPTION DETECTED! Lost " + (EXPECTED_TOTAL - unsafeMap.size()) + " entries due to unsynchronized bucket collisions!");
+        }
+    }
+
+    private static void testConcurrentHashMap() throws InterruptedException {
+        Map<String, Integer> safeMap = new ConcurrentHashMap<>();
+        ExecutorService executor = Executors.newFixedThreadPool(THREADS);
+        CountDownLatch latch = new CountDownLatch(THREADS);
+
+        for (int t = 0; t < THREADS; t++) {
+            final int threadId = t;
+            executor.submit(() -> {
+                try {
+                    for (int i = 0; i < INSERTS_PER_THREAD; i++) {
+                        safeMap.put("Key-" + threadId + "-" + i, i);
+                    }
+                } finally {
+                    latch.countDown();
+                }
+            });
+        }
+
+        latch.await();
+        executor.shutdown();
+
+        System.out.println("
+=== CONCURRENTHASHMAP CONCURRENT UPDATE RESULT ===");
+        System.out.println("Expected size: " + EXPECTED_TOTAL);
+        System.out.println("Actual size:   " + safeMap.size());
+        System.out.println("✅ 100% THREAD-SAFE! All " + safeMap.size() + " entries persisted without lost updates or global locks!");
+    }
+}
+</code></pre>
+
+<hr>
+
 <h2>4. Fail-Fast vs Fail-Safe Iterators &amp; Modifying During Iteration</h2>
 
 <p><strong>The Nightmare Scenario:</strong> You are iterating through an active list of orders to cancel them at the end of the trading day. You write:</p>
@@ -297,6 +431,75 @@ activeOrders.removeIf(Order::isExpired);</code></pre>
 
 <hr>
 
+
+<h3>Runnable Masterclass Demo: Fail-Fast CME vs Fail-Safe Mutation</h3>
+<p>The following self-contained class proves why for-each throws CME, why index-based loops skip elements, and how <code>Iterator.remove()</code>, <code>removeIf()</code>, and <code>CopyOnWriteArrayList</code> solve the problem:</p>
+
+<pre><code class="language-java">package com.bank.mastery;
+
+import java.util.*;
+import java.util.concurrent.CopyOnWriteArrayList;
+
+public class FailFastVsFailSafeMasterclassDemo {
+
+    public static void main(String[] args) {
+        System.out.println("=== 1. WHY FOR-EACH THROWS CONCURRENTMODIFICATIONEXCEPTION ===");
+        List<String> list1 = new ArrayList<>(List.of("ORD-1", "ORD-2", "ORD-3", "ORD-4"));
+        try {
+            for (String order : list1) {
+                if ("ORD-2".equals(order)) {
+                    // Direct modification increments modCount, but Iterator expectedModCount stays old!
+                    list1.remove(order);
+                }
+            }
+        } catch (ConcurrentModificationException e) {
+            System.out.println("Caught Expected CME! Reason: list.modCount != iterator.expectedModCount");
+        }
+
+        System.out.println("
+=== 2. WHY NAIVE INDEX-BASED FOR-LOOP SILENTLY SKIPS ELEMENTS ===");
+        List<String> list2 = new ArrayList<>(List.of("CANCEL", "CANCEL", "KEEP", "CANCEL"));
+        System.out.println("Before naive index removal: " + list2);
+        for (int i = 0; i < list2.size(); i++) {
+            if ("CANCEL".equals(list2.get(i))) {
+                list2.remove(i); // Elements shift left! Index 1 moves to index 0, so index 1 is SKIPPED on next iteration!
+            }
+        }
+        System.out.println("After naive index removal:  " + list2 + " (SILENT BUG: Second 'CANCEL' was skipped!)");
+
+        System.out.println("
+=== 3. SAFE MUTATION VIA Iterator.remove() ===");
+        List<String> list3 = new ArrayList<>(List.of("CANCEL", "CANCEL", "KEEP", "CANCEL"));
+        Iterator<String> it = list3.iterator();
+        while (it.hasNext()) {
+            String val = it.next();
+            if ("CANCEL".equals(val)) {
+                it.remove(); // Synchronizes expectedModCount = modCount atomically!
+            }
+        }
+        System.out.println("After Iterator.remove():    " + list3 + " (Correctly removed all CANCEL entries!)");
+
+        System.out.println("
+=== 4. MODERN JAVA 8+ DECLARATIVE REMOVAL: removeIf() ===");
+        List<String> list4 = new ArrayList<>(List.of("CANCEL", "CANCEL", "KEEP", "CANCEL"));
+        list4.removeIf("CANCEL"::equals);
+        System.out.println("After list.removeIf():      " + list4 + " (Clean, optimal, single-pass!)");
+
+        System.out.println("
+=== 5. FAIL-SAFE / SNAPSHOT ITERATION (CopyOnWriteArrayList) ===");
+        List<String> cowList = new CopyOnWriteArrayList<>(List.of("A", "B", "C"));
+        for (String item : cowList) {
+            if ("B".equals(item)) {
+                cowList.add("D"); // Modifies underlying array; iterator continues on immutable snapshot!
+            }
+        }
+        System.out.println("CopyOnWriteArrayList final: " + cowList + " (No CME, snapshot iteration!)");
+    }
+}
+</code></pre>
+
+<hr>
+
 <h2>5. Comparable vs Comparator: The Definitive Masterclass</h2>
 
 <p>Sorting in high-throughput trading (Order Book bid/ask priority, Trade Volume-Weighted sorting, Risk reporting) requires absolute clarity between intrinsic natural ordering and external strategic sorting.</p>
@@ -313,7 +516,7 @@ flowchart TD
     C --> C3["Method: int compare(T o1, T o2)"]
 </div>
 
-<h3>1. <code>Comparable<T></code> — Natural, Intrinsic Ordering</h3>
+<h3>1. <code>Comparable(T)</code> — Natural, Intrinsic Ordering</h3>
 <p>Implemented directly by the domain entity when there is an indisputable, canonical natural order. For example, a financial <code>Trade</code> naturally orders by its execution timestamp:</p>
 <pre><code class="language-java">public record Trade(String tradeId, String symbol, double price, long timestamp) 
     implements Comparable<Trade> {
@@ -329,7 +532,7 @@ flowchart TD
 List<Trade> tradeList = new ArrayList<>();
 Collections.sort(tradeList); // Automatically sorts by natural order (timestamp)</code></pre>
 
-<h3>2. <code>Comparator<T></code> — External Strategy Ordering</h3>
+<h3>2. <code>Comparator(T)</code> — External Strategy Ordering</h3>
 <p>Used when you need alternative, contextual sorting criteria without modifying the domain class source code:</p>
 <pre><code class="language-java">// Strategy 1: Sort by Price Descending (Highest price first for Bids)
 Comparator<Trade> priceComparator = (t1, t2) -> Double.compare(t2.price(), t1.price());

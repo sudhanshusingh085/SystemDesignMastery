@@ -75,21 +75,21 @@
 
     <div class="diagram-container">
       <div class="mermaid">
-        graph TD
-          subgraph Without CDN
-            U1(User Asia) ---> OS[Origin Server USA]
-            U2(User Europe) ---> OS
-            U3(User USA) -> OS
+        flowchart TD
+          subgraph WithoutCDN["Without CDN"]
+            U1["User Asia"] --> OS1["Origin Server USA"]
+            U2["User Europe"] --> OS1
+            U3["User USA"] --> OS1
           end
           
-          subgraph With CDN
-            U4(User Asia) -> C1((CDN Edge Asia))
-            U5(User Europe) -> C2((CDN Edge Europe))
-            U6(User USA) -> C3((CDN Edge USA))
+          subgraph WithCDN["With CDN"]
+            U4["User Asia"] --> C1["CDN Edge Asia"]
+            U5["User Europe"] --> C2["CDN Edge Europe"]
+            U6["User USA"] --> C3["CDN Edge USA"]
             
-            C1 -. Cache Miss .-> OS2[Origin Server USA]
-            C2 -. Cache Miss .-> OS2
-            C3 -. Cache Miss .-> OS2
+            C1 -.->|Cache Miss| OS2["Origin Server USA"]
+            C2 -.->|Cache Miss| OS2
+            C3 -.->|Cache Miss| OS2
           end
       </div>
       <p class="caption">Figure 1: How a CDN reduces the distance data travels.</p>

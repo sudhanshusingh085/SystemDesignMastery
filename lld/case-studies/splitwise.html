@@ -50,8 +50,13 @@
     </div>
 
     <h2>4. Java 21 Code Implementation</h2>
-    <span class="code-label">Java</span>
-    <pre><code>
+    <div class="code-tabs">
+  <div class="code-tabs-header">
+    <button class="code-tab-btn active" data-tab="java">☕ Java 21</button>
+    <button class="code-tab-btn" data-tab="csharp">🔷 C#</button>
+  </div>
+  <div class="code-tab-content active" data-tab-content="java">
+    <pre><code class="language-java">
 import java.util.*;
 import java.time.LocalDateTime;
 
@@ -177,6 +182,85 @@ public class Main {
     }
 }
     </code></pre>
+  </div>
+  <div class="code-tab-content" data-tab-content="csharp">
+    <pre><code class="language-csharp">using System;
+using System.Collections.Generic;
+using System.Linq;
+
+namespace Splitwise;
+
+public enum SplitType { Equal, Exact, Percentage }
+
+public record User(string Id, string Name);
+public record Split(User User, decimal Amount);
+
+public class Expense(string id, decimal totalAmount, User paidBy, List<Split> splits)
+{
+    public string Id { get; } = id;
+    public decimal TotalAmount { get; } = totalAmount;
+    public User PaidBy { get; } = paidBy;
+    public List<Split> Splits { get; } = splits;
+}
+
+public class BalanceSheetController
+{
+    // balances[userA][userB] = amount userA owes userB
+    private readonly Dictionary<string, Dictionary<string, decimal>> _balanceSheet = [];
+
+    public void AddExpense(Expense expense)
+    {
+        string payerId = expense.PaidBy.Id;
+
+        foreach (var split in expense.Splits)
+        {
+            string borrowerId = split.User.Id;
+            if (borrowerId == payerId) continue;
+
+            UpdateBalance(borrowerId, payerId, split.Amount);
+        }
+    }
+
+    private void UpdateBalance(string borrower, string lender, decimal amount)
+    {
+        _balanceSheet.TryAdd(borrower, []);
+        _balanceSheet.TryAdd(lender, []);
+
+        // Netting logic
+        decimal reverseDebt = _balanceSheet[lender].GetValueOrDefault(borrower, 0);
+
+        if (reverseDebt > 0)
+        {
+            if (reverseDebt >= amount)
+            {
+                _balanceSheet[lender][borrower] = reverseDebt - amount;
+            }
+            else
+            {
+                _balanceSheet[lender][borrower] = 0;
+                _balanceSheet[borrower][lender] = amount - reverseDebt;
+            }
+        }
+        else
+        {
+            decimal currentDebt = _balanceSheet[borrower].GetValueOrDefault(lender, 0);
+            _balanceSheet[borrower][lender] = currentDebt + amount;
+        }
+    }
+
+    public void PrintBalances()
+    {
+        foreach (var (userA, debts) in _balanceSheet)
+        {
+            foreach (var (userB, amount) in debts.Where(d => d.Value > 0))
+            {
+                Console.WriteLine($"{userA} owes {userB}: ${amount:F2}");
+            }
+        }
+    }
+}</code></pre>
+  </div>
+</div>
 
     <h2>5. Why is this recommended?</h2>
     <p>Using the <strong>Strategy Pattern</strong> for splits makes adding new split types (like "shares") trivial. The <strong>Observer Pattern</strong> perfectly models the real-world requirement of pushing notifications to users.</p>
