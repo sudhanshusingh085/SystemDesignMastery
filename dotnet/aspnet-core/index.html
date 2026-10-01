@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ASP.NET Core &amp; Microservices Architecture — From Scratch to Principal Architect</title>
+  <link rel="stylesheet" href="../css/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.0/dist/mermaid.min.js"></script>
+  <script src="../js/main.js" defer></script>
+</head>
+<body>
+
+<button class="menu-toggle" aria-label="Toggle menu">☰</button>
+
+<div class="page-wrapper">
+  <aside class="sidebar" id="sidebar"></aside>
+
+  <main class="main-content">
+    <div class="platform-switcher">
+      <span>Mastery Portals:</span>
+      <a href="../../index.html">🏛️ System Design</a>
+      <a href="../../corejava/index.html">☕ Core Java 21</a>
+      <a href="../../sqlserver/index.html">🗄️ MS SQL Server</a>
+      <a href="../index.html" class="active">🔷 .NET 8 / C# 12</a>
+    </div>
+
+    <nav class="breadcrumb">
+      <a href="../index.html">.NET Mastery</a> &gt; <span>11 · ASP.NET Core &amp; Microservices</span>
+    </nav>
+
+    <header>
+      <h1>🌐 ASP.NET Core &amp; Microservices Architecture in .NET 8</h1>
+      <p class="subtitle">An architectural blueprint for tier-1 web APIs: Kestrel socket transport, the Russian-doll middleware pipeline, Minimal APIs vs MVC, .NET 8 built-in Rate Limiting algorithms, and server-side Output Caching.</p>
+    </header>
+
+    <!-- SECTION 1: KESTREL INTERNALS -->
+    <section id="kestrel">
+      <h2>1. The Kestrel Web Server Architecture</h2>
+
+      <p>Kestrel is .NET's cross-platform, asynchronous HTTP server capable of serving over <strong>7 million requests per second</strong> on modern hardware. It achieves this through three core systems:</p>
+
+      <div class="mermaid">
+flowchart TD
+    Socket["OS Socket (Linux epoll / Windows IOCP)"] --> Pipelines["System.IO.Pipelines<br/>(Zero-copy PipeReader / PipeWriter)"]
+    Pipelines --> MemPool["MemoryPool&lt;byte&gt;.Shared<br/>(Pooled byte slabs - 0 GC allocations!)"]
+    MemPool --> HttpParser["Kestrel HTTP/1.1, HTTP/2 &amp; HTTP/3 Parser"]
+    HttpParser --> HttpContext["Constructs HttpContext"]
+    HttpContext --> Middleware["Dispatches to Middleware Pipeline"]
+      </div>
+
+      <ul>
+        <li><strong>System.IO.Pipelines:</strong> Replaces traditional byte buffer streams. Incoming network packets are written straight into pre-allocated memory slabs without copying bytes across user and kernel space.</li>
+        <li><strong>Memory Pooling:</strong> Reuses 4KB/64KB memory slabs from <code>MemoryPool&lt;byte&gt;.Shared</code>, completely preventing high-frequency HTTP requests from generating Gen 0/LOH GC allocations.</li>
+        <li><strong>Protocol Support:</strong> Native HTTP/1.1, HTTP/2 (binary framing &amp; multiplexing), and HTTP/3 (QUIC over UDP for high-packet-loss mobile networks).</li>
+      </ul>
+    </section>
+
+    <!-- SECTION 2: MIDDLEWARE PIPELINE -->
+    <section id="middleware">
+      <h2>2. The Middleware Pipeline: The Russian Doll Pattern</h2>
+
+      <div class="callout callout-info">
+        <div class="callout-title">📖 Middleware Mechanics</div>
+        <p>ASP.NET Core middleware is structured as a sequence of delegates (<code>RequestDelegate = Func&lt;HttpContext, Task&gt;</code>) wrapped around each other like Russian Matryoshka nesting dolls. Each middleware can execute code <strong>before</strong> and <strong>after</strong> the next component:</p>
+      </div>
+
+      <div class="mermaid">
+flowchart LR
+    Req["Client Request"] --> M1["1. Exception Middleware"]
+    M1 --> M2["2. CORS Middleware"]
+    M2 --> M3["3. Authentication"]
+    M3 --> M4["4. Authorization"]
+    M4 --> M5["5. Rate Limiter"]
+    M5 --> Endpoint["Endpoint Handler<br/>(Minimal API / Controller)"]
+    Endpoint -->|Response unwinds| M5
+    M5 --> M4
+    M4 --> M3
+    M3 --> M2
+    M2 --> M1
+    M1 --> Res["Client Response"]
+      </div>
+
+      <h3>Writing Custom Middleware (Performance Timing Example)</h3>
+      <pre><code class="language-csharp">public sealed class RequestTimingMiddleware(RequestDelegate next, ILogger&lt;RequestTimingMiddleware&gt; logger)
+{
+    public async Task InvokeAsync(HttpContext context)
+    {
+        var stopwatch = ValueStopwatch.StartNew();
+
+        try
+        {
+            // Pass execution down the pipeline
+            await next(context);
+        }
+        finally
+        {
+            var elapsedMs = stopwatch.GetElapsedTime().TotalMilliseconds;
+            if (elapsedMs &gt; 500)
+            {
+                logger.LogWarning("Slow request detected: {Method} {Path} took {Elapsed:N2}ms",
+                    context.Request.Method, context.Request.Path, elapsedMs);
+            }
+        }
+    }
+}</code></pre>
+    </section>
+
+    <!-- SECTION 3: MINIMAL APIS VS CONTROLLERS -->
+    <section id="minimal-apis">
+      <h2>3. Minimal APIs vs Controllers: The Performance Divide</h2>
+
+      <table class="comparison-table">
+        <thead>
+          <tr>
+            <th>Metric / Feature</th>
+            <th>Traditional MVC Controllers</th>
+            <th>Modern Minimal APIs (.NET 8)</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Startup Reflection</strong></td>
+            <td>Scans entire assembly for <code>ControllerBase</code> classes.</td>
+            <td><strong>Zero reflection</strong>; uses Roslyn Source Generators.</td>
+          </tr>
+          <tr>
+            <td><strong>Per-Request Allocation</strong></td>
+            <td>Allocates Controller instance, ActionContext, FilterContexts.</td>
+            <td>Zero allocation for parameter binding directly to handler.</td>
+          </tr>
+          <tr>
+            <td><strong>Throughput (RPS)</strong></td>
+            <td>High (~650,000 req/sec)</td>
+            <td><strong>Ultra-High (~850,000+ req/sec, +30% boost)</strong></td>
+          </tr>
+          <tr>
+            <td><strong>Endpoint Filters</strong></td>
+            <td>MVC ActionFilters (complex, non-type-safe)</td>
+            <td><code>AddEndpointFilter</code> (type-safe, functional)</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <pre><code class="language-csharp">// Production Minimal API with Validation &amp; Rate Limiting:
+var builder = WebApplication.CreateBuilder(args);
+var app = builder.Build();
+
+app.MapPost("/api/orders", async (
+    CreateOrderDto orderDto, 
+    IOrderService orderService, 
+    CancellationToken ct) =&gt;
+{
+    var orderId = await orderService.SubmitOrderAsync(orderDto, ct);
+    return Results.Created($"/api/orders/{orderId}", new { orderId });
+})
+.RequireRateLimiting("order-submission-limit")
+.WithOpenApi();
+
+app.Run();</code></pre>
+    </section>
+
+    <!-- SECTION 4: BUILT-IN RATE LIMITING -->
+    <section id="rate-limiting">
+      <h2>4. .NET 8 Built-in Rate Limiting Algorithms</h2>
+
+      <p>ASP.NET Core contains native, production-grade rate limiting in <code>System.Threading.RateLimiting</code>, supporting four distinct algorithms without requiring third-party libraries:</p>
+
+      <table class="comparison-table">
+        <thead>
+          <tr>
+            <th>Algorithm</th>
+            <th>Mechanism</th>
+            <th>Pros &amp; Cons</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Fixed Window</strong></td>
+            <td>Permits N requests per time window (e.g. 100 req / 1 min). Window resets.</td>
+            <td>Simple; vulnerable to 2x burst traffic at the edge of window reset.</td>
+          </tr>
+          <tr>
+            <td><strong>Sliding Window</strong></td>
+            <td>Divides window into segments; slides smoothly over time.</td>
+            <td>Smoother rate curve; prevents burst spikes at boundaries.</td>
+          </tr>
+          <tr>
+            <td><strong>Token Bucket</strong></td>
+            <td>Bucket holds max tokens; refills at constant rate. Requests consume tokens.</td>
+            <td>Supports bursts of traffic while guaranteeing long-term steady rate.</td>
+          </tr>
+          <tr>
+            <td><strong>Concurrency Limiter</strong></td>
+            <td>Restricts maximum concurrent in-flight requests (e.g. max 50).</td>
+            <td>Protects backend CPU/database from saturation.</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>Configuring Sliding Window Partitioned by Client IP</h3>
+      <pre><code class="language-csharp">using System.Threading.RateLimiting;
+
+builder.Services.AddRateLimiter(options =&gt;
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+
+    // Partition rate limits per client IP address
+    options.AddPolicy("sliding-ip-limit", httpContext =&gt;
+    {
+        var clientIp = httpContext.Connection.RemoteIpAddress?.ToString() ?? "anonymous";
+
+        return RateLimitPartition.GetSlidingWindowLimiter(clientIp, _ =&gt; new SlidingWindowRateLimiterOptions
+        {
+            PermitLimit = 100,
+            Window = TimeSpan.FromMinutes(1),
+            SegmentsPerWindow = 6, // 10-second segments
+            QueueLimit = 10,
+            QueueProcessingOrder = QueueProcessingOrder.OldestFirst
+        });
+    });
+});
+
+app.UseRateLimiter();</code></pre>
+    </section>
+
+    <!-- SECTION 5: OUTPUT CACHING -->
+    <section id="output-caching">
+      <h2>5. Server-Side Output Caching (.NET 7/8)</h2>
+
+      <p>Unlike <code>ResponseCaching</code> (which relies on HTTP client headers), <strong>Output Caching</strong> caches the full serialized HTTP response directly on the server (in memory or Redis) with cache tagging and granular eviction:</p>
+
+      <pre><code class="language-csharp">builder.Services.AddOutputCache(options =&gt;
+{
+    options.AddPolicy("PortfolioCache", policy =&gt; policy
+        .Expire(TimeSpan.FromMinutes(5))
+        .SetVaryByQuery("portfolioId")
+        .Tag("portfolios")); // Enables tag-based eviction!
+});
+
+app.UseOutputCache();
+
+// Endpoint tagged with policy:
+app.MapGet("/api/portfolios/{portfolioId}", async (Guid portfolioId, IPortfolioService svc) =&gt;
+{
+    return Results.Ok(await svc.GetSummaryAsync(portfolioId));
+})
+.CacheOutput("PortfolioCache");
+
+// Evict all tagged portfolio caches upon order execution:
+app.MapPost("/api/orders/fill", async (IOutputCacheStore cacheStore) =&gt;
+{
+    // Evicts all cache entries tagged with "portfolios" immediately!
+    await cacheStore.EvictByTagAsync("portfolios", default);
+    return Results.Ok();
+});</code></pre>
+    </section>
+
+    <!-- SECTION 6: INTERVIEW GRILL ROUND -->
+    <section id="interview-grill">
+      <h2>6. The Senior Interviewer's Grill Round: ASP.NET Core</h2>
+
+      <div class="callout callout-danger">
+        <div class="callout-title">🔥 Question 1: What is the difference between app.Use(), app.Run(), and app.Map()?</div>
+        <div class="callout-content">
+          <p><strong>Senior Answer:</strong>
+          <ul>
+            <li><code>app.Use(Func&lt;HttpContext, Func&lt;Task&gt;, Task&gt;)</code>: Chains a middleware component into the pipeline, giving it the ability to invoke the next middleware via <code>next()</code> or short-circuit.</li>
+            <li><code>app.Run(RequestDelegate)</code>: Adds a <strong>terminal middleware</strong> that does NOT call <code>next()</code>; execution immediately unwinds back up the pipeline.</li>
+            <li><code>app.Map(path, builder)</code>: Branches the pipeline based on the request URL path prefix, executing a distinct isolated branch of middleware for that route.</li>
+          </ul>
+          </p>
+        </div>
+      </div>
+
+      <div class="callout callout-danger">
+        <div class="callout-title">🔥 Question 2: Why should you never use HttpContext.Current in ASP.NET Core?</div>
+        <div class="callout-content">
+          <p><strong>Senior Answer:</strong> <code>HttpContext.Current</code> was a static ThreadLocal property in legacy .NET Framework (ASP.NET MVC 5) that bound the context to a specific OS thread. In ASP.NET Core, asynchronous execution hops across different ThreadPool threads during I/O awaits. Static thread-local storage fails because continuations execute on different threads. In modern .NET, <code>HttpContext</code> must be injected via <code>IHttpContextAccessor</code> (which uses <code>AsyncLocal&lt;T&gt;</code> to flow execution context across threads) or passed directly as method arguments.</p>
+        </div>
+      </div>
+
+      <div class="callout callout-danger">
+        <div class="callout-title">🔥 Question 3: How does Kestrel protect against Slowloris DDoS attacks?</div>
+        <div class="callout-content">
+          <p><strong>Senior Answer:</strong> Kestrel enforces <strong>MinRequestBodyDataRate</strong> and <strong>MinResponseDataRate</strong> (defaulting to 240 bytes/second with a 5-second grace period). In a Slowloris attack, malicious clients send HTTP headers or bodies byte-by-byte at very slow intervals to keep server sockets open. Kestrel's internal timers detect when data throughput drops below the minimum rate threshold and forcefully terminates the connection, preventing socket exhaustion.</p>
+        </div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<button class="scroll-top" aria-label="Scroll to top">↑</button>
+</body>
+</html>

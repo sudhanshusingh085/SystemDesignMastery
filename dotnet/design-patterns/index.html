@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Design Patterns in Modern C# — From Scratch to Principal Architect</title>
+  <link rel="stylesheet" href="../css/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.0/dist/mermaid.min.js"></script>
+  <script src="../js/main.js" defer></script>
+</head>
+<body>
+
+<button class="menu-toggle" aria-label="Toggle menu">☰</button>
+
+<div class="page-wrapper">
+  <aside class="sidebar" id="sidebar"></aside>
+
+  <main class="main-content">
+    <div class="platform-switcher">
+      <span>Mastery Portals:</span>
+      <a href="../../index.html">🏛️ System Design</a>
+      <a href="../../corejava/index.html">☕ Core Java 21</a>
+      <a href="../../sqlserver/index.html">🗄️ MS SQL Server</a>
+      <a href="../index.html" class="active">🔷 .NET 8 / C# 12</a>
+    </div>
+
+    <nav class="breadcrumb">
+      <a href="../index.html">.NET Mastery</a> &gt; <span>02 · Design Patterns in Modern C#</span>
+    </nav>
+
+    <header>
+      <h1>📐 Design Patterns in Modern C# 12 &amp; .NET 8</h1>
+      <p class="subtitle">An architectural masterclass on Creational, Structural, and Behavioral Gang of Four (GoF) patterns, the thread-safe Singleton dilemma, Factory vs Strategy in high-frequency trading, and Enterprise Repository &amp; Unit of Work with EF Core 8.</p>
+    </header>
+
+    <!-- SECTION 1: TAXONOMY -->
+    <section id="taxonomy">
+      <h2>1. The Modern C# Pattern Taxonomy</h2>
+      <p>Design patterns are standardized architectural blueprints for solving recurring software engineering challenges. In modern C# 12 and .NET 8, many classic 1994 GoF patterns have evolved. Language features like pattern matching, record types, primary constructors, lambdas, and built-in Dependency Injection (DI) have rendered some patterns obsolete while elevating others to enterprise staples.</p>
+
+      <div class="mermaid">
+flowchart TD
+    subgraph Creational["1. Creational Patterns (Object Construction)"]
+        S["Singleton<br/>(Thread-safe Lazy vs DI)"]
+        FM["Factory Method &amp; Abstract Factory"]
+        B["Builder<br/>(Fluent APIs &amp; Records)"]
+    end
+
+    subgraph Structural["2. Structural Patterns (Composition &amp; Interfaces)"]
+        AD["Adapter<br/>(Legacy Protocol Wrappers)"]
+        DEC["Decorator<br/>(Cross-Cutting Concerns / Scrutor)"]
+        FAC["Facade<br/>(Subsystem Simplification)"]
+    end
+
+    subgraph Behavioral["3. Behavioral Patterns (Communication &amp; Algorithms)"]
+        STR["Strategy<br/>(Dynamic Algorithm Switching)"]
+        OBS["Observer<br/>(Events, Channels, MediatR)"]
+        COR["Chain of Responsibility<br/>(ASP.NET Core Middleware)"]
+    end
+
+    subgraph Enterprise["4. Enterprise Data Patterns"]
+        REP["Repository Pattern"]
+        UOW["Unit of Work Pattern (EF Core)"]
+    end
+      </div>
+    </section>
+
+    <!-- SECTION 2: SINGLETON MASTERCLASS -->
+    <section id="singleton">
+      <h2>2. The Singleton Masterclass: Thread-Safety &amp; The Testability Trap</h2>
+      
+      <div class="callout callout-info">
+        <div class="callout-title">📖 Pattern Intent</div>
+        <p>Ensure a class has only one instance throughout the entire application lifecycle and provide a global point of access to it.</p>
+      </div>
+
+      <h3>Evolution of Thread-Safe Singleton in C#</h3>
+      <p>Implementing a Singleton in a multithreaded environment like ASP.NET Core requires careful synchronization to prevent race conditions where two threads initialize separate instances concurrently.</p>
+
+      <h4>Approach A: Double-Checked Locking (Historical &amp; Memory Barriers)</h4>
+      <p>Prior to C# 6, double-checked locking was the canonical interview implementation. Notice the critical <code>volatile</code> keyword: it prevents the CLR JIT compiler and CPU from reordering memory writes (preventing another thread from observing a non-null instance whose constructor has not finished executing).</p>
+
+      <pre><code class="language-csharp">public sealed class DoubleCheckedSingleton
+{
+    private static volatile DoubleCheckedSingleton? _instance;
+    private static readonly object _padlock = new();
+
+    private DoubleCheckedSingleton()
+    {
+        // Expensive initialization (e.g., loading config or hardware handles)
+    }
+
+    public static DoubleCheckedSingleton Instance
+    {
+        get
+        {
+            if (_instance is null) // 1st check (lock-free read)
+            {
+                lock (_padlock)
+                {
+                    if (_instance is null) // 2nd check (synchronized)
+                    {
+                        _instance = new DoubleCheckedSingleton();
+                    }
+                }
+            }
+            return _instance;
+        }
+    }
+}</code></pre>
+
+      <h4>Approach B: Thread-Safe Static Constructor (`beforefieldinit` Guarantee)</h4>
+      <p>In C#, the CLR guarantees that static constructors are executed exactly once per AppDomain in a thread-safe manner before any instance of the class is created or any static member is referenced.</p>
+
+      <pre><code class="language-csharp">public sealed class StaticSingleton
+{
+    // The CLR initializes this when the class is first accessed.
+    private static readonly StaticSingleton _instance = new();
+
+    // Explicit static constructor tells C# compiler NOT to mark type with 'beforefieldinit',
+    // guaranteeing precise lazy initialization upon first static member access.
+    static StaticSingleton() { }
+
+    private StaticSingleton() { }
+
+    public static StaticSingleton Instance => _instance;
+}</code></pre>
+
+      <h4>Approach C: Modern Idiomatic C# using `Lazy&lt;T&gt;` (Recommended GoF Approach)</h4>
+      <p>Since .NET 4.0, <code>System.Lazy&lt;T&gt;</code> provides fully thread-safe, lazy initialization using <code>LazyThreadSafetyMode.ExecutionAndPublication</code> by default:</p>
+
+      <pre><code class="language-csharp">public sealed class ModernLazySingleton
+{
+    private static readonly Lazy&lt;ModernLazySingleton&gt; _lazyInstance =
+        new(() =&gt; new ModernLazySingleton(), LazyThreadSafetyMode.ExecutionAndPublication);
+
+    private ModernLazySingleton()
+    {
+        // Socket connection pool initialization
+    }
+
+    public static ModernLazySingleton Instance =&gt; _lazyInstance.Value;
+}</code></pre>
+
+      <h3>⚠️ The Interviewer's Trap: Why Classic Singleton is an Anti-Pattern</h3>
+      <div class="callout callout-warning">
+        <div class="callout-title">🚨 Senior Architect Critique</div>
+        <p>In modern enterprise development, the classic GoF static Singleton (<code>MySingleton.Instance</code>) is widely considered an <strong>anti-pattern</strong> for three critical reasons:</p>
+        <ol>
+          <li><strong>Hides Dependencies:</strong> Classes calling <code>MySingleton.Instance.DoWork()</code> do not declare their dependency in the constructor. Looking at the public API of a service gives no hint that it relies on a global state.</li>
+          <li><strong>Destroys Testability:</strong> Unit tests run in parallel by test runners (xUnit, NUnit). A static singleton introduces global shared mutable state. Test A mutates the singleton, causing Test B to intermittently fail (flaky tests). Furthermore, you cannot inject a mock instance into <code>MySingleton.Instance</code>.</li>
+          <li><strong>Violates Inversion of Control &amp; SRP:</strong> The class controls its own lifecycle instead of delegating lifecycle management to the container.</li>
+        </ol>
+      </div>
+
+      <h4>The Modern Solution: DI-Managed Singleton</h4>
+      <p>Instead of hardcoding a private constructor and a static <code>Instance</code> property, design the class as a normal POCO adhering to an interface, and let the ASP.NET Core IoC container enforce the single-instance lifetime:</p>
+
+      <pre><code class="language-csharp">// 1. Normal clean interface and implementation
+public interface IMarketDataFeed
+{
+    decimal GetLatestPrice(string symbol);
+}
+
+public class FastMarketDataFeed : IMarketDataFeed
+{
+    public decimal GetLatestPrice(string symbol) =&gt; 182.45m;
+}
+
+// 2. Registration in Program.cs (IoC container guarantees 1 instance per AppDomain)
+builder.Services.AddSingleton&lt;IMarketDataFeed, FastMarketDataFeed&gt;();
+
+// 3. Consumer receives it via constructor injection (100% testable with Moq/NSubstitute!)
+public class TradingEngine(IMarketDataFeed feed)
+{
+    public void Execute(string symbol)
+    {
+        var price = feed.GetLatestPrice(symbol);
+        // Execute trade...
+    }
+}</code></pre>
+    </section>
+
+    <!-- SECTION 3: FACTORY PATTERNS -->
+    <section id="factory">
+      <h2>3. Factory Patterns in Modern C#</h2>
+      
+      <p>The Factory family decouples object creation logic from client consumption. In enterprise C#, there are three distinct variations:</p>
+
+      <div class="mermaid">
+flowchart LR
+    Client["Client Request"] --> SF["Simple Factory / Switch"]
+    SF -->|Creates| ConcreteA["FixOrderGateway"]
+    SF -->|Creates| ConcreteB["BinaryOrderGateway"]
+    SF -->|Creates| ConcreteC["RestOrderGateway"]
+      </div>
+
+      <h3>A. Factory Method vs Abstract Factory</h3>
+      <ul>
+        <li><strong>Factory Method:</strong> Defines an interface for creating an object, but lets subclasses decide which class to instantiate. Delegates creation to child classes.</li>
+        <li><strong>Abstract Factory:</strong> Provides an interface for creating families of related or dependent objects without specifying their concrete classes (e.g., Windows UI vs Mac UI, or FIX Protocol family vs ITCH Protocol family).</li>
+      </ul>
+
+      <h3>B. Modern C# 12 Factory using Keyed Services &amp; Pattern Matching</h3>
+      <p>With .NET 8 <strong>Keyed Services</strong>, we can implement high-performance, container-native factories without reflection or bloated switch blocks:</p>
+
+      <pre><code class="language-csharp">public enum ExecutionVenue { NYSE, NASDAQ, CME, BINANCE }
+
+public interface IOrderGateway
+{
+    Task&lt;string&gt; SubmitOrderAsync(string symbol, int qty, decimal price);
+}
+
+public class NyseOrderGateway : IOrderGateway
+{
+    public Task&lt;string&gt; SubmitOrderAsync(string symbol, int qty, decimal price) =&gt;
+        Task.FromResult($"[NYSE] Routed {qty} {symbol} @ {price}");
+}
+
+public class NasdaqOrderGateway : IOrderGateway
+{
+    public Task&lt;string&gt; SubmitOrderAsync(string symbol, int qty, decimal price) =&gt;
+        Task.FromResult($"[NASDAQ] Routed {qty} {symbol} @ {price}");
+}
+
+// Registration in Program.cs using .NET 8 Keyed Services:
+builder.Services.AddKeyedScoped&lt;IOrderGateway, NyseOrderGateway&gt;(ExecutionVenue.NYSE);
+builder.Services.AddKeyedScoped&lt;IOrderGateway, NasdaqOrderGateway&gt;(ExecutionVenue.NASDAQ);
+
+// Modern Factory using IServiceProvider Keyed Resolution:
+public interface IOrderGatewayFactory
+{
+    IOrderGateway GetGateway(ExecutionVenue venue);
+}
+
+public class OrderGatewayFactory(IServiceProvider serviceProvider) : IOrderGatewayFactory
+{
+    public IOrderGateway GetGateway(ExecutionVenue venue)
+    {
+        return serviceProvider.GetKeyedService&lt;IOrderGateway&gt;(venue)
+            ?? throw new NotSupportedException($"No gateway registered for venue: {venue}");
+    }
+}</code></pre>
+    </section>
+
+    <!-- SECTION 4: STRATEGY VS FACTORY -->
+    <section id="strategy-vs-factory">
+      <h2>4. Strategy vs Factory: The Interview Dilemma</h2>
+
+      <div class="callout callout-info">
+        <div class="callout-title">🎯 The Classic Interview Question</div>
+        <p><em>"What is the exact architectural difference between Strategy and Factory? Can they be used together?"</em></p>
+      </div>
+
+      <table class="comparison-table">
+        <thead>
+          <tr>
+            <th>Feature</th>
+            <th>Factory Pattern</th>
+            <th>Strategy Pattern</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Pattern Category</strong></td>
+            <td><strong>Creational</strong> (concerned with object creation)</td>
+            <td><strong>Behavioral</strong> (concerned with execution &amp; algorithms)</td>
+          </tr>
+          <tr>
+            <td><strong>Primary Intent</strong></td>
+            <td>Decouple client code from concrete classes being instantiated.</td>
+            <td>Encapsulate interchangeable algorithms so they can vary independently of clients.</td>
+          </tr>
+          <tr>
+            <td><strong>What it Returns</strong></td>
+            <td>Returns a new or cached object instance to the caller.</td>
+            <td>Executes an action or computes a result given dynamic context.</td>
+          </tr>
+          <tr>
+            <td><strong>Runtime Mutability</strong></td>
+            <td>Factory is called to obtain an object; object type is fixed once created.</td>
+            <td>Strategy can be swapped on the fly inside the context object during execution.</td>
+          </tr>
+          <tr>
+            <td><strong>Client Knowledge</strong></td>
+            <td>Client asks for an object by type/key (e.g. <code>"PDF"</code>, <code>"CSV"</code>).</td>
+            <td>Client provides or switches the strategy that alters how an operation proceeds.</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>Synergy: Factory Creating the Strategy</h3>
+      <p>In production trading engines, Factory and Strategy are almost always paired: A <strong>Factory</strong> creates or selects the appropriate <strong>Strategy</strong> at runtime based on market volatility or asset class!</p>
+
+      <pre><code class="language-csharp">// 1. The Strategy Interface (Behavioral)
+public interface IExecutionStrategy
+{
+    OrderRoute CalculateRoute(Order order, MarketConditions conditions);
+}
+
+public class TWAPStrategy : IExecutionStrategy // Time-Weighted Average Price
+{
+    public OrderRoute CalculateRoute(Order order, MarketConditions conditions)
+    {
+        // Slice order evenly over time intervals to minimize market impact
+        return new OrderRoute("Slice into 10 intervals of 1 minute each");
+    }
+}
+
+public class VWAPStrategy : IExecutionStrategy // Volume-Weighted Average Price
+{
+    public OrderRoute CalculateRoute(Order order, MarketConditions conditions)
+    {
+        // Weight slices according to historical intra-day volume curves
+        return new OrderRoute("Weight slices by historical 15-minute volume distribution");
+    }
+}
+
+public class DarkPoolSniperStrategy : IExecutionStrategy
+{
+    public OrderRoute CalculateRoute(Order order, MarketConditions conditions)
+    {
+        // Route hidden orders directly to alternative liquidity pools
+        return new OrderRoute("Route non-displayed liquidity to Citadel / Virtu dark pools");
+    }
+}
+
+// 2. The Strategy Factory (Creational)
+public class ExecutionStrategyFactory(IEnumerable&lt;IExecutionStrategy&gt; strategies)
+{
+    public IExecutionStrategy ResolveStrategy(MarketConditions conditions, Order order) =&gt;
+        (conditions.Volatility, order.NotionalValue) switch
+        {
+            (Volatility.Extreme, &gt; 5_000_000m) =&gt; strategies.OfType&lt;DarkPoolSniperStrategy&gt;().First(),
+            (Volatility.High, _)               =&gt; strategies.OfType&lt;VWAPStrategy&gt;().First(),
+            _                                  =&gt; strategies.OfType&lt;TWAPStrategy&gt;().First()
+        };
+}
+
+// 3. The Context using the Strategy
+public class TradingExecutionEngine(ExecutionStrategyFactory factory)
+{
+    public void Execute(Order order, MarketConditions conditions)
+    {
+        // Factory decides the strategy based on real-time market telemetry
+        IExecutionStrategy strategy = factory.ResolveStrategy(conditions, order);
+        
+        // Execute the chosen behavioral strategy
+        OrderRoute route = strategy.CalculateRoute(order, conditions);
+        Console.WriteLine($"Executing order via: {route.Description}");
+    }
+}</code></pre>
+    </section>
+
+    <!-- SECTION 5: STRUCTURAL PATTERNS -->
+    <section id="structural">
+      <h2>5. Structural Patterns: Decorator &amp; Adapter in Production</h2>
+
+      <h3>A. Decorator Pattern with Dependency Injection</h3>
+      <p>The Decorator pattern attaches additional responsibilities to an object dynamically without modifying its source code. In enterprise .NET, decorators are heavily used for cross-cutting concerns like <strong>Redis caching</strong>, <strong>OpenTelemetry tracing</strong>, and <strong>Polly retry resilience</strong>.</p>
+
+      <div class="mermaid">
+flowchart LR
+    Caller["Client Request"] --> DecCache["CachedOrderRepository (Decorator)"]
+    DecCache -->|Cache Miss| DecAudit["AuditingOrderRepository (Decorator)"]
+    DecAudit --> Target["SqlOrderRepository (Concrete Target)"]
+      </div>
+
+      <pre><code class="language-csharp">public interface IOrderRepository
+{
+    Task&lt;Order?&gt; GetByIdAsync(long orderId);
+}
+
+// 1. Concrete Core Component
+public class SqlOrderRepository(TradingDbContext db) : IOrderRepository
+{
+    public async Task&lt;Order?&gt; GetByIdAsync(long orderId) =&gt;
+        await db.Orders.FindAsync(orderId);
+}
+
+// 2. Decorator adding Distributed Redis Caching
+public class CachingOrderRepository(
+    IOrderRepository inner, 
+    IDistributedCache cache, 
+    ILogger&lt;CachingOrderRepository&gt; logger) : IOrderRepository
+{
+    public async Task&lt;Order?&gt; GetByIdAsync(long orderId)
+    {
+        string cacheKey = $"order:{orderId}";
+        var cachedBytes = await cache.GetAsync(cacheKey);
+
+        if (cachedBytes is not null)
+        {
+            logger.LogInformation("Cache hit for order {OrderId}", orderId);
+            return JsonSerializer.Deserialize&lt;Order&gt;(cachedBytes);
+        }
+
+        logger.LogWarning("Cache miss for order {OrderId}. Fetching from database...", orderId);
+        var order = await inner.GetByIdAsync(orderId);
+
+        if (order is not null)
+        {
+            var serialized = JsonSerializer.SerializeToUtf8Bytes(order);
+            await cache.SetAsync(cacheKey, serialized, new DistributedCacheEntryOptions
+            {
+                AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(10)
+            });
+        }
+
+        return order;
+    }
+}</code></pre>
+
+      <p>Using the popular <code>Scrutor</code> NuGet package, this decorator can be registered in one clean line in <code>Program.cs</code>:</p>
+      <pre><code class="language-csharp">builder.Services.AddScoped&lt;IOrderRepository, SqlOrderRepository&gt;();
+builder.Services.Decorate&lt;IOrderRepository, CachingOrderRepository&gt;();</code></pre>
+    </section>
+
+    <!-- SECTION 6: ENTERPRISE PATTERNS -->
+    <section id="enterprise-patterns">
+      <h2>6. Enterprise Patterns: Repository &amp; Unit of Work with EF Core 8</h2>
+
+      <div class="callout callout-info">
+        <div class="callout-title">🎯 The Burning Architectural Debate</div>
+        <p><em>"Is the Repository and Unit of Work pattern redundant when using Entity Framework Core?"</em></p>
+      </div>
+
+      <p>Many developers argue that EF Core's <code>DbContext</code> is already a <strong>Unit of Work</strong>, and <code>DbSet&lt;T&gt;</code> is already a <strong>Repository</strong>. Wrapping them in generic abstractions like <code>IRepository&lt;T&gt;</code> often leads to an anemic abstraction that leaks <code>IQueryable</code> or hides powerful EF Core capabilities like <code>AsSplitQuery()</code> and batch operations.</p>
+
+      <h3>When is Repository Pattern Justified in Modern .NET?</h3>
+      <ol>
+        <li><strong>Domain-Driven Design (DDD):</strong> Repositories are defined on <strong>Aggregate Roots only</strong>, not every database table. They enforce transactional invariants and boundary encapsulation.</li>
+        <li><strong>Decoupling from Persistence Details:</strong> Isolates complex multi-tenant query filters, soft-delete filters, or specialized SQL stored procedures from business logic.</li>
+        <li><strong>In-Memory Mocking for Unit Tests:</strong> Allows mocking data operations without launching a test container or in-memory SQLite database.</li>
+      </ol>
+
+      <h4>Production Unit of Work &amp; Aggregate Repository Implementation:</h4>
+      <pre><code class="language-csharp">// 1. Aggregate Root Interface
+public interface IOrderRepository
+{
+    Task&lt;Order?&gt; GetByIdWithLinesAsync(Guid orderId, CancellationToken ct = default);
+    Task AddAsync(Order order, CancellationToken ct = default);
+}
+
+// 2. Unit of Work Interface
+public interface IUnitOfWork : IDisposable
+{
+    IOrderRepository Orders { get; }
+    Task&lt;int&gt; CommitAsync(CancellationToken ct = default);
+}
+
+// 3. Concrete EF Core Implementation
+public class EfOrderRepository(TradingDbContext db) : IOrderRepository
+{
+    public async Task&lt;Order?&gt; GetByIdWithLinesAsync(Guid orderId, CancellationToken ct = default)
+    {
+        return await db.Orders
+            .Include(o =&gt; o.Lines) // Eager load aggregate items
+            .AsSplitQuery()        // Avoid Cartesian explosion
+            .FirstOrDefaultAsync(o =&gt; o.Id == orderId, ct);
+    }
+
+    public async Task AddAsync(Order order, CancellationToken ct = default)
+    {
+        await db.Orders.AddAsync(order, ct);
+    }
+}
+
+public class EfUnitOfWork(TradingDbContext db) : IUnitOfWork
+{
+    private IOrderRepository? _orders;
+
+    public IOrderRepository Orders =&gt; _orders ??= new EfOrderRepository(db);
+
+    public async Task&lt;int&gt; CommitAsync(CancellationToken ct = default)
+    {
+        // Executes within EF Core's implicit database transaction
+        return await db.SaveChangesAsync(ct);
+    }
+
+    public void Dispose()
+    {
+        db.Dispose();
+        GC.SuppressFinalize(this);
+    }
+}</code></pre>
+    </section>
+
+    <!-- SECTION 7: INTERVIEW GRILL ROUND -->
+    <section id="interview-grill">
+      <h2>7. The Senior Interviewer's Grill Round: Design Patterns in C#</h2>
+
+      <div class="callout callout-danger">
+        <div class="callout-title">🔥 Question 1: How does volatile prevent instruction reordering in Double-Checked Locking?</div>
+        <div class="callout-content">
+          <p><strong>Senior Answer:</strong> When <code>new DoubleCheckedSingleton()</code> is executed, the runtime performs three operations: (1) allocates uninitialized memory on the heap, (2) invokes the constructor to initialize fields, (3) assigns the memory address to the reference variable <code>_instance</code>. Without the <code>volatile</code> keyword, the CLR JIT compiler or CPU out-of-order execution engine may reorder step 3 before step 2! If another thread executes the 1st lock-free check <code>if (_instance is null)</code> precisely at that microsecond, it observes a non-null reference, returns it, and dereferences fields that have NOT yet been initialized by the constructor, leading to hard-to-reproduce memory corruption bugs. <code>volatile</code> introduces a memory fence/barrier guaranteeing write-release semantics.</p>
+        </div>
+      </div>
+
+      <div class="callout callout-danger">
+        <div class="callout-title">🔥 Question 2: Why should you avoid exposing IQueryable&lt;T&gt; from a Repository?</div>
+        <div class="callout-content">
+          <p><strong>Senior Answer:</strong> Exposing <code>IQueryable&lt;T&gt;</code> from a repository completely destroys the purpose of the Repository pattern. It leaks persistence concerns (LINQ-to-Entities expressions) directly into the business/service layer. If a service calls <code>repo.GetAll().Where(...).ToList()</code>, business logic now dictates SQL generation. Furthermore, unit testing becomes extremely difficult because mocking <code>IQueryable</code> expression trees requires complex in-memory query providers. A clean repository should return concrete collections (<code>Task&lt;IReadOnlyList&lt;T&gt;&gt;</code>) or domain aggregates.</p>
+        </div>
+      </div>
+
+      <div class="callout callout-danger">
+        <div class="callout-title">🔥 Question 3: What is the difference between Strategy pattern and State pattern?</div>
+        <div class="callout-content">
+          <p><strong>Senior Answer:</strong> Structurally, both patterns share an identical UML class diagram (Context delegating to an interface with multiple concrete subclasses). However, their <strong>architectural intent</strong> and <strong>lifecycle</strong> differ completely:
+          <ul>
+            <li>In the <strong>Strategy Pattern</strong>, the client typically configures the context with a specific algorithm (e.g. TWAP vs VWAP). Strategies are usually unaware of each other, stateless, and do not trigger transitions between one another.</li>
+            <li>In the <strong>State Pattern</strong>, the context's internal behavior changes dynamically as its state changes (e.g. Order in <code>Pending</code> &rarr; <code>Approved</code> &rarr; <code>Filled</code> &rarr; <code>Settled</code>). Concrete states hold references to the context and trigger transitions to other states based on actions or events.</li>
+          </ul>
+          </p>
+        </div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<button class="scroll-top" aria-label="Scroll to top">↑</button>
+</body>
+</html>

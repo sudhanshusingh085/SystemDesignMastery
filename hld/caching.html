@@ -94,12 +94,16 @@
     </section>
 
     <section>
-      <h2>Java 21 Code: LRU Cache Implementation</h2>
-      <p>Java's <code>LinkedHashMap</code> has a built-in mechanism that makes implementing an LRU cache incredibly easy.</p>
+      <h2>LRU Cache Implementation (Java 21 &amp; C#)</h2>
+      <p>Compare the standard O(1) implementations: Java using <code>LinkedHashMap</code> and C# using a <code>Dictionary</code> paired with a doubly linked <code>LinkedList</code>.</p>
       
-      <span class="code-label">Java</span>
-      <pre>
-import java.util.LinkedHashMap;
+      <div class="code-tabs">
+        <div class="code-tabs-header">
+          <button class="code-tab-btn active" data-tab="java">☕ Java 21</button>
+          <button class="code-tab-btn" data-tab="csharp">🔷 C#</button>
+        </div>
+        <div class="code-tab-content active" data-tab-content="java">
+          <pre><code class="language-java">import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
 
@@ -116,13 +120,11 @@ class LRUCache&lt;K, V&gt; implements Cache&lt;K, V&gt; {
 
     public LRUCache(int capacity) {
         this.capacity = capacity;
-        // The magic parameters: initialCapacity, loadFactor, accessOrder
         // accessOrder = true means it orders by recently accessed, not insertion order!
         this.internalCache = new LinkedHashMap&lt;&gt;(capacity, 0.75f, true) {
             @Override
             protected boolean removeEldestEntry(Map.Entry&lt;K, V&gt; eldest) {
-                // Automatically evict when size exceeds capacity
-                return size() > capacity;
+                return size() > capacity; // Evict when size exceeds capacity
             }
         };
     }
@@ -160,8 +162,64 @@ public class CacheDemo {
         userCache.printCache(); 
         // Output will show: {u3=Charlie, u1=Alice, u4=Dave}. Bob (u2) was evicted!
     }
+}</code></pre>
+        </div>
+        <div class="code-tab-content" data-tab-content="csharp">
+          <pre><code class="language-csharp">using System;
+using System.Collections.Generic;
+
+public interface ICache&lt;TKey, TValue&gt;
+{
+    void Put(TKey key, TValue value);
+    bool TryGet(TKey key, out TValue? value);
 }
-      </pre>
+
+// O(1) LRU Cache: Dictionary (O(1) lookup) + LinkedList (O(1) head/tail shifts)
+public class LRUCache&lt;TKey, TValue&gt;(int capacity) : ICache&lt;TKey, TValue&gt; 
+    where TKey : notnull
+{
+    private record CacheEntry(TKey Key, TValue Value);
+    private readonly int _capacity = capacity;
+    private readonly Dictionary&lt;TKey, LinkedListNode&lt;CacheEntry&gt;&gt; _map = new(capacity);
+    private readonly LinkedList&lt;CacheEntry&gt; _list = new();
+
+    public void Put(TKey key, TValue value)
+    {
+        if (_map.TryGetValue(key, out var existingNode))
+        {
+            _list.Remove(existingNode); // Remove old node position
+        }
+        else if (_map.Count >= _capacity)
+        {
+            // Evict least recently used node from tail O(1)
+            var lru = _list.Last!;
+            _map.Remove(lru.Value.Key);
+            _list.RemoveLast();
+        }
+
+        // Add newly accessed node to head (Most Recently Used)
+        var newNode = new LinkedListNode&lt;CacheEntry&gt;(new CacheEntry(key, value));
+        _list.AddFirst(newNode);
+        _map[key] = newNode;
+    }
+
+    public bool TryGet(TKey key, out TValue? value)
+    {
+        if (_map.TryGetValue(key, out var node))
+        {
+            // Move accessed node to head
+            _list.Remove(node);
+            _list.AddFirst(node);
+            value = node.Value.Value;
+            return true;
+        }
+
+        value = default;
+        return false;
+    }
+}</code></pre>
+        </div>
+      </div>
     </section>
 
     <section>

@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Modern C# 9–12 Innovations — From Scratch to Principal Architect</title>
+  <link rel="stylesheet" href="../css/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.0/dist/mermaid.min.js"></script>
+  <script src="../js/main.js" defer></script>
+</head>
+<body>
+
+<button class="menu-toggle" aria-label="Toggle menu">☰</button>
+
+<div class="page-wrapper">
+  <aside class="sidebar" id="sidebar"></aside>
+
+  <main class="main-content">
+    <div class="platform-switcher">
+      <span>Mastery Portals:</span>
+      <a href="../../index.html">🏛️ System Design</a>
+      <a href="../../corejava/index.html">☕ Core Java 21</a>
+      <a href="../../sqlserver/index.html">🗄️ MS SQL Server</a>
+      <a href="../index.html" class="active">🔷 .NET 8 / C# 12</a>
+    </div>
+
+    <nav class="breadcrumb">
+      <a href="../index.html">.NET Mastery</a> &gt; <span>13 · Modern C# 9–12 Innovations</span>
+    </nav>
+
+    <header>
+      <h1>✨ Modern C# 9–12 Language Innovations</h1>
+      <p class="subtitle">An architectural tour of modern C# features: Primary constructors, Collection expressions &amp; spread operators, advanced pattern matching, raw string literals, init-only setters, and static abstract interface members (Generic Math).</p>
+    </header>
+
+    <!-- SECTION 1: PRIMARY CONSTRUCTORS -->
+    <section id="primary-constructors">
+      <h2>1. Primary Constructors in C# 12: Classes vs Records</h2>
+
+      <p>Introduced for records in C# 9, C# 12 extended <strong>Primary Constructors</strong> to standard classes and structs, radically reducing boilerplate when writing dependency-injected services.</p>
+
+      <div class="mermaid">
+flowchart TD
+    subgraph Traditional["❌ C# 8 Traditional Class (15 Lines Boilerplate)"]
+        T1["private readonly ILogger _logger;"]
+        T2["private readonly IOrderRepo _repo;"]
+        T3["public OrderService(ILogger logger, IOrderRepo repo)<br/>{ _logger = logger; _repo = repo; }"]
+    end
+
+    subgraph PrimaryCtor["✅ C# 12 Primary Constructor (1 Line)"]
+        P1["public class OrderService(ILogger&lt;OrderService&gt; logger, IOrderRepo repo)"]
+    end
+      </div>
+
+      <h3>Crucial Architectural Difference: Class vs Record Primary Constructors</h3>
+      <table class="comparison-table">
+        <thead>
+          <tr>
+            <th>Feature</th>
+            <th>Primary Constructors in <code>record</code></th>
+            <th>Primary Constructors in <code>class</code></th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Public Properties</strong></td>
+            <td>Automatically generates public <code>{ get; init; }</code> properties for all parameters.</td>
+            <td><strong>Does NOT generate public properties.</strong> Parameters act as parameters in scope across the class body.</td>
+          </tr>
+          <tr>
+            <td><strong>State Capture</strong></td>
+            <td>Stored in synthesized public properties.</td>
+            <td>Captured into compiler-generated private backing fields <em>only if referenced inside methods</em>.</td>
+          </tr>
+          <tr>
+            <td><strong>Equality</strong></td>
+            <td>Synthesizes value-based <code>Equals</code> and <code>GetHashCode</code>.</td>
+            <td>Retains default reference equality.</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <pre><code class="language-csharp">// 1. C# 12 Service using Primary Constructor
+public class TradeExecutionService(
+    ITradingDbContext db, 
+    IMessagePublisher bus, 
+    ILogger&lt;TradeExecutionService&gt; logger) : ITradeExecutionService
+{
+    // 'db', 'bus', and 'logger' are in scope across all methods:
+    public async Task ExecuteTradeAsync(TradeRequest request, CancellationToken ct)
+    {
+        logger.LogInformation("Processing trade for {Symbol}", request.Symbol);
+        var order = new Order(request.Symbol, request.Quantity, request.Price);
+
+        db.Orders.Add(order);
+        await db.SaveChangesAsync(ct);
+        await bus.PublishAsync(new TradeExecutedEvent(order.Id), ct);
+    }
+}</code></pre>
+    </section>
+
+    <!-- SECTION 2: COLLECTION EXPRESSIONS -->
+    <section id="collection-expressions">
+      <h2>2. C# 12 Collection Expressions &amp; The Spread Operator (`..`)</h2>
+
+      <p>Before C# 12, initializing collections required fragmented syntax across different collection types (<code>new int[] { 1, 2 }</code>, <code>new List&lt;int&gt; { 1, 2 }</code>, <code>ImmutableArray.Create(1, 2)</code>). C# 12 introduces a unified, zero-allocation syntax using brackets <code>[...]</code> and the spread operator <code>..</code>:</p>
+
+      <pre><code class="language-csharp">// 1. Unified initialization for any collection type:
+int[] array = [1, 2, 3];
+List&lt;string&gt; list = ["AAPL", "GOOG", "MSFT"];
+Span&lt;byte&gt; stackSpan = [0x46, 0x49, 0x58]; // Allocates directly on stack!
+ReadOnlySpan&lt;char&gt; charSpan = ['A', 'B', 'C'];
+
+// 2. The Spread Operator (..) for merging collections without LINQ allocations:
+int[] lowTier = [10, 20];
+int[] midTier = [30, 40];
+int[] allTiers = [..lowTier, 25, ..midTier, 50]; // [10, 20, 25, 30, 40, 50]</code></pre>
+
+      <div class="callout callout-success">
+        <div class="callout-title">⚡ Compiler Optimization Under the Hood</div>
+        <p>When the C# compiler processes <code>[..a, ..b]</code>, it checks if <code>a</code> and <code>b</code> expose <code>Length</code> or <code>Count</code>. It sums the lengths upfront, allocates a single array of the exact required size, and executes fast memory block copies (<code>Span.CopyTo</code>) rather than resizing or invoking enumerators!</p>
+      </div>
+    </section>
+
+    <!-- SECTION 3: PATTERN MATCHING -->
+    <section id="pattern-matching">
+      <h2>3. Advanced Pattern Matching Evolution</h2>
+
+      <p>Pattern matching allows expressive, declarative branching based on data shape, type, and relationships:</p>
+
+      <pre><code class="language-csharp">public decimal CalculateExecutionFee(Order order, TraderProfile trader) =&gt;
+    (order, trader) switch
+    {
+        // Property pattern with relational conditions
+        ({ Notional: &gt; 1_000_000m }, { Tier: TraderTier.VIP }) =&gt; 5.00m,
+
+        // Relational and logical 'and' / 'or'
+        ({ Notional: &gt;= 100_000m and &lt;= 1_000_000m }, _) =&gt; 25.00m,
+
+        // Type pattern matching on sub-classes
+        (IcebergOrder { VisibleQty: &lt; 100 }, _) =&gt; 50.00m,
+
+        // Default discard fallback
+        _ =&gt; 100.00m
+    };
+
+// List Pattern Matching (C# 11):
+public string AnalyzeOrderSequence(int[] quantities) =&gt;
+    quantities switch
+    {
+        [100, 200, 300]                =&gt; "Exact ladder detected",
+        [var single]                   =&gt; $"Single batch order of {single}",
+        [var first, .., var last]      =&gt; $"Ranged batch starting with {first} and ending with {last}",
+        []                             =&gt; "Empty sequence",
+        _                              =&gt; "Unrecognized sequence"
+    };</code></pre>
+    </section>
+
+    <!-- SECTION 4: RAW STRING LITERALS -->
+    <section id="raw-strings">
+      <h2>4. Raw String Literals (C# 11) &amp; Newlines</h2>
+
+      <p>Raw string literals start and end with at least three double quotes (<code>"""</code>). They eliminate escaping for quotes, backslashes, and multiline strings:</p>
+
+      <pre><code class="language-csharp">// 1. Multiline JSON without escaping quotes or newlines:
+string jsonConfig = """
+    {
+        "TradingEngine": {
+            "Symbol": "MSFT",
+            "MaxLeverage": 5.0,
+            "Enabled": true
+        }
+    }
+    """;
+
+// 2. Interpolated Raw String Literals with double dollar signs ($$):
+// Any number of '$' characters dictates how many '{' are required for interpolation!
+string ticker = "NVDA";
+decimal price = 124.50m;
+
+string payload = $$"""
+    {
+        "symbol": "{{ticker}}",
+        "currentPrice": {{price}},
+        "timestamp": "{{DateTime.UtcNow:O}}"
+    }
+    """;</code></pre>
+    </section>
+
+    <!-- SECTION 5: GENERIC MATH -->
+    <section id="generic-math">
+      <h2>5. Generic Math &amp; Static Abstract Interface Members (C# 11)</h2>
+
+      <p>Prior to C# 11, you could not write a generic algorithm that performed basic arithmetic (<code>+</code>, <code>-</code>, <code>*</code>) because operators in C# are static methods and could not be defined on interfaces. C# 11 introduced <strong>Static Abstract Members in Interfaces</strong>, unlocking <strong>Generic Math</strong> via <code>INumber&lt;T&gt;</code>:</p>
+
+      <pre><code class="language-csharp">using System.Numerics;
+
+// Generic algorithm that works identically for int, double, decimal, float, BigInteger!
+public static T CalculateTotalVolume&lt;T&gt;(ReadOnlySpan&lt;T&gt; values) 
+    where T : INumber&lt;T&gt;
+{
+    T total = T.Zero;
+    foreach (var value in values)
+    {
+        total += value; // Supported generically across all numeric types!
+    }
+    return total;
+}
+
+// Usage:
+decimal[] stockPrices = [182.50m, 184.20m, 181.10m];
+decimal totalCost = CalculateTotalVolume&lt;decimal&gt;(stockPrices);
+
+int[] shareCounts = [100, 500, 1000];
+int totalShares = CalculateTotalVolume&lt;int&gt;(shareCounts);</code></pre>
+    </section>
+
+    <!-- SECTION 6: INTERVIEW GRILL ROUND -->
+    <section id="interview-grill">
+      <h2>6. The Senior Interviewer's Grill Round: Modern C#</h2>
+
+      <div class="callout callout-danger">
+        <div class="callout-title">🔥 Question 1: What is the difference between 'init' and 'readonly' properties in C#?</div>
+        <div class="callout-content">
+          <p><strong>Senior Answer:</strong> A <code>readonly</code> property with only a getter (<code>get;</code>) can only be initialized inside the class constructor. An <code>init</code>-only setter allows the property to be initialized via <strong>object initializers</strong> (<code>new Order { Price = 100 }</code>) or <code>with</code> expressions during object instantiation, but forbids any subsequent mutation once construction completes. It provides immutable domain models with the convenience of object initializer syntax.</p>
+        </div>
+      </div>
+
+      <div class="callout callout-danger">
+        <div class="callout-title">🔥 Question 2: Why was 'file' scoped type accessibility introduced in C# 11?</div>
+        <div class="callout-content">
+          <p><strong>Senior Answer:</strong> The <code>file</code> modifier restricts the scope and visibility of a top-level type to only the source file in which it is declared. It was designed primarily for <strong>Roslyn Source Generators</strong>. When code generators synthesize helper types, enum converters, or regex matchers, naming collisions can occur if multiple source generators emit identically named classes (e.g. <code>GeneratedHelper</code>). Declaring them as <code>file class GeneratedHelper</code> guarantees zero naming collisions across the compilation unit.</p>
+        </div>
+      </div>
+
+      <div class="callout callout-danger">
+        <div class="callout-title">🔥 Question 3: How does non-destructive mutation work with C# records and 'with' expressions?</div>
+        <div class="callout-content">
+          <p><strong>Senior Answer:</strong> When you invoke <code>original with { Price = 150m }</code>, the compiler executes a synthesized <strong>shallow clone constructor</strong> (<code>protected Order(Order original)</code>) that copies all fields of the original record into a freshly allocated instance on the heap. Then, it invokes the <code>init</code> setter of the specified property (<code>Price</code>) to overwrite that specific value before returning the new reference. The original record remains 100% immutable and untouched.</p>
+        </div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<button class="scroll-top" aria-label="Scroll to top">↑</button>
+</body>
+</html>

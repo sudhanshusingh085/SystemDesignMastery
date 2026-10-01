@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>C# Practical Coding &amp; Optimization — From Scratch to Principal Architect</title>
+  <link rel="stylesheet" href="../css/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.0/dist/mermaid.min.js"></script>
+  <script src="../js/main.js" defer></script>
+</head>
+<body>
+
+<button class="menu-toggle" aria-label="Toggle menu">☰</button>
+
+<div class="page-wrapper">
+  <aside class="sidebar" id="sidebar"></aside>
+
+  <main class="main-content">
+    <div class="platform-switcher">
+      <span>Mastery Portals:</span>
+      <a href="../../index.html">🏛️ System Design</a>
+      <a href="../../corejava/index.html">☕ Core Java 21</a>
+      <a href="../../sqlserver/index.html">🗄️ MS SQL Server</a>
+      <a href="../index.html" class="active">🔷 .NET 8 / C# 12</a>
+    </div>
+
+    <nav class="breadcrumb">
+      <a href="../index.html">.NET Mastery</a> &gt; <span>05 · Practical Coding &amp; Optimization</span>
+    </nav>
+
+    <header>
+      <h1>🚀 C# Practical Coding &amp; High-Throughput Optimization</h1>
+      <p class="subtitle">A senior engineer's guide to micro-optimizations, zero-allocation algorithms with Span&lt;T&gt; and ArrayPool, avoiding LINQ multiple enumeration, async/await deadlocks, and diagnosing production memory leaks.</p>
+    </header>
+
+    <!-- SECTION 1: LINQ PITFALLS -->
+    <section id="linq-pitfalls">
+      <h2>1. LINQ Execution Pitfalls: Multiple Enumeration &amp; Boxing</h2>
+
+      <div class="callout callout-info">
+        <div class="callout-title">📖 Deferred Execution Mechanics</div>
+        <p>LINQ queries built via extension methods like <code>.Where()</code> and <code>.Select()</code> return <code>IEnumerable&lt;T&gt;</code> iterators that represent <strong>intent</strong>, not executed data. Execution only begins when an enumeration trigger (e.g. <code>foreach</code>, <code>.ToList()</code>, <code>.First()</code>) is invoked.</p>
+      </div>
+
+      <h3>A. The Multiple Enumeration Bug</h3>
+      <p>If an <code>IEnumerable&lt;T&gt;</code> is supplied by an unmaterialized data source (e.g., an EF Core query, a REST API streaming response, or a generator yielding calculated objects), calling LINQ methods repeatedly causes the underlying execution to rerun every single time:</p>
+
+      <pre><code class="language-csharp">// ❌ BUG: Multiple Enumeration causes 2 duplicate database queries!
+public async Task ProcessOrdersBadAsync(IEnumerable&lt;Order&gt; orders)
+{
+    // 1st enumeration: Executes SQL query to check count
+    if (orders.Count() &gt; 0) 
+    {
+        // 2nd enumeration: Executes SQL query AGAIN to iterate orders!
+        foreach (var order in orders) 
+        {
+            await ExecuteTradeAsync(order);
+        }
+    }
+}
+
+// ✅ FIXED: Materialize once, or use Any() / Count property
+public async Task ProcessOrdersGoodAsync(IEnumerable&lt;Order&gt; orders)
+{
+    // If input is an unknown sequence, materialize once into a List or Array:
+    var orderList = orders as IReadOnlyCollection&lt;Order&gt; ?? orders.ToList();
+
+    if (orderList.Count &gt; 0)
+    {
+        foreach (var order in orderList)
+        {
+            await ExecuteTradeAsync(order);
+        }
+    }
+}</code></pre>
+
+      <h3>B. `Any()` vs `Count() > 0` vs `Length`</h3>
+      <table class="comparison-table">
+        <thead>
+          <tr>
+            <th>Expression</th>
+            <th>Complexity</th>
+            <th>Behavior</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>sequence.Count() &gt; 0</code></td>
+            <td><strong>O(N)</strong> for generic <code>IEnumerable</code></td>
+            <td>Iterates through all 1,000,000 items just to verify if the sequence is non-empty!</td>
+          </tr>
+          <tr>
+            <td><code>sequence.Any()</code></td>
+            <td><strong>O(1)</strong></td>
+            <td>Invokes <code>MoveNext()</code> once and immediately short-circuits.</td>
+          </tr>
+          <tr>
+            <td><code>list.Count &gt; 0</code> / <code>array.Length &gt; 0</code></td>
+            <td><strong>O(1) (Zero-call)</strong></td>
+            <td>Reads the internal field directly with no method dispatch overhead.</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <!-- SECTION 2: COLLECTION OPTIMIZATION -->
+    <section id="collection-opt">
+      <h2>2. Collection &amp; Loop Optimization: Avoiding Bounds Checks</h2>
+
+      <h3>A. Pre-allocating Capacity (Preventing Array Resizing Thrash)</h3>
+      <p>A C# <code>List&lt;T&gt;</code> has an initial capacity of 0. When elements are added, it doubles: 0 &rarr; 4 &rarr; 8 &rarr; 16 &rarr; 32 &rarr; 64... Each resize allocates a new array on the heap, copies the old elements, and leaves the old array for the Garbage Collector (GC).</p>
+
+      <pre><code class="language-csharp">// ❌ BAD: Resizes array 15 times, generating GC Gen 0 garbage
+var trades = new List&lt;Trade&gt;();
+for (int i = 0; i &lt; 50_000; i++)
+    trades.Add(new Trade(i));
+
+// ✅ GOOD: Single heap allocation of exact required size
+var trades = new List&lt;Trade&gt;(50_000);
+for (int i = 0; i &lt; 50_000; i++)
+    trades.Add(new Trade(i));</code></pre>
+
+      <h3>B. `CollectionsMarshal.AsSpan` (High-Performance Loops)</h3>
+      <p>When indexing into a <code>List&lt;T&gt;</code>, the JIT compiler emits array bounds check instructions (<code>cmp index, length; jge ThrowIndexOutOfRange</code>). In high-frequency computing, we can bypass this overhead using .NET 8's <code>CollectionsMarshal.AsSpan</code>:</p>
+
+      <pre><code class="language-csharp">using System.Runtime.InteropServices;
+
+public decimal CalculateTotalNotional(List&lt;Trade&gt; trades)
+{
+    // Access internal backing array directly as a Span&lt;T&gt;
+    Span&lt;Trade&gt; tradeSpan = CollectionsMarshal.AsSpan(trades);
+    
+    decimal total = 0m;
+    for (int i = 0; i &lt; tradeSpan.Length; i++)
+    {
+        // JIT optimizes this loop by eliminating bounds checking completely!
+        total += tradeSpan[i].Notional;
+    }
+    return total;
+}</code></pre>
+
+      <h3>C. `Dictionary.TryGetValue` vs `ContainsKey` + Indexer</h3>
+      <p>Calling <code>ContainsKey(key)</code> followed by <code>dict[key]</code> hashes the key twice and traverses the internal hash bucket chain twice (Double-Lookup penalty):</p>
+      <pre><code class="language-csharp">// ❌ SLOW: 2 Hash calculations + 2 Bucket lookups
+if (cache.ContainsKey(symbol))
+{
+    var price = cache[symbol];
+}
+
+// ✅ FAST: 1 Hash calculation + 1 Bucket lookup
+if (cache.TryGetValue(symbol, out var price))
+{
+    // Use price directly
+}</code></pre>
+    </section>
+
+    <!-- SECTION 3: ZERO-ALLOCATION SPAN & ARRAYPOOL -->
+    <section id="zero-alloc">
+      <h2>3. Zero-Allocation High-Throughput: Span&lt;T&gt; &amp; ArrayPool</h2>
+
+      <div class="callout callout-info">
+        <div class="callout-title">📖 Span&lt;T&gt; Architecture</div>
+        <p><code>Span&lt;T&gt;</code> is a <code>ref struct</code> allocated exclusively on the execution stack. It represents a contiguous window over arbitrary memory (managed array, stack memory via <code>stackalloc</code>, or unmanaged native pointers) without triggering any heap allocations.</p>
+      </div>
+
+      <div class="mermaid">
+flowchart LR
+    Span["Span&lt;char&gt;<br/>(Ptr + Length)"] -->|Window into memory| Mem["'FIX.4.2|35=D|55=MSFT|38=500|44=182.50'"]
+    Mem -.->|Allocates 0 Bytes!| Slice1["symbol = 'MSFT'"]
+    Mem -.->|Allocates 0 Bytes!| Slice2["qty = 500"]
+      </div>
+
+      <h3>A. Zero-Allocation String Parsing with `ReadOnlySpan&lt;char&gt;`</h3>
+      <p>Traditional string parsing with <code>string.Substring()</code> or <code>string.Split()</code> allocates multiple new string objects on the heap per incoming network message. With <code>ReadOnlySpan&lt;char&gt;</code>, parsing FIX or CSV messages allocates <strong>zero bytes of heap memory</strong>:</p>
+
+      <pre><code class="language-csharp">public readonly record struct TradeOrder(ReadOnlyMemory&lt;char&gt; Symbol, int Quantity, decimal Price);
+
+public static TradeOrder ParseFixMessageFast(ReadOnlySpan&lt;char&gt; fixMessage)
+{
+    // Format: "SYMBOL,QTY,PRICE" -> "AAPL,500,182.40"
+    int firstComma = fixMessage.IndexOf(',');
+    var symbolSpan = fixMessage[..firstComma];
+
+    var remaining = fixMessage[(firstComma + 1)..];
+    int secondComma = remaining.IndexOf(',');
+    var qtySpan = remaining[..secondComma];
+    var priceSpan = remaining[(secondComma + 1)..];
+
+    // High-performance int & decimal parsing directly from Span!
+    int quantity = int.Parse(qtySpan);
+    decimal price = decimal.Parse(priceSpan);
+
+    return new TradeOrder(symbolSpan.ToArray().AsMemory(), quantity, price);
+}</code></pre>
+
+      <h3>B. Preventing LOH Garbage with `ArrayPool&lt;T&gt;`</h3>
+      <p>Any managed array greater than or equal to <strong>85,000 bytes</strong> is allocated directly onto the <strong>Large Object Heap (LOH)</strong>. The LOH is collected only during expensive Gen 2 Garbage Collections. In web APIs processing file uploads or cryptographic hashing, allocating byte arrays repeatedly fragments memory and degrades server response times.</p>
+
+      <pre><code class="language-csharp">using System.Buffers;
+
+public async Task ProcessLargeStreamAsync(Stream networkStream)
+{
+    // Rent a 128 KB buffer from the shared pool (ZERO heap allocation!)
+    byte[] buffer = ArrayPool&lt;byte&gt;.Shared.Rent(128 * 1024);
+    try
+    {
+        int bytesRead;
+        while ((bytesRead = await networkStream.ReadAsync(buffer.AsMemory(0, buffer.Length))) &gt; 0)
+        {
+            // Process bytesRead from buffer
+            ProcessChunk(buffer.AsSpan(0, bytesRead));
+        }
+    }
+    finally
+    {
+        // Return buffer to pool for reuse by subsequent requests
+        ArrayPool&lt;byte&gt;.Shared.Return(buffer);
+    }
+}</code></pre>
+    </section>
+
+    <!-- SECTION 4: ASYNC/AWAIT TRAPS -->
+    <section id="async-traps">
+      <h2>4. Async/Await Pitfalls: Deadlocks, ValueTask &amp; async void</h2>
+
+      <h3>A. The Catastrophic `async void` Crash</h3>
+      <p>Except for event handlers, methods should never be declared as <code>async void</code>. Exceptions thrown inside an <code>async void</code> method cannot be caught by callers using <code>try-catch</code>; they bubble up straight to the AppDomain unhandled exception handler and <strong>terminate the entire web server process</strong>:</p>
+
+      <pre><code class="language-csharp">// ❌ DEADLY: Process crashes if an exception is thrown!
+public async void SaveAuditLogAsync(AuditRecord log) 
+{
+    await _db.SaveAsync(log); // If DB fails, whole application terminates!
+}
+
+// ✅ CORRECT: Caller can await and catch exceptions safely
+public async Task SaveAuditLogAsync(AuditRecord log)
+{
+    await _db.SaveAsync(log);
+}</code></pre>
+
+      <h3>B. Sync-Over-Async Deadlock with `.Result` or `.Wait()`</h3>
+      <p>Calling <code>.Result</code> or <code>.Wait()</code> on an uncompleted Task blocks the current thread while waiting for the background thread. In environments with a <code>SynchronizationContext</code> (like legacy ASP.NET or WPF/WinForms), this causes an irreversible <strong>deadlock</strong>:</p>
+
+      <div class="mermaid">
+flowchart TD
+    UI["Thread 1: UI / Request Thread"] -->|Blocks waiting for Task.Result| Wait["Wait for Task"]
+    TaskRun["Async Operation"] -->|Finishes &amp; requests SynchronizationContext| UI
+    UI -.->|Cannot resume because Thread 1 is blocked!| Deadlock["Irreversible Deadlock 💥"]
+      </div>
+
+      <h3>C. When to use `ValueTask&lt;T&gt;`</h3>
+      <p>Allocating a <code>Task&lt;T&gt;</code> object requires ~72 bytes of heap memory. In hot paths where an operation frequently completes synchronously (e.g. cache hit), <code>ValueTask&lt;T&gt;</code> is a struct that incurs <strong>zero heap allocations</strong>:</p>
+
+      <pre><code class="language-csharp">public ValueTask&lt;SecurityToken&gt; GetTokenAsync(string clientId)
+{
+    // Hot path: Token already cached in memory -> 0 Allocations!
+    if (_cache.TryGetValue(clientId, out var cachedToken))
+    {
+        return new ValueTask&lt;SecurityToken&gt;(cachedToken);
+    }
+
+    // Cold path: Perform asynchronous network request
+    return new ValueTask&lt;SecurityToken&gt;(FetchTokenFromOAuthServerAsync(clientId));
+}</code></pre>
+    </section>
+
+    <!-- SECTION 5: HUNTING MEMORY LEAKS -->
+    <section id="memory-leaks">
+      <h2>5. Diagnosing &amp; Hunting Production Memory Leaks in .NET</h2>
+
+      <div class="callout callout-danger">
+        <div class="callout-title">🚨 The Top 4 Causes of .NET Memory Leaks</div>
+        <ol>
+          <li><strong>Event Handler Subscriptions:</strong> If a short-lived subscriber attaches to an event on a long-lived publisher (<code>publisher.TradeExecuted += subscriber.OnTrade;</code>), the publisher holds a strong reference in its invocation list, preventing the subscriber from ever being garbage collected!</li>
+          <li><strong>Closures Capturing Outer Variables:</strong> Lambdas that capture local variables generate compiler-generated display classes. If the lambda is stored in a long-lived delegate or cache, the entire captured scope remains pinned in memory.</li>
+          <li><strong>Unbounded Caches:</strong> Using a static <code>ConcurrentDictionary</code> without an eviction policy (TTL, max size) causes perpetual memory accumulation.</li>
+          <li><strong>Unmanaged Handles / Finalizers:</strong> Forgetting to call <code>Dispose()</code> on native handles, sockets, or bitmap streams.</li>
+        </ol>
+      </div>
+
+      <h3>Production Diagnostic Toolchain</h3>
+      <ul>
+        <li><strong>`dotnet-gcdump`</strong>: Captures a lightweight snapshot of the managed heap in seconds with near-zero performance pause on production pods.</li>
+        <li><strong>`dotnet-dump`</strong>: Collects a full memory dump for offline analysis in WinDbg or Visual Studio.</li>
+        <li><strong>`dotnet-trace`</strong>: Collects CPU profiling traces using EventPipe without attaching a debugger.</li>
+      </ul>
+
+      <pre><code class="language-bash"># 1. List running .NET processes
+dotnet-gcdump ps
+
+# 2. Collect a live heap snapshot
+dotnet-gcdump collect -p 4128 --output order-engine.gcdump
+
+# 3. Analyze in Visual Studio: Look for 'Retained Memory' and 'Paths to Root'</code></pre>
+    </section>
+
+    <!-- SECTION 6: INTERVIEW GRILL ROUND -->
+    <section id="interview-grill">
+      <h2>6. The Senior Interviewer's Grill Round: Optimization &amp; Diagnostics</h2>
+
+      <div class="callout callout-danger">
+        <div class="callout-title">🔥 Question 1: What is the Golden Rule of ValueTask? Why can you not await it twice?</div>
+        <div class="callout-content">
+          <p><strong>Senior Answer:</strong> A <code>ValueTask&lt;T&gt;</code> wraps either a result or an <code>IValueTaskSource&lt;T&gt;</code>. To maintain zero allocations, the backing <code>IValueTaskSource</code> objects are pooled and reused across the runtime! Once a <code>ValueTask</code> is awaited, its backing source is returned to the pool and may be reassigned to a completely different operation. Awaiting a <code>ValueTask</code> twice (or calling <code>.Result</code> after awaiting) results in undefined behavior, corrupted state, or race conditions. If multiple awaits are necessary, convert it once to a standard Task using <code>vt.AsTask()</code>.</p>
+        </div>
+      </div>
+
+      <div class="callout callout-danger">
+        <div class="callout-title">🔥 Question 2: Why should library authors specify ConfigureAwait(false)?</div>
+        <div class="callout-content">
+          <p><strong>Senior Answer:</strong> By default (<code>ConfigureAwait(true)</code>), awaiting a Task captures the current <code>SynchronizationContext</code> and marshals the continuation back onto that context when the task completes. In class libraries (non-UI code), capturing the synchronization context is unnecessary, incurs thread-switch context latency, and causes deadlocks when consumers invoke sync-over-async methods (<code>.Result</code>). Specifying <code>ConfigureAwait(false)</code> tells the CLR that the continuation can execute on any available ThreadPool thread.</p>
+        </div>
+      </div>
+
+      <div class="callout callout-danger">
+        <div class="callout-title">🔥 Question 3: How do you fix an event handler memory leak if you cannot easily unsubscribe?</div>
+        <div class="callout-content">
+          <p><strong>Senior Answer:</strong> There are three architectural remedies:
+          <ol>
+            <li><strong>Weak Event Pattern:</strong> Use <code>WeakReference&lt;T&gt;</code> to reference the subscriber, allowing the GC to collect it even while registered with the publisher.</li>
+            <li><strong>IDisposable Encasement:</strong> Make the subscriber implement <code>IDisposable</code>, and inside <code>Dispose()</code>, explicitly unsubscribe: <code>_publisher.TradeExecuted -= OnTrade;</code>.</li>
+            <li><strong>Decouple with Message Brokers:</strong> Replace direct C# events with decoupled mediator pipelines or <code>System.Threading.Channels</code>.</li>
+          </ol>
+          </p>
+        </div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<button class="scroll-top" aria-label="Scroll to top">↑</button>
+</body>
+</html>

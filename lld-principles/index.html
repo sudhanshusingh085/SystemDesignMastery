@@ -34,8 +34,13 @@
     <div class="comparison">
       <div class="side bad">
         <h3>❌ BAD: Repetitive Code</h3>
-        <pre>
-public void registerUser(String email, String phone) {
+        <div class="code-tabs">
+          <div class="code-tabs-header">
+            <button class="code-tab-btn active" data-tab="java">☕ Java</button>
+            <button class="code-tab-btn" data-tab="csharp">🔷 C#</button>
+          </div>
+          <div class="code-tab-content active" data-tab-content="java">
+            <pre><code class="language-java">public void registerUser(String email, String phone) {
     if (email == null || !email.contains("@")) {
         throw new IllegalArgumentException("Invalid email");
     }
@@ -47,13 +52,34 @@ public void updateEmail(String email) {
         throw new IllegalArgumentException("Invalid email");
     }
     // update email...
+}</code></pre>
+          </div>
+          <div class="code-tab-content" data-tab-content="csharp">
+            <pre><code class="language-csharp">public void RegisterUser(string email, string phone) {
+    if (string.IsNullOrWhiteSpace(email) || !email.Contains('@')) {
+        throw new ArgumentException("Invalid email");
+    }
+    // save user...
 }
-        </pre>
+
+public void UpdateEmail(string email) {
+    if (string.IsNullOrWhiteSpace(email) || !email.Contains('@')) {
+        throw new ArgumentException("Invalid email");
+    }
+    // update email...
+}</code></pre>
+          </div>
+        </div>
       </div>
       <div class="side good">
         <h3>✅ GOOD: Reusable Logic</h3>
-        <pre>
-public class Validator {
+        <div class="code-tabs">
+          <div class="code-tabs-header">
+            <button class="code-tab-btn active" data-tab="java">☕ Java</button>
+            <button class="code-tab-btn" data-tab="csharp">🔷 C#</button>
+          </div>
+          <div class="code-tab-content active" data-tab-content="java">
+            <pre><code class="language-java">public class Validator {
     public static void validateEmail(String email) {
         if (email == null || !email.contains("@")) {
             throw new IllegalArgumentException("Invalid email");
@@ -64,8 +90,23 @@ public class Validator {
 public void registerUser(String email, String phone) {
     Validator.validateEmail(email);
     // save user...
+}</code></pre>
+          </div>
+          <div class="code-tab-content" data-tab-content="csharp">
+            <pre><code class="language-csharp">public static class Validator {
+    public static void ValidateEmail(string email) {
+        if (string.IsNullOrWhiteSpace(email) || !email.Contains('@')) {
+            throw new ArgumentException("Invalid email");
+        }
+    }
 }
-        </pre>
+
+public void RegisterUser(string email, string phone) {
+    Validator.ValidateEmail(email);
+    // save user...
+}</code></pre>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -77,8 +118,13 @@ public void registerUser(String email, String phone) {
     <div class="comparison">
       <div class="side bad">
         <h3>❌ BAD: Over-engineered</h3>
-        <pre>
-// Over-engineered Calculator
+        <div class="code-tabs">
+          <div class="code-tabs-header">
+            <button class="code-tab-btn active" data-tab="java">☕ Java</button>
+            <button class="code-tab-btn" data-tab="csharp">🔷 C#</button>
+          </div>
+          <div class="code-tab-content active" data-tab-content="java">
+            <pre><code class="language-java">// Over-engineered Calculator
 public interface OperationStrategy {
     int execute(int a, int b);
 }
@@ -88,19 +134,45 @@ public class AdditionStrategy implements OperationStrategy {
 public class CalculatorContext {
     private OperationStrategy strategy;
     // ... setup and execute ...
+}</code></pre>
+          </div>
+          <div class="code-tab-content" data-tab-content="csharp">
+            <pre><code class="language-csharp">// Over-engineered Calculator
+public interface IOperationStrategy {
+    int Execute(int a, int b);
 }
-        </pre>
+public class AdditionStrategy : IOperationStrategy {
+    public int Execute(int a, int b) => a + b;
+}
+public class CalculatorContext {
+    private IOperationStrategy _strategy;
+    // ... setup and execute ...
+}</code></pre>
+          </div>
+        </div>
       </div>
       <div class="side good">
         <h3>✅ GOOD: Simple</h3>
-        <pre>
-// Just what we need
+        <div class="code-tabs">
+          <div class="code-tabs-header">
+            <button class="code-tab-btn active" data-tab="java">☕ Java</button>
+            <button class="code-tab-btn" data-tab="csharp">🔷 C#</button>
+          </div>
+          <div class="code-tab-content active" data-tab-content="java">
+            <pre><code class="language-java">// Just what we need
 public class Calculator {
     public int add(int a, int b) {
         return a + b;
     }
-}
-        </pre>
+}</code></pre>
+          </div>
+          <div class="code-tab-content" data-tab-content="csharp">
+            <pre><code class="language-csharp">// Just what we need
+public class Calculator {
+    public int Add(int a, int b) => a + b;
+}</code></pre>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -112,25 +184,53 @@ public class Calculator {
     <div class="comparison">
       <div class="side bad">
         <h3>❌ BAD: Speculative Features</h3>
-        <pre>
-// Building a complex plugin architecture for a simple Todo app
+        <div class="code-tabs">
+          <div class="code-tabs-header">
+            <button class="code-tab-btn active" data-tab="java">☕ Java</button>
+            <button class="code-tab-btn" data-tab="csharp">🔷 C#</button>
+          </div>
+          <div class="code-tab-content active" data-tab-content="java">
+            <pre><code class="language-java">// Building a complex plugin architecture for a simple Todo app
 public abstract class AbstractTodoPluginLoader {
     protected List&lt;Plugin&gt; plugins;
     public abstract void initializePlugins();
     public abstract void executePluginLifecycleHooks();
-}
-        </pre>
+}</code></pre>
+          </div>
+          <div class="code-tab-content" data-tab-content="csharp">
+            <pre><code class="language-csharp">// Building a complex plugin architecture for a simple Todo app
+public abstract class AbstractTodoPluginLoader {
+    protected List&lt;Plugin&gt; Plugins;
+    public abstract void InitializePlugins();
+    public abstract void ExecutePluginLifecycleHooks();
+}</code></pre>
+          </div>
+        </div>
       </div>
       <div class="side good">
         <h3>✅ GOOD: Immediate Needs</h3>
-        <pre>
-// Simple Todo App, extend later if requested
+        <div class="code-tabs">
+          <div class="code-tabs-header">
+            <button class="code-tab-btn active" data-tab="java">☕ Java</button>
+            <button class="code-tab-btn" data-tab="csharp">🔷 C#</button>
+          </div>
+          <div class="code-tab-content active" data-tab-content="java">
+            <pre><code class="language-java">// Simple Todo App, extend later if requested
 public class TodoService {
     public void addTodo(String task) {
         // just add it to DB
     }
-}
-        </pre>
+}</code></pre>
+          </div>
+          <div class="code-tab-content" data-tab-content="csharp">
+            <pre><code class="language-csharp">// Simple Todo App, extend later if requested
+public class TodoService {
+    public void AddTodo(string task) {
+        // just add it to DB
+    }
+}</code></pre>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -142,18 +242,36 @@ public class TodoService {
     <div class="comparison">
       <div class="side bad">
         <h3>❌ BAD: Train Wreck</h3>
-        <pre>
-public void processDelivery(Order order) {
+        <div class="code-tabs">
+          <div class="code-tabs-header">
+            <button class="code-tab-btn active" data-tab="java">☕ Java</button>
+            <button class="code-tab-btn" data-tab="csharp">🔷 C#</button>
+          </div>
+          <div class="code-tab-content active" data-tab-content="java">
+            <pre><code class="language-java">public void processDelivery(Order order) {
     // Talking to strangers
     String city = order.getCustomer().getAddress().getCity();
     System.out.println("Shipping to: " + city);
-}
-        </pre>
+}</code></pre>
+          </div>
+          <div class="code-tab-content" data-tab-content="csharp">
+            <pre><code class="language-csharp">public void ProcessDelivery(Order order) {
+    // Talking to strangers
+    string city = order.Customer.Address.City;
+    Console.WriteLine($"Shipping to: {city}");
+}</code></pre>
+          </div>
+        </div>
       </div>
       <div class="side good">
         <h3>✅ GOOD: Delegation</h3>
-        <pre>
-public void processDelivery(Order order) {
+        <div class="code-tabs">
+          <div class="code-tabs-header">
+            <button class="code-tab-btn active" data-tab="java">☕ Java</button>
+            <button class="code-tab-btn" data-tab="csharp">🔷 C#</button>
+          </div>
+          <div class="code-tab-content active" data-tab-content="java">
+            <pre><code class="language-java">public void processDelivery(Order order) {
     // Order delegates the request
     String city = order.getDeliveryCity();
     System.out.println("Shipping to: " + city);
@@ -162,8 +280,19 @@ public void processDelivery(Order order) {
 // Inside Order class:
 public String getDeliveryCity() {
     return this.customer.getDeliveryCity();
+}</code></pre>
+          </div>
+          <div class="code-tab-content" data-tab-content="csharp">
+            <pre><code class="language-csharp">public void ProcessDelivery(Order order) {
+    // Order delegates the request
+    string city = order.GetDeliveryCity();
+    Console.WriteLine($"Shipping to: {city}");
 }
-        </pre>
+
+// Inside Order class:
+public string GetDeliveryCity() => Customer.GetDeliveryCity();</code></pre>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -175,8 +304,13 @@ public String getDeliveryCity() {
     <div class="comparison">
       <div class="side bad">
         <h3>❌ BAD: Deep Inheritance</h3>
-        <pre>
-class Animal {}
+        <div class="code-tabs">
+          <div class="code-tabs-header">
+            <button class="code-tab-btn active" data-tab="java">☕ Java</button>
+            <button class="code-tab-btn" data-tab="csharp">🔷 C#</button>
+          </div>
+          <div class="code-tab-content active" data-tab-content="java">
+            <pre><code class="language-java">class Animal {}
 class FlyingAnimal extends Animal {}
 class Bird extends FlyingAnimal {}
 
@@ -184,13 +318,29 @@ class Bird extends FlyingAnimal {}
 class Ostrich extends Bird {
     @Override 
     public void fly() { throw new UnsupportedOperationException(); }
-}
-        </pre>
+}</code></pre>
+          </div>
+          <div class="code-tab-content" data-tab-content="csharp">
+            <pre><code class="language-csharp">class Animal {}
+class FlyingAnimal : Animal {}
+class Bird : FlyingAnimal {}
+
+// Wait, Ostriches can't fly... we have a problem.
+class Ostrich : Bird {
+    public override void Fly() => throw new NotSupportedException();
+}</code></pre>
+          </div>
+        </div>
       </div>
       <div class="side good">
         <h3>✅ GOOD: Composition via Interfaces</h3>
-        <pre>
-// Java 21 interface with Strategy
+        <div class="code-tabs">
+          <div class="code-tabs-header">
+            <button class="code-tab-btn active" data-tab="java">☕ Java</button>
+            <button class="code-tab-btn" data-tab="csharp">🔷 C#</button>
+          </div>
+          <div class="code-tab-content active" data-tab-content="java">
+            <pre><code class="language-java">// Java 21 interface with Strategy
 interface FlyBehavior {
     void fly();
 }
@@ -209,8 +359,25 @@ class Bird {
     public void performFly() {
         flyBehavior.fly();
     }
+}</code></pre>
+          </div>
+          <div class="code-tab-content" data-tab-content="csharp">
+            <pre><code class="language-csharp">// C# interface with Strategy
+public interface IFlyBehavior {
+    void Fly();
 }
-        </pre>
+public class FlyWithWings : IFlyBehavior {
+    public void Fly() => Console.WriteLine("Flap flap");
+}
+public class NoFly : IFlyBehavior {
+    public void Fly() => Console.WriteLine("Can't fly");
+}
+
+public class Bird(IFlyBehavior flyBehavior) {
+    public void PerformFly() => flyBehavior.Fly();
+}</code></pre>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -222,23 +389,49 @@ class Bird {
     <div class="comparison">
       <div class="side bad">
         <h3>❌ BAD: Asking for state</h3>
-        <pre>
-public void applyDiscount(Order order) {
+        <div class="code-tabs">
+          <div class="code-tabs-header">
+            <button class="code-tab-btn active" data-tab="java">☕ Java</button>
+            <button class="code-tab-btn" data-tab="csharp">🔷 C#</button>
+          </div>
+          <div class="code-tab-content active" data-tab-content="java">
+            <pre><code class="language-java">public void applyDiscount(Order order) {
     if (order.getTotalAmount() > 100 && !order.isDiscountApplied()) {
         order.setTotalAmount(order.getTotalAmount() * 0.9);
         order.setDiscountApplied(true);
     }
-}
-        </pre>
+}</code></pre>
+          </div>
+          <div class="code-tab-content" data-tab-content="csharp">
+            <pre><code class="language-csharp">public void ApplyDiscount(Order order) {
+    if (order.TotalAmount > 100 && !order.IsDiscountApplied) {
+        order.TotalAmount *= 0.9m;
+        order.IsDiscountApplied = true;
+    }
+}</code></pre>
+          </div>
+        </div>
       </div>
       <div class="side good">
         <h3>✅ GOOD: Telling to execute</h3>
-        <pre>
-public void applyDiscount(Order order) {
+        <div class="code-tabs">
+          <div class="code-tabs-header">
+            <button class="code-tab-btn active" data-tab="java">☕ Java</button>
+            <button class="code-tab-btn" data-tab="csharp">🔷 C#</button>
+          </div>
+          <div class="code-tab-content active" data-tab-content="java">
+            <pre><code class="language-java">public void applyDiscount(Order order) {
     // The Order class handles its own state and rules
     order.applyLoyaltyDiscount();
-}
-        </pre>
+}</code></pre>
+          </div>
+          <div class="code-tab-content" data-tab-content="csharp">
+            <pre><code class="language-csharp">public void ApplyDiscount(Order order) {
+    // The Order class handles its own state and rules
+    order.ApplyLoyaltyDiscount();
+}</code></pre>
+          </div>
+        </div>
       </div>
     </div>
 

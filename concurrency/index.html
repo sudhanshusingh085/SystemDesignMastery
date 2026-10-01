@@ -39,9 +39,13 @@
     <div class="jargon">📖 <strong>Thread</strong>: The smallest unit of processing that can be performed in an OS. It is a path of execution within a program.</div>
 
     <h3>Creating Threads in Java</h3>
-    <span class="code-label">Java 21</span>
-    <pre>
-// 1. Extending Thread class
+<div class="code-tabs">
+  <div class="code-tabs-header">
+    <button class="code-tab-btn active" data-tab="java">☕ Java 21</button>
+    <button class="code-tab-btn" data-tab="csharp">🔷 C#</button>
+  </div>
+  <div class="code-tab-content active" data-tab-content="java">
+    <pre><code class="language-java">// 1. Extending Thread class
 class MyThread extends Thread {
     @Override
     public void run() {
@@ -73,8 +77,45 @@ public class ThreadExample {
         });
         t3.start();
     }
-}
-    </pre>
+}</code></pre>
+  </div>
+  <div class="code-tab-content" data-tab-content="csharp">
+    <pre><code class="language-csharp">using System;
+using System.Threading;
+using System.Threading.Tasks;
+
+public class ThreadExample
+{
+    // 1. ThreadStart delegate
+    static void RunMethod()
+    {
+        Console.WriteLine($"Method running on thread: {Environment.CurrentManagedThreadId}");
+    }
+
+    public static void Main()
+    {
+        // Method 1: Dedicated OS Thread
+        Thread t1 = new Thread(RunMethod);
+        t1.Start();
+
+        // Method 2: Lambda Thread
+        Thread t2 = new Thread(() => {
+            Console.WriteLine($"Lambda running on thread: {Environment.CurrentManagedThreadId}");
+        });
+        t2.Start();
+
+        // Method 3: Modern C# Task (ThreadPool Worker - Recommended)
+        Task t3 = Task.Run(() => {
+            Console.WriteLine($"Task running on ThreadPool thread: {Environment.CurrentManagedThreadId}");
+        });
+
+        t1.Join();
+        t2.Join();
+        t3.Wait();
+    }
+}</code></pre>
+  </div>
+</div>
 
     <div class="diagram-container">
       <div class="mermaid">
@@ -96,9 +137,13 @@ public class ThreadExample {
 
     <p><strong>Analogy:</strong> Two people editing the same sentence in a Google Doc at the same time. One person types "Cat", the other types "Dog", and the final result is a mess like "CDaotg".</p>
 
-    <span class="code-label">Java 21</span>
-    <pre>
-public class RaceConditionExample {
+<div class="code-tabs">
+  <div class="code-tabs-header">
+    <button class="code-tab-btn active" data-tab="java">☕ Java 21</button>
+    <button class="code-tab-btn" data-tab="csharp">🔷 C#</button>
+  </div>
+  <div class="code-tab-content active" data-tab-content="java">
+    <pre><code class="language-java">public class RaceConditionExample {
     private static int counter = 0;
 
     public static void main(String[] args) throws InterruptedException {
@@ -121,17 +166,53 @@ public class RaceConditionExample {
         // Reality: 15342 (or some random number less than 20000)
         System.out.println("Final counter: " + counter); 
     }
-}
-    </pre>
+}</code></pre>
+  </div>
+  <div class="code-tab-content" data-tab-content="csharp">
+    <pre><code class="language-csharp">using System;
+using System.Threading;
+
+public class RaceConditionExample
+{
+    private static int counter = 0;
+
+    public static void Main()
+    {
+        ThreadStart incrementTask = () => {
+            for (int i = 0; i < 10000; i++) {
+                counter++; // Non-atomic! 3 CPU instructions: read, increment, store
+            }
+        };
+
+        Thread t1 = new Thread(incrementTask);
+        Thread t2 = new Thread(incrementTask);
+
+        t1.Start();
+        t2.Start();
+
+        t1.Join();
+        t2.Join();
+
+        // Expectation: 20000
+        // Reality: ~14000 due to lost concurrent updates!
+        Console.WriteLine($"Final counter: {counter}");
+    }
+}</code></pre>
+  </div>
+</div>
 
     <h2>4. synchronized / Locks</h2>
     <p>To fix race conditions, we need to ensure only one thread can access the critical section at a time.</p>
     
     <p><strong>Analogy:</strong> A bathroom lock. Only one person can be in the bathroom. Others must wait outside until the key is returned.</p>
 
-    <span class="code-label">Java 21</span>
-    <pre>
-import java.util.concurrent.locks.ReentrantLock;
+<div class="code-tabs">
+  <div class="code-tabs-header">
+    <button class="code-tab-btn active" data-tab="java">☕ Java 21</button>
+    <button class="code-tab-btn" data-tab="csharp">🔷 C#</button>
+  </div>
+  <div class="code-tab-content active" data-tab-content="java">
+    <pre><code class="language-java">import java.util.concurrent.locks.ReentrantLock;
 
 public class LockExamples {
     private int counter1 = 0;
@@ -161,8 +242,54 @@ public class LockExamples {
             reentrantLock.unlock(); // ALWAYS unlock in a finally block
         }
     }
-}
-    </pre>
+}</code></pre>
+  </div>
+  <div class="code-tab-content" data-tab-content="csharp">
+    <pre><code class="language-csharp">using System.Threading;
+
+public class LockExamples
+{
+    private int counter1 = 0;
+    private int counter2 = 0;
+    private readonly object _padlock = new();
+    private readonly SemaphoreSlim _semaphore = new(1, 1);
+
+    // 1. lock statement (Syntactic sugar for Monitor.Enter / Monitor.Exit)
+    public void Increment1()
+    {
+        lock (_padlock)
+        {
+            counter1++;
+        }
+    }
+
+    // 2. Explicit Monitor with TryEnter timeout support
+    public bool TryIncrement()
+    {
+        if (Monitor.TryEnter(_padlock, TimeSpan.FromMilliseconds(50)))
+        {
+            try { counter1++; return true; }
+            finally { Monitor.Exit(_padlock); }
+        }
+        return false;
+    }
+
+    // 3. Async-compatible lock using SemaphoreSlim
+    public async Task IncrementAsync()
+    {
+        await _semaphore.WaitAsync();
+        try
+        {
+            counter2++;
+        }
+        finally
+        {
+            _semaphore.Release();
+        }
+    }
+}</code></pre>
+  </div>
+</div>
 
     <h3>Lock vs Synchronized</h3>
     <table>
@@ -177,9 +304,13 @@ public class LockExamples {
 
     <p><strong>Analogy:</strong> Two people walking towards each other in a narrow hallway. Person A steps to the right, Person B steps to the left (their right). They are both blocked, waiting for the other to move.</p>
 
-    <span class="code-label">Java 21</span>
-    <pre>
-public class DeadlockExample {
+<div class="code-tabs">
+  <div class="code-tabs-header">
+    <button class="code-tab-btn active" data-tab="java">☕ Java 21</button>
+    <button class="code-tab-btn" data-tab="csharp">🔷 C#</button>
+  </div>
+  <div class="code-tab-content active" data-tab-content="java">
+    <pre><code class="language-java">public class DeadlockExample {
     private static final Object lock1 = new Object();
     private static final Object lock2 = new Object();
 
@@ -209,17 +340,60 @@ public class DeadlockExample {
         t1.start();
         t2.start();
     }
-}
-    </pre>
+}</code></pre>
+  </div>
+  <div class="code-tab-content" data-tab-content="csharp">
+    <pre><code class="language-csharp">using System;
+using System.Threading;
+
+public class DeadlockExample
+{
+    private static readonly object lock1 = new();
+    private static readonly object lock2 = new();
+
+    public static void Main()
+    {
+        Thread t1 = new Thread(() => {
+            lock (lock1) {
+                Console.WriteLine("Thread 1: Holding lock 1...");
+                Thread.Sleep(100);
+                Console.WriteLine("Thread 1: Waiting for lock 2...");
+                lock (lock2) {
+                    Console.WriteLine("Thread 1: Holding lock 1 & 2...");
+                }
+            }
+        });
+
+        Thread t2 = new Thread(() => {
+            lock (lock2) { // FIX: Acquire lock1 first, then lock2!
+                Console.WriteLine("Thread 2: Holding lock 2...");
+                Thread.Sleep(100);
+                Console.WriteLine("Thread 2: Waiting for lock 1...");
+                lock (lock1) {
+                    Console.WriteLine("Thread 2: Holding lock 1 & 2...");
+                }
+            }
+        });
+
+        t1.Start();
+        t2.Start();
+    }
+}</code></pre>
+  </div>
+</div>
 
     <h2>6. Semaphore</h2>
     <div class="jargon">📖 <strong>Semaphore</strong>: Maintains a set of permits. It restricts the number of threads that can access a resource.</div>
 
     <p><strong>Analogy:</strong> A parking lot with 5 spots. If 5 cars are in, the 6th car must wait at the gate until a car leaves and returns the ticket (permit).</p>
 
-    <span class="code-label">Java 21</span>
-    <pre>
-import java.util.concurrent.Semaphore;
+<div class="code-tabs">
+  <div class="code-tabs-header">
+    <button class="code-tab-btn active" data-tab="java">☕ Java 21</button>
+    <button class="code-tab-btn" data-tab="csharp">🔷 C#</button>
+  </div>
+  <div class="code-tab-content active" data-tab-content="java">
+    <pre><code class="language-java">import java.util.concurrent.Semaphore;
 
 public class SemaphoreExample {
     // Only 3 threads can access the resource at the same time
@@ -244,15 +418,57 @@ public class SemaphoreExample {
             new Thread(() -> accessResource(id)).start();
         }
     }
-}
-    </pre>
+}</code></pre>
+  </div>
+  <div class="code-tab-content" data-tab-content="csharp">
+    <pre><code class="language-csharp">using System;
+using System.Threading;
+using System.Threading.Tasks;
+
+public class SemaphoreExample
+{
+    // Restricts concurrent access to at most 3 callers
+    private static readonly SemaphoreSlim semaphore = new(3, 3);
+
+    public static async Task AccessResourceAsync(int id)
+    {
+        await semaphore.WaitAsync();
+        try
+        {
+            Console.WriteLine($"Task {id} entered. Available permits: {semaphore.CurrentCount}");
+            await Task.Delay(2000); // Async non-blocking work
+        }
+        finally
+        {
+            Console.WriteLine($"Task {id} leaving.");
+            semaphore.Release();
+        }
+    }
+
+    public static async Task Main()
+    {
+        var tasks = new Task[6];
+        for (int i = 0; i < 6; i++)
+        {
+            int id = i + 1;
+            tasks[i] = Task.Run(() => AccessResourceAsync(id));
+        }
+        await Task.WhenAll(tasks);
+    }
+}</code></pre>
+  </div>
+</div>
 
     <h2>7. Thread Pool / ExecutorService</h2>
     <p>Creating threads is expensive. Instead of creating a new thread for every task, we use a pool of worker threads.</p>
 
-    <span class="code-label">Java 21</span>
-    <pre>
-import java.util.concurrent.ExecutorService;
+<div class="code-tabs">
+  <div class="code-tabs-header">
+    <button class="code-tab-btn active" data-tab="java">☕ Java 21</button>
+    <button class="code-tab-btn" data-tab="csharp">🔷 C#</button>
+  </div>
+  <div class="code-tab-content active" data-tab-content="java">
+    <pre><code class="language-java">import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 public class ThreadPoolExample {
@@ -268,15 +484,45 @@ public class ThreadPoolExample {
             }
         } // ExecutorService implements AutoCloseable in modern Java, so it shuts down automatically here
     }
-}
-    </pre>
+}</code></pre>
+  </div>
+  <div class="code-tab-content" data-tab-content="csharp">
+    <pre><code class="language-csharp">using System;
+using System.Threading;
+using System.Threading.Tasks;
+
+public class ThreadPoolExample
+{
+    public static void Main()
+    {
+        // 1. Queue to .NET ThreadPool directly:
+        for (int i = 1; i <= 5; i++)
+        {
+            int taskId = i;
+            ThreadPool.QueueUserWorkItem(_ => {
+                Console.WriteLine($"ThreadPool task {taskId} on thread {Environment.CurrentManagedThreadId}");
+            });
+        }
+
+        // 2. Parallel.For with bounded degree of parallelism:
+        Parallel.For(6, 11, new ParallelOptions { MaxDegreeOfParallelism = 3 }, taskId => {
+            Console.WriteLine($"Parallel task {taskId} on thread {Environment.CurrentManagedThreadId}");
+        });
+    }
+}</code></pre>
+  </div>
+</div>
 
     <h2>8. CompletableFuture</h2>
     <p>Modern Java's way of handling asynchronous programming. It allows chaining operations without blocking.</p>
 
-    <span class="code-label">Java 21</span>
-    <pre>
-import java.util.concurrent.CompletableFuture;
+<div class="code-tabs">
+  <div class="code-tabs-header">
+    <button class="code-tab-btn active" data-tab="java">☕ Java 21</button>
+    <button class="code-tab-btn" data-tab="csharp">🔷 C#</button>
+  </div>
+  <div class="code-tab-content active" data-tab-content="java">
+    <pre><code class="language-java">import java.util.concurrent.CompletableFuture;
 
 public class CompletableFutureExample {
     public static void main(String[] args) {
@@ -298,17 +544,51 @@ public class CompletableFutureExample {
         // Wait for result for demonstration
         System.out.println("Result: " + future.join());
     }
-}
-    </pre>
+}</code></pre>
+  </div>
+  <div class="code-tab-content" data-tab-content="csharp">
+    <pre><code class="language-csharp">using System;
+using System.Threading.Tasks;
+
+public class TaskChainingExample
+{
+    public static async Task Main()
+    {
+        // Modern idiomatic C# async/await (equivalent to CompletableFuture chaining)
+        try
+        {
+            string user = await FetchUserAsync();
+            string upperUser = user.ToUpper();
+            Console.WriteLine($"Result: {upperUser}");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error: {ex.Message}");
+            Console.WriteLine("Result: UNKNOWN");
+        }
+    }
+
+    private static async Task&lt;string&gt; FetchUserAsync()
+    {
+        await Task.Delay(1000); // Simulate network call
+        return "User123";
+    }
+}</code></pre>
+  </div>
+</div>
 
     <h2>9. Virtual Threads (Java 21)</h2>
     <div class="jargon">📖 <strong>Virtual Threads</strong>: Lightweight threads introduced in Java 21 (Project Loom). They reduce the effort of writing, maintaining, and observing high-throughput concurrent applications.</div>
 
     <p><strong>Game Changer:</strong> You can create millions of virtual threads. They are not tied 1:1 to OS threads. Blocking a virtual thread (e.g., waiting for DB) does NOT block the OS thread.</p>
 
-    <span class="code-label">Java 21</span>
-    <pre>
-import java.util.concurrent.Executors;
+<div class="code-tabs">
+  <div class="code-tabs-header">
+    <button class="code-tab-btn active" data-tab="java">☕ Java 21</button>
+    <button class="code-tab-btn" data-tab="csharp">🔷 C#</button>
+  </div>
+  <div class="code-tab-content active" data-tab-content="java">
+    <pre><code class="language-java">import java.util.concurrent.Executors;
 
 public class VirtualThreadsExample {
     public static void main(String[] args) {
@@ -329,15 +609,50 @@ public class VirtualThreadsExample {
             }
         }
     }
-}
-    </pre>
+}</code></pre>
+  </div>
+  <div class="code-tab-content" data-tab-content="csharp">
+    <pre><code class="language-csharp">using System;
+using System.Collections.Generic;
+using System.Threading.Tasks;
+
+public class HighConcurrencyAsyncExample
+{
+    public static async Task Main()
+    {
+        // C# achieves high-density async I/O via compiler-generated async state machines
+        // and OS I/O Completion Ports (IOCP). 100,000 Tasks run with ZERO blocked OS threads!
+        var tasks = new List&lt;Task&gt;(100_000);
+
+        for (int i = 0; i < 100_000; i++)
+        {
+            int taskId = i;
+            tasks.Add(ProcessRequestAsync(taskId));
+        }
+
+        await Task.WhenAll(tasks);
+        Console.WriteLine("All 100,000 asynchronous operations finished successfully!");
+    }
+
+    private static async Task ProcessRequestAsync(int id)
+    {
+        // Non-blocking timer suspension: thread returns immediately to ThreadPool!
+        await Task.Delay(1000);
+    }
+}</code></pre>
+  </div>
+</div>
 
     <h2>10. Concurrent Collections</h2>
     <p>Standard collections (ArrayList, HashMap) are not thread-safe. Java provides thread-safe alternatives in <code>java.util.concurrent</code>.</p>
 
-    <span class="code-label">Java 21</span>
-    <pre>
-import java.util.concurrent.BlockingQueue;
+<div class="code-tabs">
+  <div class="code-tabs-header">
+    <button class="code-tab-btn active" data-tab="java">☕ Java 21</button>
+    <button class="code-tab-btn" data-tab="csharp">🔷 C#</button>
+  </div>
+  <div class="code-tab-content active" data-tab-content="java">
+    <pre><code class="language-java">import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 
 public class ProducerConsumerExample {
@@ -366,15 +681,53 @@ public class ProducerConsumerExample {
         producer.start();
         consumer.start();
     }
-}
-    </pre>
+}</code></pre>
+  </div>
+  <div class="code-tab-content" data-tab-content="csharp">
+    <pre><code class="language-csharp">using System;
+using System.Threading.Channels;
+using System.Threading.Tasks;
+
+public class ChannelProducerConsumerExample
+{
+    public static async Task Main()
+    {
+        // High-performance bounded channel (capacity 5 with async backpressure)
+        var channel = Channel.CreateBounded&lt;string&gt;(new BoundedChannelOptions(5)
+        {
+            FullMode = BoundedChannelFullMode.Wait
+        });
+
+        var producer = Task.Run(async () => {
+            for (int i = 0; i < 10; i++) {
+                await channel.Writer.WriteAsync($"Item {i}");
+                Console.WriteLine($"Produced: Item {i}");
+            }
+            channel.Writer.Complete();
+        });
+
+        var consumer = Task.Run(async () => {
+            await foreach (var item in channel.Reader.ReadAllAsync()) {
+                Console.WriteLine($"Consumed: {item}");
+            }
+        });
+
+        await Task.WhenAll(producer, consumer);
+    }
+}</code></pre>
+  </div>
+</div>
 
     <h2>11. Atomic Variables</h2>
     <p>Classes like <code>AtomicInteger</code> use Compare-And-Swap (CAS) instructions to be thread-safe without using locks. This is much faster than <code>synchronized</code> for simple counters.</p>
 
-    <span class="code-label">Java 21</span>
-    <pre>
-import java.util.concurrent.atomic.AtomicInteger;
+<div class="code-tabs">
+  <div class="code-tabs-header">
+    <button class="code-tab-btn active" data-tab="java">☕ Java 21</button>
+    <button class="code-tab-btn" data-tab="csharp">🔷 C#</button>
+  </div>
+  <div class="code-tab-content active" data-tab-content="java">
+    <pre><code class="language-java">import java.util.concurrent.atomic.AtomicInteger;
 
 public class AtomicExample {
     private static AtomicInteger atomicCounter = new AtomicInteger(0);
@@ -394,8 +747,34 @@ public class AtomicExample {
 
         System.out.println("Result: " + atomicCounter.get()); // Exactly 20000
     }
-}
-    </pre>
+}</code></pre>
+  </div>
+  <div class="code-tab-content" data-tab-content="csharp">
+    <pre><code class="language-csharp">using System;
+using System.Threading;
+using System.Threading.Tasks;
+
+public class InterlockedExample
+{
+    private static int counter = 0;
+
+    public static void Main()
+    {
+        // Interlocked operations use CPU hardware-level atomic instructions
+        Parallel.Invoke(
+            () => {
+                for (int i = 0; i < 10000; i++) Interlocked.Increment(ref counter);
+            },
+            () => {
+                for (int i = 0; i < 10000; i++) Interlocked.Increment(ref counter);
+            }
+        );
+
+        Console.WriteLine($"Result: {Volatile.Read(ref counter)}"); // Guaranteed 20000!
+    }
+}</code></pre>
+  </div>
+</div>
 
     <h2>12. Summary: When to use what</h2>
     <table>

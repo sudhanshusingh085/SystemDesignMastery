@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dependency Injection &amp; Lifecycles in .NET 8 — From Scratch to Principal Architect</title>
+  <link rel="stylesheet" href="../css/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.0/dist/mermaid.min.js"></script>
+  <script src="../js/main.js" defer></script>
+</head>
+<body>
+
+<button class="menu-toggle" aria-label="Toggle menu">☰</button>
+
+<div class="page-wrapper">
+  <aside class="sidebar" id="sidebar"></aside>
+
+  <main class="main-content">
+    <div class="platform-switcher">
+      <span>Mastery Portals:</span>
+      <a href="../../index.html">🏛️ System Design</a>
+      <a href="../../corejava/index.html">☕ Core Java 21</a>
+      <a href="../../sqlserver/index.html">🗄️ MS SQL Server</a>
+      <a href="../index.html" class="active">🔷 .NET 8 / C# 12</a>
+    </div>
+
+    <nav class="breadcrumb">
+      <a href="../index.html">.NET Mastery</a> &gt; <span>04 · Dependency Injection &amp; Lifecycles</span>
+    </nav>
+
+    <header>
+      <h1>💉 Dependency Injection &amp; Service Lifecycles in .NET 8</h1>
+      <p class="subtitle">A masterclass on the Microsoft.Extensions.DependencyInjection container, Transient vs Scoped vs Singleton lifecycles, the catastrophic Captive Dependency bug, IServiceScopeFactory patterns, and modern .NET 8 Keyed Services.</p>
+    </header>
+
+    <!-- SECTION 1: CORE PHILOSOPHY -->
+    <section id="philosophy">
+      <h2>1. The Core Philosophy: IoC, DIP &amp; DI</h2>
+      <p>Modern enterprise applications cannot afford hardcoded class instantiations (<code>new OrderService()</code>). Tightly coupled dependencies destroy unit testability, prevent dynamic feature toggles, and make architectural evolution impossible.</p>
+
+      <div class="callout callout-info">
+        <div class="callout-title">📖 Architectural Distinctions</div>
+        <ul>
+          <li><strong>Inversion of Control (IoC):</strong> A broad design principle where control of object creation and application flow is inverted from the component itself to an external framework or container.</li>
+          <li><strong>Dependency Inversion Principle (DIP):</strong> The SOLID design principle stating high-level policy modules should not depend on low-level implementation details; both must depend upon abstractions.</li>
+          <li><strong>Dependency Injection (DI):</strong> A concrete software pattern implementing IoC by providing dependent objects (dependencies) to a class rather than allowing the class to create them directly.</li>
+        </ul>
+      </div>
+
+      <div class="mermaid">
+flowchart TD
+    subgraph TightCoupling["❌ Tightly Coupled (Anti-Pattern)"]
+        S1["OrderService"] -->|Calls 'new'| DB1["SqlServerTradingDb"]
+        S1 -->|Calls 'new'| SMTP1["SmtpEmailSender"]
+    end
+
+    subgraph DIContainer["✅ Inversion of Control via DI Container"]
+        IoC["IoC Container (IServiceProvider)"]
+        IoC -->|Injects ITradingDb| S2["OrderService"]
+        IoC -->|Injects INotificationService| S2
+        DB2["PostgresTradingDb / SqlServerDb"] -.->|Implements| IoC
+        SMTP2["SendGridSender / SmtpSender"] -.->|Implements| IoC
+    end
+      </div>
+    </section>
+
+    <!-- SECTION 2: SERVICE LIFETIMES -->
+    <section id="lifetimes">
+      <h2>2. The Three Service Lifetimes in ASP.NET Core</h2>
+
+      <p>Every service registered with <code>IServiceCollection</code> must be assigned an explicit lifetime that dictates how the container creates, caches, and disposes of instances:</p>
+
+      <table class="comparison-table">
+        <thead>
+          <tr>
+            <th>Lifetime</th>
+            <th>Registration Method</th>
+            <th>Instance Creation</th>
+            <th>Disposal Timing</th>
+            <th>Ideal Use Cases</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Transient</strong></td>
+            <td><code>AddTransient&lt;T, U&gt;()</code></td>
+            <td>Every single time the service is requested from the container.</td>
+            <td>At the end of the HTTP/Scope boundary if <code>IDisposable</code>.</td>
+            <td>Lightweight, stateless utility services, validators, calculators.</td>
+          </tr>
+          <tr>
+            <td><strong>Scoped</strong></td>
+            <td><code>AddScoped&lt;T, U&gt;()</code></td>
+            <td>Once per HTTP Request (or once per active <code>IServiceScope</code>).</td>
+            <td>When the HTTP request finishes or scope is disposed.</td>
+            <td>EF Core <code>DbContext</code>, Unit of Work, Current User session state.</td>
+          </tr>
+          <tr>
+            <td><strong>Singleton</strong></td>
+            <td><code>AddSingleton&lt;T, U&gt;()</code></td>
+            <td>Once per application lifetime (on first request or boot).</td>
+            <td>When the entire application shuts down (Host termination).</td>
+            <td>In-memory caches, TCP socket pools, Kafka producers, telemetry metrics.</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="mermaid">
+flowchart TD
+    subgraph Request1["Client HTTP Request 1 (Scope 1)"]
+        Req1["Request Initiated"] --> Scp1["Scoped Service A (Instance #1)"]
+        Scp1 --> Trn1["Transient Service B (Instance #1)"]
+        Scp1 --> Trn2["Transient Service B (Instance #2)"]
+        Scp1 --> Sgl1["Singleton Service C (Shared Instance #1)"]
+    end
+
+    subgraph Request2["Client HTTP Request 2 (Scope 2)"]
+        Req2["Request Initiated"] --> Scp2["Scoped Service A (Instance #2)"]
+        Scp2 --> Trn3["Transient Service B (Instance #3)"]
+        Scp2 --> Sgl1
+    end
+      </div>
+    </section>
+
+    <!-- SECTION 3: CAPTIVE DEPENDENCY BUG -->
+    <section id="captive-dependency">
+      <h2>3. The Captive Dependency Bug (The Silent Production Killer)</h2>
+
+      <div class="callout callout-danger">
+        <div class="callout-title">🚨 Definition of Captive Dependency</div>
+        <p>A <strong>Captive Dependency</strong> occurs when a service with a longer lifetime takes a dependency on a service with a shorter lifetime. Specifically, when a <strong>Singleton</strong> service injects a <strong>Scoped</strong> service into its constructor.</p>
+      </div>
+
+      <h3>Why This Causes Devastating Production Outages</h3>
+      <p>Because the Singleton is instantiated only once and held alive for the lifetime of the application, any service injected into its constructor is also captured and kept alive forever. Consider what happens when a Singleton service injects EF Core's <code>DbContext</code> (which is Scoped):</p>
+
+      <ol>
+        <li><strong>Multithreaded Concurrency Crashes:</strong> EF Core's <code>DbContext</code> is explicitly <strong>not thread-safe</strong>. If two simultaneous HTTP requests hit the Singleton service, both threads execute queries on the exact same <code>DbContext</code> instance concurrently. This results in the infamous runtime crash:
+        <pre><code class="language-text">System.InvalidOperationException: A second operation was started on this context 
+instance before a previous operation completed. This is usually caused by different 
+threads concurrently using the same instance of DbContext.</code></pre>
+        </li>
+        <li><strong>Catastrophic Memory Leaks:</strong> EF Core's Change Tracker holds in-memory references to every entity queried or updated. Because the captive DbContext is never disposed, its Change Tracker grows indefinitely until the process triggers an <code>OutOfMemoryException</code> (OOM).</li>
+        <li><strong>Stale Data:</strong> Queries executed on a long-lived DbContext return entities from its in-memory first-level cache rather than fresh data from the database.</li>
+      </ol>
+
+      <h4>❌ The Buggy Code:</h4>
+      <pre><code class="language-csharp">// Registered as Singleton
+public class OrderNotificationEngine : IOrderNotificationEngine
+{
+    private readonly TradingDbContext _dbContext; // ❌ CAPTIVE DEPENDENCY!
+
+    // Constructor injection binds Scoped DbContext to Singleton lifetime!
+    public OrderNotificationEngine(TradingDbContext dbContext) 
+    {
+        _dbContext = dbContext;
+    }
+
+    public async Task ProcessPendingNotificationsAsync()
+    {
+        var orders = await _dbContext.Orders.Where(o =&gt; !o.Notified).ToListAsync();
+        // Concurrency collision will happen here under load!
+    }
+}</code></pre>
+
+      <h3>✅ The Architectural Solution: `IServiceScopeFactory`</h3>
+      <p>When a Singleton or <code>BackgroundService</code> needs to consume a Scoped dependency, it must inject <code>IServiceScopeFactory</code> and create an explicit, short-lived scope per execution unit:</p>
+
+      <pre><code class="language-csharp">public sealed class OrderNotificationEngine(IServiceScopeFactory scopeFactory, ILogger&lt;OrderNotificationEngine&gt; logger) 
+    : IOrderNotificationEngine
+{
+    public async Task ProcessPendingNotificationsAsync(CancellationToken ct = default)
+    {
+        // 1. Create a dedicated scope for this execution boundary
+        using var scope = scopeFactory.CreateScope();
+
+        // 2. Resolve the scoped service safely from the scope's ServiceProvider
+        var db = scope.ServiceProvider.GetRequiredService&lt;TradingDbContext&gt;();
+
+        var orders = await db.Orders
+            .Where(o =&gt; !o.Notified)
+            .Take(100)
+            .ToListAsync(ct);
+
+        foreach (var order in orders)
+        {
+            order.Notified = true;
+        }
+
+        await db.SaveChangesAsync(ct);
+        // 3. When exiting the 'using' block, the scope is disposed, 
+        // cleanly disposing the DbContext and flushing the Change Tracker!
+    }
+}</code></pre>
+
+      <div class="callout callout-success">
+        <div class="callout-title">🛡️ Built-in Scope Validation</div>
+        <p>ASP.NET Core includes a built-in safety net: <code>ValidateScopes = true</code>. When running in the <code>Development</code> environment, the host checks your dependency graph on startup and throws an <code>InvalidOperationException</code> immediately if a singleton captures a scoped service. However, this check is disabled by default in <code>Production</code> for performance reasons!</p>
+      </div>
+    </section>
+
+    <!-- SECTION 4: .NET 8 KEYED SERVICES -->
+    <section id="keyed-services">
+      <h2>4. Modern .NET 8 Keyed Services</h2>
+
+      <p>Prior to .NET 8, resolving different implementations of the same interface required custom factory delegates, switch statements, or third-party containers (Autofac). .NET 8 introduced native <strong>Keyed Services</strong> into <code>Microsoft.Extensions.DependencyInjection</code>:</p>
+
+      <pre><code class="language-csharp">// 1. Register multiple implementations with distinct keys
+builder.Services.AddKeyedScoped&lt;IPaymentGateway, StripePaymentGateway&gt;("stripe");
+builder.Services.AddKeyedScoped&lt;IPaymentGateway, AdyenPaymentGateway&gt;("adyen");
+builder.Services.AddKeyedScoped&lt;IPaymentGateway, CryptoPaymentGateway&gt;("crypto");
+
+// 2. Consume using [FromKeyedServices] attribute in C# 12 Primary Constructors
+public sealed class CheckoutService(
+    [FromKeyedServices("stripe")] IPaymentGateway primaryGateway,
+    [FromKeyedServices("adyen")] IPaymentGateway backupGateway,
+    ILogger&lt;CheckoutService&gt; logger)
+{
+    public async Task ProcessCheckout(decimal amount)
+    {
+        try
+        {
+            await primaryGateway.ChargeAsync(amount);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Primary gateway failed. Falling back to Adyen.");
+            await backupGateway.ChargeAsync(amount);
+        }
+    }
+}
+
+// 3. Keyed resolution in ASP.NET Core Minimal APIs:
+app.MapPost("/pay/{gateway}", async (
+    string gateway, 
+    decimal amount, 
+    IServiceProvider sp) =&gt;
+{
+    var selectedGateway = sp.GetKeyedService&lt;IPaymentGateway&gt;(gateway);
+    if (selectedGateway is null)
+        return Results.BadRequest($"Unsupported gateway: {gateway}");
+
+    await selectedGateway.ChargeAsync(amount);
+    return Results.Ok();
+});</code></pre>
+    </section>
+
+    <!-- SECTION 5: DISPOSAL MECHANICS -->
+    <section id="disposal">
+      <h2>5. Container Disposal Mechanics &amp; Memory Traps</h2>
+
+      <p>The DI container takes ownership of every instance it creates that implements <code>IDisposable</code> or <code>IAsyncDisposable</code>:</p>
+      <ul>
+        <li><strong>Transient / Scoped Disposables:</strong> Tracked by the active <code>IServiceScope</code>. When the HTTP request or scope completes, the scope calls <code>Dispose()</code> or <code>DisposeAsync()</code> on every resolved disposable in reverse order of creation.</li>
+        <li><strong>Singleton Disposables:</strong> Held alive and disposed only when the root <code>IHost</code> is stopped.</li>
+      </ul>
+
+      <div class="callout callout-warning">
+        <div class="callout-title">⚠️ The Transient Disposable Leak Trap</div>
+        <p>If you resolve thousands of Transient objects that implement <code>IDisposable</code> inside a long-lived scope (e.g., inside an Azure Service Bus queue receiver scope), the scope holds references to all of them to dispose them later! This causes high memory consumption. Prefer resolving factory delegates or using short-lived explicit child scopes.</p>
+      </div>
+    </section>
+
+    <!-- SECTION 6: INTERVIEW GRILL ROUND -->
+    <section id="interview-grill">
+      <h2>6. The Senior Interviewer's Grill Round: Dependency Injection</h2>
+
+      <div class="callout callout-danger">
+        <div class="callout-title">🔥 Question 1: What happens if a Scoped service injects a Transient service? Is it an anti-pattern?</div>
+        <div class="callout-content">
+          <p><strong>Senior Answer:</strong> No, it is perfectly safe and valid. A Transient service has a shorter or equal lifespan to a Scoped service. The container creates a fresh instance of the Transient service specifically for that Scoped service. That Transient instance lives for the duration of the Scope and is disposed when the Scope is disposed. A Captive Dependency only happens in the reverse direction: when a longer-lived service (Singleton) injects a shorter-lived service (Scoped).</p>
+        </div>
+      </div>
+
+      <div class="callout callout-danger">
+        <div class="callout-title">🔥 Question 2: Why should you avoid calling services.BuildServiceProvider() inside ConfigureServices / Program.cs?</div>
+        <div class="callout-content">
+          <p><strong>Senior Answer:</strong> Calling <code>services.BuildServiceProvider()</code> creates a second, detached copy of the DI container. This leads to two critical problems:
+          <ol>
+            <li><strong>Duplicate Singletons:</strong> Any singleton resolved from the temporary provider will be a completely different instance from the singleton resolved by the runtime application host, violating the single-instance invariant.</li>
+            <li><strong>Memory Leaks:</strong> The temporary service provider is often not disposed, meaning any disposable singletons it constructed remain pinned in memory indefinitely.</li>
+          </ol>
+          In modern .NET 8, configuration or seed dependencies should be accessed via <code>IConfigureOptions&lt;T&gt;</code>, <code>IHostedService</code>, or by resolving from <code>app.Services</code> after <code>app.Build()</code>.</p>
+        </div>
+      </div>
+
+      <div class="callout callout-danger">
+        <div class="callout-title">🔥 Question 3: What is the difference between IServiceScopeFactory and IServiceProvider.CreateScope()?</div>
+        <div class="callout-content">
+          <p><strong>Senior Answer:</strong> <code>IServiceScopeFactory</code> is a singleton registered in the root container designed specifically for creating child scopes from background workers and singletons. Calling <code>IServiceProvider.CreateScope()</code> is an extension method that internally delegates to <code>IServiceScopeFactory.CreateScope()</code>. However, using <code>IServiceScopeFactory</code> makes the class dependency explicit and avoids taking a direct dependency on <code>IServiceProvider</code> (which can be considered a Service Locator anti-pattern).</p>
+        </div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<button class="scroll-top" aria-label="Scroll to top">↑</button>
+</body>
+</html>

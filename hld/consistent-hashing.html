@@ -80,12 +80,16 @@
       </div>
     </div>
 
-    <h2>Java 21 Code Example</h2>
-    <p>Here is a complete, beginner-friendly implementation of a Consistent Hash Ring using Java 21's features, specifically utilizing a <code>TreeMap</code> which is perfect for searching "the next element clockwise".</p>
+    <h2>Consistent Hashing Implementation (Java 21 &amp; C#)</h2>
+    <p>Here is a complete implementation of a Consistent Hash Ring in Java and C#, using a balanced sorted map / dictionary to search clockwise along the ring.</p>
     
-    <span class="code-label">Java</span>
-    <pre>
-import java.security.MessageDigest;
+    <div class="code-tabs">
+      <div class="code-tabs-header">
+        <button class="code-tab-btn active" data-tab="java">☕ Java 21</button>
+        <button class="code-tab-btn" data-tab="csharp">🔷 C#</button>
+      </div>
+      <div class="code-tab-content active" data-tab-content="java">
+        <pre><code class="language-java">import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.SortedMap;
 import java.util.TreeMap;
@@ -191,7 +195,95 @@ public class ConsistentHashRing {
         System.out.println("User 'Bob' goes to: " + hashRing.getNode("Bob"));
     }
 }
-    </pre>
+</code></pre>
+      </div>
+      <div class="code-tab-content" data-tab-content="csharp">
+        <pre><code class="language-csharp">using System;
+using System.Collections.Generic;
+using System.Security.Cryptography;
+using System.Text;
+
+public class ConsistentHashRing
+{
+    private readonly int _virtualNodesPerServer;
+    // SortedDictionary maintains keys sorted, representing the ring ordered clockwise
+    private readonly SortedDictionary&lt;uint, string&gt; _ring = [];
+
+    public ConsistentHashRing(int virtualNodesPerServer)
+    {
+        _virtualNodesPerServer = virtualNodesPerServer;
+    }
+
+    public void AddNode(string serverName)
+    {
+        for (int i = 0; i &lt; _virtualNodesPerServer; i++)
+        {
+            string vNodeName = $"{serverName}-VN{i}";
+            uint hash = ComputeHash(vNodeName);
+            _ring[hash] = serverName;
+        }
+        Console.WriteLine($"Added server: {serverName}");
+    }
+
+    public void RemoveNode(string serverName)
+    {
+        for (int i = 0; i &lt; _virtualNodesPerServer; i++)
+        {
+            string vNodeName = $"{serverName}-VN{i}";
+            uint hash = ComputeHash(vNodeName);
+            _ring.Remove(hash);
+        }
+        Console.WriteLine($"Removed server: {serverName}");
+    }
+
+    public string? GetNode(string key)
+    {
+        if (_ring.Count == 0) return null;
+
+        uint hash = ComputeHash(key);
+
+        // Find the first virtual node clockwise with hash &gt;= key hash
+        foreach (var (nodeHash, server) in _ring)
+        {
+            if (nodeHash &gt;= hash)
+                return server;
+        }
+
+        // Wrap around ring: return first server
+        foreach (var (_, server) in _ring)
+            return server;
+
+        return null;
+    }
+
+    private static uint ComputeHash(string input)
+    {
+        byte[] bytes = MD5.HashData(Encoding.UTF8.GetBytes(input));
+        return BitConverter.ToUInt32(bytes, 0);
+    }
+
+    public static void Main()
+    {
+        var hashRing = new ConsistentHashRing(3); // 3 virtual nodes per server
+
+        hashRing.AddNode("Server-A");
+        hashRing.AddNode("Server-B");
+        hashRing.AddNode("Server-C");
+
+        Console.WriteLine("User 'Alice' goes to: " + hashRing.GetNode("Alice"));
+        Console.WriteLine("User 'Bob' goes to: " + hashRing.GetNode("Bob"));
+        Console.WriteLine("User 'Charlie' goes to: " + hashRing.GetNode("Charlie"));
+
+        // If Server-B crashes
+        hashRing.RemoveNode("Server-B");
+
+        Console.WriteLine("After Server-B removed:");
+        Console.WriteLine("User 'Alice' goes to: " + hashRing.GetNode("Alice"));
+        Console.WriteLine("User 'Bob' goes to: " + hashRing.GetNode("Bob"));
+    }
+}</code></pre>
+      </div>
+    </div>
 
     <h2>Where is Consistent Hashing Used?</h2>
     <p>Consistent hashing is a foundational concept used in many massively distributed systems:</p>

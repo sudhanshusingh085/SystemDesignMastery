@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CQRS &amp; Event Sourcing in .NET 8 — From Scratch to Principal Architect</title>
+  <link rel="stylesheet" href="../css/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.0/dist/mermaid.min.js"></script>
+  <script src="../js/main.js" defer></script>
+</head>
+<body>
+
+<button class="menu-toggle" aria-label="Toggle menu">☰</button>
+
+<div class="page-wrapper">
+  <aside class="sidebar" id="sidebar"></aside>
+
+  <main class="main-content">
+    <div class="platform-switcher">
+      <span>Mastery Portals:</span>
+      <a href="../../index.html">🏛️ System Design</a>
+      <a href="../../corejava/index.html">☕ Core Java 21</a>
+      <a href="../../sqlserver/index.html">🗄️ MS SQL Server</a>
+      <a href="../index.html" class="active">🔷 .NET 8 / C# 12</a>
+    </div>
+
+    <nav class="breadcrumb">
+      <a href="../index.html">.NET Mastery</a> &gt; <span>03 · CQRS &amp; Event Sourcing in .NET 8</span>
+    </nav>
+
+    <header>
+      <h1>⚡ CQRS &amp; Event Sourcing in Modern .NET 8</h1>
+      <p class="subtitle">Architecting enterprise high-throughput financial and order management platforms: Command vs Query segregation, the MediatR pipeline, the pragmatic EF Core + Dapper dual-stack, Event Sourcing aggregates, the Outbox pattern, and handling eventual consistency.</p>
+    </header>
+
+    <!-- SECTION 1: FOUNDATION -->
+    <section id="foundation">
+      <h2>1. The Architectural Philosophy: CQS vs CQRS</h2>
+      <p>In traditional enterprise CRUD architectures, a single domain model and database schema are forced to satisfy two radically conflicting requirements:</p>
+      <ol>
+        <li><strong>Transactional Writes (Commands):</strong> Require deep validation, strict boundary invariants, normalized schemas (3NF) to eliminate data redundancy, locking, and concurrency protection.</li>
+        <li><strong>High-Speed Reads (Queries):</strong> Require denormalized flat data, multi-table joins, aggregations, caching, and zero locking or change-tracking overhead.</li>
+      </ol>
+
+      <p>Forcing both requirements through the same ORM entities (like standard EF Core tracking models) causes slow query performance, over-fetching, complex entity graphs, and database lock contention.</p>
+
+      <div class="callout callout-info">
+        <div class="callout-title">📖 CQS vs CQRS</div>
+        <ul>
+          <li><strong>Command-Query Separation (CQS):</strong> Formulated by Bertrand Meyer. A principle at the method/class level stating that every method should either mutate state (Command) or return data (Query), but never both.</li>
+          <li><strong>Command Query Responsibility Segregation (CQRS):</strong> Formulated by Greg Young. An architectural pattern at the application level that splits the entire read and write paths into distinct data models, services, and optionally distinct physical databases.</li>
+        </ul>
+      </div>
+
+      <div class="mermaid">
+flowchart TD
+    subgraph ClientLayer["Client &amp; API Layer"]
+        UI["Blazor / React / Mobile Client"]
+    end
+
+    subgraph CommandPath["WRITE STACK (Transactional &amp; Validated)"]
+        Cmd["CreateOrderCommand"] --> MedCmd["MediatR Pipeline<br/>(Validation &amp; Transaction)"]
+        MedCmd --> CmdHandler["CreateOrderCommandHandler"]
+        CmdHandler --> DomainAgg["Order Aggregate Root"]
+        DomainAgg --> EFCore["EF Core 8<br/>(Write DB / Normalized 3NF)"]
+        EFCore --> Outbox["Transactional Outbox Table"]
+    end
+
+    subgraph QueryPath["READ STACK (Ultra-Fast &amp; Read-Only)"]
+        Qry["GetOrderDetailsQuery"] --> MedQry["MediatR Dispatcher"]
+        MedQry --> QryHandler["GetOrderDetailsQueryHandler"]
+        QryHandler --> Dapper["Dapper Micro-ORM<br/>(Raw SQL &amp; Views)"]
+        Dapper --> ReadReplica["Read Replica DB / Redis Cache"]
+        ReadReplica --> DTO["Flat C# 12 Record DTO"]
+    end
+
+    UI -->|Mutate State| Cmd
+    UI -->|Fetch Data| Qry
+      </div>
+    </section>
+
+    <!-- SECTION 2: PRAGMATIC CQRS -->
+    <section id="pragmatic-cqrs">
+      <h2>2. Pragmatic CQRS: EF Core Commands + Dapper Queries</h2>
+      <p>A widespread misconception is that CQRS requires Event Sourcing and multiple physical databases. In 90% of enterprise systems, <strong>Pragmatic CQRS</strong> using a single database (or primary write + read replicas) yields immense performance and architectural cleanliness:</p>
+
+      <ul>
+        <li><strong>Commands</strong> execute through <strong>Entity Framework Core</strong>: Benefiting from entity encapsulation, business invariants, optimistic concurrency (RowVersion), and transactional unit of work.</li>
+        <li><strong>Queries</strong> bypass EF Core completely and execute through <strong>Dapper</strong>: Directly executing optimized SQL queries, utilizing SQL Server columnstore indexes or indexed views, deserializing straight into C# <code>record</code> DTOs without EF Core change-tracker overhead.</li>
+      </ul>
+
+      <h3>A. MediatR Pipeline Behavior (Cross-Cutting Validation)</h3>
+      <p>Using MediatR pipeline behaviors, cross-cutting concerns like validation with FluentValidation, structured logging, and performance metrics are applied automatically without polluting handlers:</p>
+
+      <pre><code class="language-csharp">public sealed class ValidationBehavior&lt;TRequest, TResponse&gt;(
+    IEnumerable&lt;IValidator&lt;TRequest&gt;&gt; validators)
+    : IPipelineBehavior&lt;TRequest, TResponse&gt;
+    where TRequest : notnull
+{
+    public async Task&lt;TResponse&gt; Handle(
+        TRequest request, 
+        RequestHandlerDelegate&lt;TResponse&gt; next, 
+        CancellationToken cancellationToken)
+    {
+        if (!validators.Any())
+            return await next();
+
+        var context = new ValidationContext&lt;TRequest&gt;(request);
+        var validationResults = await Task.WhenAll(
+            validators.Select(v =&gt; v.ValidateAsync(context, cancellationToken)));
+
+        var failures = validationResults
+            .SelectMany(r =&gt; r.Errors)
+            .Where(f =&gt; f is not null)
+            .ToList();
+
+        if (failures.Count != 0)
+            throw new ValidationException(failures);
+
+        return await next();
+    }
+}</code></pre>
+
+      <h3>B. The Command Stack (EF Core 8)</h3>
+      <pre><code class="language-csharp">// Command definition (Intent to mutate)
+public sealed record CreateOrderCommand(
+    string AccountId, 
+    string Symbol, 
+    int Quantity, 
+    decimal Price) : IRequest&lt;Guid&gt;;
+
+// Command Validator (FluentValidation)
+public sealed class CreateOrderCommandValidator : AbstractValidator&lt;CreateOrderCommand&gt;
+{
+    public CreateOrderCommandValidator()
+    {
+        RuleFor(x =&gt; x.AccountId).NotEmpty();
+        RuleFor(x =&gt; x.Symbol).Matches("^[A-Z]{1,5}$").WithMessage("Invalid ticker symbol.");
+        RuleFor(x =&gt; x.Quantity).GreaterThan(0);
+        RuleFor(x =&gt; x.Price).GreaterThan(0m);
+    }
+}
+
+// Command Handler
+public sealed class CreateOrderCommandHandler(TradingDbContext db) 
+    : IRequestHandler&lt;CreateOrderCommand, Guid&gt;
+{
+    public async Task&lt;Guid&gt; Handle(CreateOrderCommand cmd, CancellationToken ct)
+    {
+        // Encapsulated Domain Aggregate enforces business invariants
+        var order = Order.Create(cmd.AccountId, cmd.Symbol, cmd.Quantity, cmd.Price);
+
+        db.Orders.Add(order);
+        await db.SaveChangesAsync(ct);
+
+        return order.Id;
+    }
+}</code></pre>
+
+      <h3>C. The Query Stack (Dapper Micro-ORM)</h3>
+      <pre><code class="language-csharp">// Query definition
+public sealed record GetOrderSummaryQuery(Guid OrderId) : IRequest&lt;OrderSummaryDto?&gt;;
+
+// Immutable Read DTO
+public sealed record OrderSummaryDto(
+    Guid OrderId, 
+    string AccountId, 
+    string Symbol, 
+    int Quantity, 
+    decimal Price, 
+    string Status, 
+    DateTime CreatedAtUtc);
+
+// Query Handler with Dapper (Bypasses EF Core Change Tracker for maximum speed)
+public sealed class GetOrderSummaryQueryHandler(IDbConnectionFactory connectionFactory) 
+    : IRequestHandler&lt;GetOrderSummaryQuery, OrderSummaryDto?&gt;
+{
+    public async Task&lt;OrderSummaryDto?&gt; Handle(GetOrderSummaryQuery query, CancellationToken ct)
+    {
+        using var connection = connectionFactory.CreateReadOnlyConnection();
+
+        const string sql = """
+            SELECT 
+                OrderId, 
+                AccountId, 
+                Symbol, 
+                Quantity, 
+                Price, 
+                Status, 
+                CreatedAtUtc
+            FROM vw_OrderExecutionSummaries WITH (NOLOCK)
+            WHERE OrderId = @OrderId;
+            """;
+
+        return await connection.QuerySingleOrDefaultAsync&lt;OrderSummaryDto&gt;(
+            new CommandDefinition(sql, new { query.OrderId }, cancellationToken: ct));
+    }
+}</code></pre>
+    </section>
+
+    <!-- SECTION 3: EVENT SOURCING -->
+    <section id="event-sourcing">
+      <h2>3. Event Sourcing: State as a Stream of Events</h2>
+      
+      <div class="callout callout-info">
+        <div class="callout-title">📖 Core Principle</div>
+        <p>Instead of persisting only the current state of an entity, <strong>Event Sourcing</strong> persists every state-changing event as an immutable, append-only log. The current state is calculated by replaying all past events.</p>
+      </div>
+
+      <div class="mermaid">
+flowchart LR
+    E1["Event 1:<br/>OrderCreated<br/>(Qty: 100, Price: 150)"] --> E2["Event 2:<br/>PartialFill<br/>(Filled: 40 @ 150)"]
+    E2 --> E3["Event 3:<br/>PriceAmended<br/>(New Price: 152)"]
+    E3 --> E4["Event 4:<br/>OrderCancelled<br/>(Remaining: 60)"]
+    E4 -->|Fold / Replay| State["Current Order State:<br/>Status: Cancelled<br/>FilledQty: 40<br/>AvgPrice: 150"]
+      </div>
+
+      <h3>Implementing an Event-Sourced Aggregate in C# 12</h3>
+      <pre><code class="language-csharp">// Base Domain Event
+public abstract record DomainEvent(DateTime TimestampUtc);
+
+public sealed record OrderPlacedEvent(Guid OrderId, string Symbol, int Qty, decimal Price) 
+    : DomainEvent(DateTime.UtcNow);
+
+public sealed record OrderFilledEvent(Guid OrderId, int FilledQty, decimal ExecutionPrice) 
+    : DomainEvent(DateTime.UtcNow);
+
+// Event-Sourced Aggregate Root
+public sealed class OrderAggregate
+{
+    public Guid Id { get; private set; }
+    public string Symbol { get; private set; } = string.Empty;
+    public int RemainingQty { get; private set; }
+    public int FilledQty { get; private set; }
+    public decimal AveragePrice { get; private set; }
+    public int Version { get; private set; }
+
+    private readonly List&lt;DomainEvent&gt; _uncommittedEvents = [];
+    public IReadOnlyList&lt;DomainEvent&gt; UncommittedEvents =&gt; _uncommittedEvents.AsReadOnly();
+
+    public OrderAggregate() { } // Required for replay
+
+    // Factory method creating the aggregate
+    public static OrderAggregate PlaceOrder(Guid id, string symbol, int qty, decimal price)
+    {
+        var aggregate = new OrderAggregate();
+        aggregate.RaiseEvent(new OrderPlacedEvent(id, symbol, qty, price));
+        return aggregate;
+    }
+
+    public void Fill(int filledQty, decimal price)
+    {
+        if (filledQty &lt;= 0 || filledQty &gt; RemainingQty)
+            throw new InvalidOperationException("Invalid fill quantity.");
+
+        RaiseEvent(new OrderFilledEvent(Id, filledQty, price));
+    }
+
+    private void RaiseEvent(DomainEvent @event)
+    {
+        ApplyEvent(@event);
+        _uncommittedEvents.Add(@event);
+    }
+
+    // Mutates state by applying event
+    public void ApplyEvent(DomainEvent @event)
+    {
+        switch (@event)
+        {
+            case OrderPlacedEvent e:
+                Id = e.OrderId;
+                Symbol = e.Symbol;
+                RemainingQty = e.Qty;
+                FilledQty = 0;
+                break;
+
+            case OrderFilledEvent e:
+                decimal totalSpent = (FilledQty * AveragePrice) + (e.FilledQty * e.ExecutionPrice);
+                FilledQty += e.FilledQty;
+                RemainingQty -= e.FilledQty;
+                AveragePrice = totalSpent / FilledQty;
+                break;
+        }
+        Version++;
+    }
+
+    public void ClearUncommittedEvents() =&gt; _uncommittedEvents.Clear();
+}</code></pre>
+    </section>
+
+    <!-- SECTION 4: THE OUTBOX PATTERN -->
+    <section id="outbox-pattern">
+      <h2>4. The Dual-Write Problem &amp; The Transactional Outbox Pattern</h2>
+
+      <div class="callout callout-danger">
+        <div class="callout-title">🚨 The Dual-Write Trap</div>
+        <p>In microservices, you frequently need to save data to a relational database AND publish an event to Kafka or RabbitMQ. What happens when:</p>
+        <ol>
+          <li>You commit to SQL DB, but the network fails before Kafka receives the event? <strong>Data is saved, but downstream microservices are never notified.</strong></li>
+          <li>You publish to Kafka first, but the SQL commit fails due to a unique constraint violation? <strong>Events were sent for orders that do not exist!</strong></li>
+        </ol>
+      </div>
+
+      <p>The <strong>Transactional Outbox Pattern</strong> solves this by writing the outgoing event into an <code>OutboxMessages</code> table within the <strong>exact same local SQL transaction</strong> as the business entities:</p>
+
+      <div class="mermaid">
+flowchart TD
+    API["API Command"] --> DBTx["Single SQL Transaction"]
+    subgraph LocalTransaction["Atomic DB Commit"]
+        DBTx --> OrdersTable["1. Insert Order Row"]
+        DBTx --> OutboxTable["2. Insert OutboxMessage Row"]
+    end
+    OutboxTable -.-> Worker["BackgroundService / Worker"]
+    Worker -->|Poll / CDC Debezium| Kafka["Kafka / RabbitMQ Broker"]
+    Kafka --> Downstream["Downstream Services"]
+    Worker -->|Mark as Processed| OutboxTable
+      </div>
+
+      <h3>Production Outbox Processor in .NET 8 (`BackgroundService`)</h3>
+      <pre><code class="language-csharp">public sealed class OutboxMessage
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public string EventType { get; set; } = string.Empty;
+    public string Payload { get; set; } = string.Empty;
+    public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
+    public DateTime? ProcessedAtUtc { get; set; }
+    public string? Error { get; set; }
+}
+
+public sealed class OutboxPublisherBackgroundService(
+    IServiceScopeFactory scopeFactory, 
+    ILogger&lt;OutboxPublisherBackgroundService&gt; logger) 
+    : BackgroundService
+{
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    {
+        while (!stoppingToken.IsCancellationRequested)
+        {
+            try
+            {
+                using var scope = scopeFactory.CreateScope();
+                var db = scope.ServiceProvider.GetRequiredService&lt;TradingDbContext&gt;();
+                var bus = scope.ServiceProvider.GetRequiredService&lt;IMessageBus&gt;();
+
+                // Lock top 50 unhandled messages
+                var messages = await db.OutboxMessages
+                    .Where(m =&gt; m.ProcessedAtUtc == null)
+                    .OrderBy(m =&gt; m.CreatedAtUtc)
+                    .Take(50)
+                    .ToListAsync(stoppingToken);
+
+                foreach (var message in messages)
+                {
+                    try
+                    {
+                        await bus.PublishAsync(message.EventType, message.Payload, stoppingToken);
+                        message.ProcessedAtUtc = DateTime.UtcNow;
+                    }
+                    catch (Exception ex)
+                    {
+                        message.Error = ex.Message;
+                        logger.LogError(ex, "Failed to publish Outbox message {Id}", message.Id);
+                    }
+                }
+
+                await db.SaveChangesAsync(stoppingToken);
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Error processing outbox batch.");
+            }
+
+            await Task.Delay(TimeSpan.FromSeconds(2), stoppingToken);
+        }
+    }
+}</code></pre>
+    </section>
+
+    <!-- SECTION 5: INTERVIEW GRILL ROUND -->
+    <section id="interview-grill">
+      <h2>5. The Senior Interviewer's Grill Round: CQRS &amp; Event Sourcing</h2>
+
+      <div class="callout callout-danger">
+        <div class="callout-title">🔥 Question 1: How do you solve the 'Read-Your-Own-Writes' latency problem in CQRS?</div>
+        <div class="callout-content">
+          <p><strong>Senior Answer:</strong> When read models are updated asynchronously (Eventual Consistency), a user submitting an order might be immediately redirected to the Order Details page before the read projection has processed the event, resulting in a 404 or outdated data. Solutions include:
+          <ul>
+            <li><strong>Optimistic UI:</strong> The frontend client immediately merges the submitted command payload into its local state before the read projection catches up.</li>
+            <li><strong>Version-based Synchronization:</strong> The command returns the new Aggregate <code>Version</code> (or Sequence Number). When querying the read stack, the client passes <code>?minVersion=5</code>. The read service polls or awaits until the read replica reaches version &gt;= 5.</li>
+            <li><strong>Command Returns DTO:</strong> Pragmatically return the created DTO directly from the command execution response for immediate UI rendering, bypassing the read model for the immediate response.</li>
+          </ul>
+          </p>
+        </div>
+      </div>
+
+      <div class="callout callout-danger">
+        <div class="callout-title">🔥 Question 2: How do you handle schema changes and event evolution in Event Sourcing?</div>
+        <div class="callout-content">
+          <p><strong>Senior Answer:</strong> Because past events are immutable and cannot be altered, schema changes must be handled through <strong>Upcasting</strong>:
+          <ol>
+            <li><strong>Upcasters:</strong> Middleware sits between the Event Store and the Aggregate replay engine. When an old <code>OrderPlacedEvent_v1</code> is deserialized, the Upcaster dynamically transforms it into <code>OrderPlacedEvent_v2</code> by filling default values before handing it to the aggregate.</li>
+            <li><strong>Weak Schema Compatibility:</strong> Event payloads should use optional fields and default values, tolerating missing fields upon JSON deserialization.</li>
+          </ol>
+          </p>
+        </div>
+      </div>
+
+      <div class="callout callout-danger">
+        <div class="callout-title">🔥 Question 3: How does Event Sourcing comply with GDPR 'Right to be Forgotten'?</div>
+        <div class="callout-content">
+          <p><strong>Senior Answer:</strong> Deleting events from an append-only event store violates immutability and corrupts cryptographic hash chains. The industry standard solution is <strong>Crypto-Shredding</strong>: Personal Identifiable Information (PII) inside event payloads is encrypted using a unique encryption key per user. When a user exercises their Right to be Forgotten, the user's encryption key is destroyed from the Key Management Service (KMS). The historical events remain structurally intact for financial audits, but the PII becomes cryptographically unrecoverable ciphertext.</p>
+        </div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<button class="scroll-top" aria-label="Scroll to top">↑</button>
+</body>
+</html>

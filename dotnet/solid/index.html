@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SOLID Principles in C# — From Scratch to Principal Architect</title>
+  <link rel="stylesheet" href="../css/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.0/dist/mermaid.min.js"></script>
+  <script src="../js/main.js" defer></script>
+</head>
+<body>
+
+<button class="menu-toggle" aria-label="Toggle menu">☰</button>
+
+<div class="page-wrapper">
+  <aside class="sidebar" id="sidebar"></aside>
+
+  <main class="main-content">
+    <div class="platform-switcher">
+      <span>Mastery Portals:</span>
+      <a href="../../index.html">🏛️ System Design</a>
+      <a href="../../corejava/index.html">☕ Core Java 21</a>
+      <a href="../../sqlserver/index.html">🗄️ MS SQL Server</a>
+      <a href="../index.html" class="active">🔷 .NET 8 / C# 12</a>
+    </div>
+
+    <nav class="breadcrumb">
+      <a href="../index.html">.NET Mastery</a> &gt; <span>01 · SOLID Principles in C#</span>
+    </nav>
+
+    <header>
+      <h1>💎 SOLID Principles in C#: Ground-Zero to Senior Architect</h1>
+      <p class="subtitle">An exhaustive masterclass on Single Responsibility, Open/Closed, Liskov Substitution, Interface Segregation, and Dependency Inversion — with real financial trading domain architectures, refactoring before/after, and interview defense.</p>
+    </header>
+
+    <!-- SECTION 1: OVERVIEW -->
+    <section id="overview">
+      <h2>1. The Ground-Zero Philosophy: Why SOLID?</h2>
+      <p>In high-frequency trading (HFT), risk engines, and enterprise enterprise banking platforms, software decays rapidly under evolving regulatory requirements and volatile market conditions. Without architectural discipline, codebases suffer from the four classic symptoms of rotten architecture:</p>
+      
+      <ul>
+        <li><strong>Rigidity:</strong> Every small change causes a cascade of modifications across unrelated modules.</li>
+        <li><strong>Fragility:</strong> A fix in the order cancellation logic breaks the compliance reporting pipeline in an unexpected way.</li>
+        <li><strong>Immobility:</strong> Components cannot be reused in another service because they are tightly coupled to specific SQL databases or third-party APIs.</li>
+        <li><strong>Viscosity:</strong> Doing things the "hacky" way is easier than doing things the architecturally correct way, leading to technical debt accumulation.</li>
+      </ul>
+
+      <p>The <strong>SOLID</strong> principles, coined by Robert C. Martin (Uncle Bob), provide the mathematical and design foundations to build loosely coupled, highly cohesive, and easily testable software in C#.</p>
+
+      <div class="mermaid">
+flowchart TD
+    S["S: Single Responsibility<br/>1 Reason to Change"] --> O["O: Open / Closed<br/>Open for extension, closed for modification"]
+    O --> L["L: Liskov Substitution<br/>Subtypes must honor base contracts"]
+    L --> I["I: Interface Segregation<br/>No client forced to depend on unused methods"]
+    I --> D["D: Dependency Inversion<br/>Depend on abstractions, not concretions"]
+      </div>
+    </section>
+
+    <!-- SECTION 2: SINGLE RESPONSIBILITY PRINCIPLE -->
+    <section id="srp">
+      <h2>2. S — Single Responsibility Principle (SRP)</h2>
+      <div class="callout callout-info">
+        <div class="callout-title">📖 Formal Definition</div>
+        <p><em>"A class should have one, and only one, reason to change."</em> — A responsibility is defined as an actor or stakeholder who requests the change.</p>
+      </div>
+
+      <h3>The Production Pain Point &amp; Anti-Pattern</h3>
+      <p>Consider an order processing class in an electronic trading system. If a single class parses the FIX protocol message, validates trader credit limits, writes to the SQL Server database, and sends an email confirmation, that class serves four different stakeholders:</p>
+      <ol>
+        <li>The Network Operations team (FIX protocol specification changes).</li>
+        <li>The Risk Management team (credit check formula changes).</li>
+        <li>The Database Administration team (schema / indexing changes).</li>
+        <li>The Client Notification team (email / push notification template changes).</li>
+      </ol>
+      <p>Any change requested by one stakeholder risks breaking functionality relied upon by the other three!</p>
+
+      <h4>❌ The Monolithic Anti-Pattern (Violating SRP):</h4>
+      <pre><code class="language-csharp">public class OrderProcessor
+{
+    public void Process(string rawFixMessage)
+    {
+        // 1. Parsing FIX message (Reason to change: Protocol change)
+        string[] tags = rawFixMessage.Split('|');
+        string symbol = tags[0].Split('=')[1];
+        decimal price = decimal.Parse(tags[1].Split('=')[1]);
+        int qty = int.Parse(tags[2].Split('=')[1]);
+
+        // 2. Risk & Credit Check (Reason to change: Risk policy change)
+        if (price * qty > 1_000_000)
+            throw new InvalidOperationException("Order breaches trader notional limit.");
+
+        // 3. Database Persistence (Reason to change: Database schema change)
+        using var conn = new SqlConnection("Server=trade-db;...");
+        conn.Open();
+        var cmd = new SqlCommand("INSERT INTO Orders VALUES (@s, @p, @q)", conn);
+        cmd.Parameters.AddWithValue("@s", symbol);
+        cmd.Parameters.AddWithValue("@p", price);
+        cmd.Parameters.AddWithValue("@q", qty);
+        cmd.ExecuteNonQuery();
+
+        // 4. Client Notification (Reason to change: Communication vendor change)
+        using var smtp = new SmtpClient("smtp.bank.com");
+        smtp.Send(new MailMessage("trades@bank.com", "client@fund.com", "Order Filled", "Details..."));
+    }
+}</code></pre>
+
+      <h4>✅ Clean C# 12 Architecture (Adhering to SRP):</h4>
+      <p>We decompose the workflow into highly focused, single-purpose classes orchestrated by a coordinator service:</p>
+
+      <pre><code class="language-csharp">namespace TradingEngine.Core;
+
+// 1. Immutable Domain Entity (Data Only)
+public record Order(string Symbol, decimal Price, int Quantity);
+
+// 2. Protocol Parser (Only changes if FIX protocol spec changes)
+public interface IFixMessageParser
+{
+    Order Parse(string rawFixMessage);
+}
+
+// 3. Risk Verification (Only changes if Risk Department alters policies)
+public interface IRiskValidator
+{
+    bool Validate(Order order, out string failureReason);
+}
+
+// 4. Persistence Repository (Only changes if database tech changes)
+public interface IOrderRepository
+{
+    Task SaveAsync(Order order, CancellationToken ct = default);
+}
+
+// 5. Notification Service (Only changes if alerting channels change)
+public interface ITradeNotifier
+{
+    Task NotifyTraderAsync(Order order, CancellationToken ct = default);
+}
+
+// 6. High-level Orchestrator (Coordinates single-purpose services)
+public class OrderExecutionCoordinator(
+    IFixMessageParser parser,
+    IRiskValidator riskValidator,
+    IOrderRepository repository,
+    ITradeNotifier notifier)
+{
+    public async Task ProcessOrderAsync(string rawFixMessage, CancellationToken ct = default)
+    {
+        var order = parser.Parse(rawFixMessage);
+
+        if (!riskValidator.Validate(order, out var reason))
+            throw new InvalidOperationException($"Risk check failed: {reason}");
+
+        await repository.SaveAsync(order, ct);
+        await notifier.NotifyTraderAsync(order, ct);
+    }
+}</code></pre>
+    </section>
+
+    <!-- SECTION 3: OPEN CLOSED PRINCIPLE -->
+    <section id="ocp">
+      <h2>3. O — Open/Closed Principle (OCP)</h2>
+      <div class="callout callout-info">
+        <div class="callout-title">📖 Formal Definition</div>
+        <p><em>"Software entities (classes, modules, functions) should be open for extension, but closed for modification."</em></p>
+      </div>
+
+      <h3>The Production Pain Point &amp; Real-World Example</h3>
+      <p>Consider calculating commission fees on an equity trading exchange. The exchange charges different fees based on client tiers: Retail (0.10%), Institutional (0.04%), High-Frequency Trading Maker-Taker (-0.01% rebate), and VIP Hedge Fund (flat $2 per trade).</p>
+      <p>If you implement this with a switch statement or an <code>if-else</code> cascade on a <code>ClientType</code> enum, every time marketing introduces a new client tier or holiday promotion, you must <strong>open and modify the existing, battle-tested calculation class</strong>! This risks introducing bugs into existing client billing logic.</p>
+
+      <h4>❌ Violating OCP (Switch-Case Cascade):</h4>
+      <pre><code class="language-csharp">public enum ClientTier { Retail, Institutional, HftMaker, Vip }
+
+public class FeeCalculator
+{
+    public decimal CalculateFee(ClientTier tier, decimal tradeNotional) => tier switch
+    {
+        ClientTier.Retail => tradeNotional * 0.0010m,
+        ClientTier.Institutional => tradeNotional * 0.0004m,
+        ClientTier.HftMaker => -(tradeNotional * 0.0001m), // Rebate
+        ClientTier.Vip => 2.00m,
+        _ => throw new NotSupportedException()
+    };
+    // Adding a new tier requires editing and re-testing this critical class!
+}</code></pre>
+
+      <h4>✅ Clean C# 12 Architecture (Open for Extension via Strategy Pattern):</h4>
+      <p>We declare an abstraction <code>IFeeStrategy</code>. New client tiers are added by creating <strong>brand new classes</strong> without touching a single line of existing code:</p>
+
+      <pre><code class="language-csharp">namespace TradingEngine.Pricing;
+
+public interface IFeeStrategy
+{
+    bool Matches(ClientAccount account);
+    decimal CalculateFee(decimal tradeNotional);
+}
+
+public class RetailFeeStrategy : IFeeStrategy
+{
+    public bool Matches(ClientAccount account) => account.Tier == "RETAIL";
+    public decimal CalculateFee(decimal tradeNotional) => tradeNotional * 0.0010m;
+}
+
+public class InstitutionalFeeStrategy : IFeeStrategy
+{
+    public bool Matches(ClientAccount account) => account.Tier == "INSTITUTIONAL";
+    public decimal CalculateFee(decimal tradeNotional) => tradeNotional * 0.0004m;
+}
+
+// Adding a new promotional strategy requires ZERO modifications to existing strategies!
+public class BlackFridayPromotionFeeStrategy : IFeeStrategy
+{
+    public bool Matches(ClientAccount account) => account.HasActivePromotion("BLACK_FRIDAY");
+    public decimal CalculateFee(decimal tradeNotional) => Math.Min(5.00m, tradeNotional * 0.0001m);
+}
+
+// The core engine is CLOSED for modification, but OPEN for extension:
+public class TradePricingEngine(IEnumerable<IFeeStrategy> strategies)
+{
+    public decimal DetermineFee(ClientAccount account, decimal tradeNotional)
+    {
+        var strategy = strategies.FirstOrDefault(s => s.Matches(account))
+            ?? throw new InvalidOperationException($"No fee strategy registered for account {account.Id}");
+
+        return strategy.CalculateFee(tradeNotional);
+    }
+}</code></pre>
+    </section>
+
+    <!-- SECTION 4: LISKOV SUBSTITUTION PRINCIPLE -->
+    <section id="lsp">
+      <h2>4. L — Liskov Substitution Principle (LSP)</h2>
+      <div class="callout callout-info">
+        <div class="callout-title">📖 Formal Definition (Barbara Liskov, 1987)</div>
+        <p><em>"If $S$ is a subtype of $T$, then objects of type $T$ may be replaced with objects of type $S$ without altering any of the desirable properties of the program."</em></p>
+      </div>
+
+      <h3>How Liskov Substitution Works in Inheritance</h3>
+      <p>LSP requires <strong>Behavioral Subtyping</strong>, not just syntactic inheritance. In C#, simply inheriting from a class or implementing an interface with the same method names does <em>not</em> mean you satisfy LSP. You must satisfy four behavioural rules:</p>
+      <ol>
+        <li><strong>Preconditions cannot be strengthened in a subtype:</strong> Subtypes cannot require stricter validation than the base class.</li>
+        <li><strong>Postconditions cannot be weakened in a subtype:</strong> Subtypes must fulfill all guarantees made by the base class.</li>
+        <li><strong>Invariants of the base type must be preserved in the subtype:</strong> State rules cannot be violated.</li>
+        <li><strong>History constraint (Immutability rule):</strong> If the base type is designed to be immutable, the subtype cannot introduce mutability.</li>
+      </ol>
+
+      <h4>❌ Classic Trap 1: The Read-Only Account Disaster</h4>
+      <pre><code class="language-csharp">public class BankAccount
+{
+    public decimal Balance { get; protected set; }
+    
+    public virtual void Deposit(decimal amount)
+    {
+        if (amount <= 0) throw new ArgumentOutOfRangeException(nameof(amount));
+        Balance += amount;
+    }
+
+    public virtual void Withdraw(decimal amount)
+    {
+        if (amount > Balance) throw new InvalidOperationException("Overdraft");
+        Balance -= amount;
+    }
+}
+
+// CATASTROPHIC LSP VIOLATION:
+public class FixedDepositAccount : BankAccount
+{
+    public override void Withdraw(decimal amount)
+    {
+        // Throws exception because fixed deposits are locked for 1 year!
+        throw new NotSupportedException("Cannot withdraw from a Fixed Deposit account before maturity!");
+    }
+}
+
+// Client code crashes in production:
+public void ProcessDailyPayout(BankAccount account, decimal payout)
+{
+    account.Withdraw(payout); // CRASHES with NotSupportedException if account is FixedDepositAccount!
+}</code></pre>
+
+      <h4>✅ Clean C# 12 Architecture (Correct Hierarchy via Segregated Contracts):</h4>
+      <pre><code class="language-csharp">namespace Banking.Accounts;
+
+public interface IAccount
+{
+    decimal Balance { get; }
+    void Deposit(decimal amount);
+}
+
+public interface IWithdrawableAccount : IAccount
+{
+    void Withdraw(decimal amount);
+}
+
+public class CheckingAccount : IWithdrawableAccount
+{
+    public decimal Balance { get; private set; }
+    public void Deposit(decimal amount) => Balance += amount;
+    public void Withdraw(decimal amount) => Balance -= amount;
+}
+
+public class FixedDepositAccount : IAccount
+{
+    public decimal Balance { get; private set; }
+    public void Deposit(decimal amount) => Balance += amount;
+    // FixedDeposit does NOT implement IWithdrawableAccount!
+    // Compiler prevents illegal withdrawal calls at compile-time!
+}</code></pre>
+    </section>
+
+    <!-- SECTION 5: INTERFACE SEGREGATION PRINCIPLE -->
+    <section id="isp">
+      <h2>5. I — Interface Segregation Principle (ISP)</h2>
+      <div class="callout callout-info">
+        <div class="callout-title">📖 Formal Definition</div>
+        <p><em>"Clients should not be forced to depend upon interfaces that they do not use."</em></p>
+      </div>
+
+      <h3>The "Fat Interface" Anti-Pattern</h3>
+      <p>Developers often create a single, bloated interface (e.g. <code>IOrderService</code> with 25 methods: Create, Cancel, Modify, Settle, Audit, ExportCsv, PrintReceipt, SendPushNotification). When an external lightweight pricing bot or an automated risk monitor only needs to read order prices, it is forced to implement or mock all 25 methods!</p>
+
+      <h4>❌ Violating ISP (The Bloated Interface):</h4>
+      <pre><code class="language-csharp">public interface ITradingOperations
+{
+    void PlaceOrder(Order order);
+    void CancelOrder(string orderId);
+    void ModifyOrder(string orderId, decimal newPrice);
+    void GenerateRegulatoryReport(DateTime date);
+    void PrintPhysicalTradingSlip(string orderId);
+    void ResetTradingDeskHardware();
+}
+
+// A simple algorithmic trading bot is forced to throw NotImplementedException:
+public class AlgoBotTrader : ITradingOperations
+{
+    public void PlaceOrder(Order order) { /* Trade logic */ }
+    public void CancelOrder(string orderId) { /* Cancel logic */ }
+    public void ModifyOrder(string orderId, decimal newPrice) { /* Modify */ }
+    
+    // FORCED TO IMPLEMENT JUNK:
+    public void GenerateRegulatoryReport(DateTime date) => throw new NotImplementedException();
+    public void PrintPhysicalTradingSlip(string orderId) => throw new NotImplementedException();
+    public void ResetTradingDeskHardware() => throw new NotImplementedException();
+}</code></pre>
+
+      <h4>✅ Clean C# 12 Architecture (Role Interfaces):</h4>
+      <pre><code class="language-csharp">namespace Trading.Abstractions;
+
+public interface IOrderPlacement
+{
+    void PlaceOrder(Order order);
+}
+
+public interface IOrderCancellation
+{
+    void CancelOrder(string orderId);
+}
+
+public interface IOrderModification
+{
+    void ModifyOrder(string orderId, decimal newPrice);
+}
+
+public interface IRegulatoryReporting
+{
+    void GenerateRegulatoryReport(DateTime date);
+}
+
+// The bot depends ONLY on what it needs:
+public class AlgorithmicTradingBot(IOrderPlacement placement, IOrderCancellation cancellation)
+{
+    public void ExecuteStrategy(Order signal)
+    {
+        placement.PlaceOrder(signal);
+    }
+}</code></pre>
+    </section>
+
+    <!-- SECTION 6: DEPENDENCY INVERSION PRINCIPLE -->
+    <section id="dip">
+      <h2>6. D — Dependency Inversion Principle (DIP)</h2>
+      <div class="callout callout-info">
+        <div class="callout-title">📖 Formal Definition</div>
+        <p><em>"1. High-level modules should not depend on low-level modules. Both should depend on abstractions.<br>
+        2. Abstractions should not depend on details. Details should depend on abstractions."</em></p>
+      </div>
+
+      <h3>DIP vs DI vs IoC: The Precise Distinction</h3>
+      <ul>
+        <li><strong>Inversion of Control (IoC):</strong> The overarching architectural concept of inverting control flow (e.g. the framework calls your code, instead of your code calling the framework).</li>
+        <li><strong>Dependency Inversion Principle (DIP):</strong> The design principle stating that high-level business policy must not depend on low-level database/I/O plumbing.</li>
+        <li><strong>Dependency Injection (DI):</strong> The specific structural technique used to implement DIP in C# (e.g. passing interface instances via constructor).</li>
+      </ul>
+
+      <div class="mermaid">
+flowchart TD
+    subgraph BadArchitecture ["❌ Violating DIP (High-level depends on Concretion)"]
+        TradeServiceBad["TradeService (High-level Business Policy)"] -->|"Directly Instantiates new"| SqlOrderDb["SqlServerOrderDb (Low-level Database Detail)"]
+    end
+    
+    subgraph GoodArchitecture ["✅ Adhering to DIP (Both depend on Abstraction)"]
+        TradeServiceGood["TradeService (High-Level)"] -->|"Depends on"| IOrderRepo["IOrderRepository (Abstraction)"]
+        SqlOrderDbGood["SqlServerOrderDb (Low-Level Detail)"] -->|"Implements"| IOrderRepo
+    end
+      </div>
+
+      <h4>✅ Production Implementation in C# &amp; ASP.NET Core:</h4>
+      <pre><code class="language-csharp">// 1. Domain Abstraction (Owned by the High-Level Core, NOT the database layer!)
+public interface IMarketDataFeed
+{
+    Task<decimal> GetLivePriceAsync(string symbol, CancellationToken ct = default);
+}
+
+// 2. High-Level Business Service
+public class ArbitrageCalculationService(IMarketDataFeed feed)
+{
+    public async Task<bool> IsArbitrageOpportunityAsync(string symbol, decimal targetPrice)
+    {
+        decimal livePrice = await feed.GetLivePriceAsync(symbol);
+        return (targetPrice - livePrice) > 0.05m;
+    }
+}
+
+// 3. Low-Level Infrastructure Detail (Can be swapped with Zero impact on ArbitrageCalculationService)
+public class BloombergMarketDataFeed : IMarketDataFeed
+{
+    public async Task<decimal> GetLivePriceAsync(string symbol, CancellationToken ct = default)
+    {
+        // Real-time Bloomberg B-PIPE socket reader
+        await Task.Delay(1, ct);
+        return 150.25m;
+    }
+}
+
+// 4. Registration in ASP.NET Core DI Container (Program.cs):
+builder.Services.AddSingleton<IMarketDataFeed, BloombergMarketDataFeed>();
+builder.Services.AddTransient<ArbitrageCalculationService>();</code></pre>
+    </section>
+
+    <!-- SECTION 7: INTERVIEW GRILL ROUND -->
+    <section id="grill-round">
+      <div class="callout callout-warning">
+        <div class="callout-title">🎯 The Principal Engineer's Grill Round: SOLID in C#</div>
+
+        <p><strong>Q1: "Can a class violate SRP even if it only has 50 lines of code?"</strong></p>
+        <p><strong>Senior Answer:</strong> "Yes, absolutely. SRP is not measured in lines of code; it is measured in <strong>reasons to change</strong>. A 30-line class that parses a JSON payload, computes an interest rate, and writes an error log to a local file violates SRP because it couples data serialization format, financial calculation rules, and logging infrastructure. Changes to any of those three distinct business drivers will force a modification of that class."</p>
+
+        <p><strong>Q2: "What is the difference between covariant and contravariant generics in C#, and how does that relate to Liskov Substitution?"</strong></p>
+        <p><strong>Senior Answer:</strong> "Covariance (<code>out T</code>) allows a method to return a more derived type than that specified by the interface (preserving assignment compatibility for outputs: <code>IEnumerable&lt;Derived&gt;</code> is assignable to <code>IEnumerable&lt;Base&gt;</code>). Contravariance (<code>in T</code>) allows a method to accept arguments of a less derived type (for inputs: <code>IComparer&lt;Base&gt;</code> can compare <code>Derived</code> instances). This directly enforces LSP mathematically: inputs can broaden their accepted types (weakened preconditions), while outputs can narrow their returned types (strengthened postconditions)."</p>
+
+        <p><strong>Q3: "How does the Open/Closed Principle apply to C# sealed classes?"</strong></p>
+        <p><strong>Senior Answer:</strong> "Sealing classes (<code>public sealed class</code>) seems contradictory to OCP at first glance because it prevents class inheritance. However, inheritance is the weakest form of extension. True OCP favors <strong>Composition over Inheritance</strong>. By sealing concrete classes, you protect their internal invariants from improper subclassing, and you achieve OCP by having the sealed class implement an interface or by wrapping it via the Decorator Pattern."</p>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<button class="scroll-top" aria-label="Scroll to top">↑</button>
+</body>
+</html>

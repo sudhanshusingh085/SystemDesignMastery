@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>EF Core 8 Internals &amp; Performance — From Scratch to Principal Architect</title>
+  <link rel="stylesheet" href="../css/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.0/dist/mermaid.min.js"></script>
+  <script src="../js/main.js" defer></script>
+</head>
+<body>
+
+<button class="menu-toggle" aria-label="Toggle menu">☰</button>
+
+<div class="page-wrapper">
+  <aside class="sidebar" id="sidebar"></aside>
+
+  <main class="main-content">
+    <div class="platform-switcher">
+      <span>Mastery Portals:</span>
+      <a href="../../index.html">🏛️ System Design</a>
+      <a href="../../corejava/index.html">☕ Core Java 21</a>
+      <a href="../../sqlserver/index.html">🗄️ MS SQL Server</a>
+      <a href="../index.html" class="active">🔷 .NET 8 / C# 12</a>
+    </div>
+
+    <nav class="breadcrumb">
+      <a href="../index.html">.NET Mastery</a> &gt; <span>12 · EF Core 8 Internals &amp; Performance</span>
+    </nav>
+
+    <header>
+      <h1>🗄️ Entity Framework Core 8 Internals &amp; Performance Tuning</h1>
+      <p class="subtitle">An architectural deep-dive into the Change Tracker snapshot engine, AsNoTracking strategies, eliminating the N+1 problem, Cartesian explosion &amp; AsSplitQuery, optimistic concurrency tokens, and resilient execution strategies.</p>
+    </header>
+
+    <!-- SECTION 1: CHANGE TRACKER -->
+    <section id="change-tracker">
+      <h2>1. The Change Tracker Internals: Snapshot Engine &amp; States</h2>
+
+      <p>Entity Framework Core tracks changes to domain models using an internal <strong>Snapshot Change Tracking</strong> mechanism:</p>
+
+      <div class="mermaid">
+flowchart TD
+    Query["db.Orders.Find(id)"] --> CreatePOCO["1. Instantiate Order POCO"]
+    CreatePOCO --> Snapshot["2. Create Private Snapshot of all Property Values"]
+    Snapshot --> StateMap["3. Add Entry to Identity Map (State: Unchanged)"]
+    StateMap --> UserMutation["Developer modifies: order.Status = 'Filled'"]
+    UserMutation --> Save["db.SaveChangesAsync()"]
+    Save --> Detect["4. DetectChanges(): Compares POCO against Snapshot"]
+    Detect --> EmitSQL["5. Emits targeted: UPDATE Orders SET Status = 'Filled' WHERE Id = @id"]
+      </div>
+
+      <h3>The 5 Entity States</h3>
+      <table class="comparison-table">
+        <thead>
+          <tr>
+            <th>EntityState</th>
+            <th>Meaning</th>
+            <th>Action upon SaveChanges()</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>Detached</code></td>
+            <td>Not tracked by the DbContext.</td>
+            <td>Ignored.</td>
+          </tr>
+          <tr>
+            <td><code>Unchanged</code></td>
+            <td>Property values match the initial snapshot.</td>
+            <td>No SQL emitted.</td>
+          </tr>
+          <tr>
+            <td><code>Modified</code></td>
+            <td>One or more properties have changed since snapshot.</td>
+            <td>Emits targeted <code>UPDATE</code> SQL.</td>
+          </tr>
+          <tr>
+            <td><code>Added</code></td>
+            <td>New entity registered with <code>db.Add()</code>.</td>
+            <td>Emits <code>INSERT</code> SQL; maps generated PK back.</td>
+          </tr>
+          <tr>
+            <td><code>Deleted</code></td>
+            <td>Marked for removal via <code>db.Remove()</code>.</td>
+            <td>Emits <code>DELETE</code> SQL.</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="callout callout-warning">
+        <div class="callout-title">⚠️ The Tracking Memory Tax</div>
+        <p>Tracking 10,000 entities in a long-lived DbContext requires storing 10,000 active objects PLUS 10,000 snapshot dictionaries! When <code>SaveChangesAsync()</code> is invoked, <code>DetectChanges()</code> scans all properties of all 10,000 entities, causing severe CPU spikes. Always use <code>AsNoTracking()</code> for read-only queries.</p>
+      </div>
+    </section>
+
+    <!-- SECTION 2: TRACKING MODES -->
+    <section id="tracking-modes">
+      <h2>2. AsNoTracking vs AsNoTrackingWithIdentityResolution</h2>
+
+      <table class="comparison-table">
+        <thead>
+          <tr>
+            <th>Query Mode</th>
+            <th>Snapshot Overhead</th>
+            <th>Identity Map Cache</th>
+            <th>Ideal Scenario</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>Default Tracking</code></td>
+            <td>Full snapshot created</td>
+            <td>Yes (1 instance per PK)</td>
+            <td>Mutations, CRUD operations, Unit of Work transactions.</td>
+          </tr>
+          <tr>
+            <td><code>AsNoTracking()</code></td>
+            <td><strong>None (Zero overhead)</strong></td>
+            <td>No (Can duplicate objects)</td>
+            <td>Flat read-only queries, DTO projections, API responses.</td>
+          </tr>
+          <tr>
+            <td><code>AsNoTrackingWithIdentityResolution()</code></td>
+            <td><strong>None</strong></td>
+            <td><strong>Yes (Within query scope)</strong></td>
+            <td>Complex queries with graph relationships sharing common entities.</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <pre><code class="language-csharp">// Read-only high-performance query (0 snapshot overhead):
+var activeOrders = await db.Orders
+    .AsNoTracking()
+    .Where(o =&gt; o.Status == OrderStatus.Pending)
+    .ToListAsync(ct);</code></pre>
+    </section>
+
+    <!-- SECTION 3: N+1 & CARTESIAN EXPLOSION -->
+    <section id="n-plus-one">
+      <h2>3. The N+1 Problem &amp; Cartesian Explosion</h2>
+
+      <h3>A. Eliminating the N+1 Query Trap</h3>
+      <p>The N+1 problem occurs when an application executes 1 initial query to fetch parent records, followed by N separate queries to fetch related child records:</p>
+
+      <pre><code class="language-csharp">// ❌ BAD: Executes 1 query for customers + 500 queries for orders!
+var customers = await db.Customers.Take(500).ToListAsync();
+foreach (var c in customers)
+{
+    var orders = await db.Orders.Where(o =&gt; o.CustomerId == c.Id).ToListAsync();
+}
+
+// ✅ GOOD: Eager Loading with Include (1 single SQL JOIN query)
+var customersWithOrders = await db.Customers
+    .Include(c =&gt; c.Orders)
+    .Take(500)
+    .ToListAsync();
+
+// 🚀 BEST: Projection (Fetches only required fields into a flat DTO)
+var customerDtos = await db.Customers
+    .Select(c =&gt; new CustomerDto(c.Name, c.Orders.Count))
+    .Take(500)
+    .ToListAsync();</code></pre>
+
+      <h3>B. Cartesian Explosion &amp; `AsSplitQuery()`</h3>
+      <p>When you include multiple 1-to-many collections in a single query (e.g. <code>Orders</code> with <code>Lines</code> AND <code>AuditEntries</code>), SQL generates a cross-product join:</p>
+      
+      <div class="callout callout-danger">
+        <div class="callout-title">🚨 The Cartesian Row Explosion</div>
+        <p>If an order has 10 lines and 10 audit entries, a single SQL JOIN returns <strong>100 rows</strong> (10 &times; 10), with every single order column duplicated 100 times over the network! For 1,000 orders, this turns into 100,000 bloated rows.</p>
+      </div>
+
+      <pre><code class="language-csharp">// ✅ SOLUTION: AsSplitQuery emits 3 clean, parallel queries instead of 1 explosive JOIN:
+var complexOrderGraph = await db.Orders
+    .Include(o =&gt; o.Lines)
+    .Include(o =&gt; o.AuditEntries)
+    .AsSplitQuery() // 1 query for Orders, 1 for Lines, 1 for AuditEntries!
+    .FirstOrDefaultAsync(o =&gt; o.Id == orderId, ct);</code></pre>
+    </section>
+
+    <!-- SECTION 4: OPTIMISTIC CONCURRENCY -->
+    <section id="optimistic-concurrency">
+      <h2>4. Optimistic Concurrency with RowVersion Tokens</h2>
+
+      <p>In high-throughput trading, two users might attempt to update the same order simultaneously. Pessimistic locking (<code>SELECT ... WITH (UPDLOCK)</code>) kills database concurrency. <strong>Optimistic Concurrency</strong> uses a concurrency token (SQL Server <code>rowversion</code>) to detect race conditions at commit time:</p>
+
+      <pre><code class="language-csharp">public class Order
+{
+    public Guid Id { get; set; }
+    public decimal Price { get; set; }
+    public int Quantity { get; set; }
+
+    // Concurrency Token: Automatically updated by SQL Server on every UPDATE
+    [Timestamp]
+    public byte[] RowVersion { get; set; } = null!;
+}
+
+// In your OrderService:
+public async Task UpdateOrderPriceAsync(Guid orderId, decimal newPrice, byte[] clientVersion)
+{
+    var order = await db.Orders.FindAsync(orderId);
+    if (order is null) throw new NotFoundException();
+
+    // Overwrite with client's version token
+    db.Entry(order).Property(o =&gt; o.RowVersion).OriginalValue = clientVersion;
+    order.Price = newPrice;
+
+    try
+    {
+        await db.SaveChangesAsync();
+    }
+    catch (DbUpdateConcurrencyException ex)
+    {
+        // Another thread updated the order first!
+        var entry = ex.Entries.Single();
+        var databaseValues = await entry.GetDatabaseValuesAsync();
+        
+        throw new ConcurrencyException("Order was modified by another trader. Please refresh.");
+    }
+}</code></pre>
+    </section>
+
+    <!-- SECTION 5: INTERVIEW GRILL ROUND -->
+    <section id="interview-grill">
+      <h2>5. The Senior Interviewer's Grill Round: EF Core</h2>
+
+      <div class="callout callout-danger">
+        <div class="callout-title">🔥 Question 1: What is the risk of using AsSplitQuery() without a database transaction?</div>
+        <div class="callout-content">
+          <p><strong>Senior Answer:</strong> Because <code>AsSplitQuery()</code> executes multiple separate SQL queries sequentially (e.g. Query 1 for Orders, Query 2 for OrderLines), if a concurrent transaction modifies or deletes child records between Query 1 and Query 2, your application may read an inconsistent, corrupted object graph. If strict point-in-time consistency is mandatory across split queries, wrap the read operation in a <code>TransactionScope</code> with <code>Snapshot</code> or <code>Serializable</code> isolation level.</p>
+        </div>
+      </div>
+
+      <div class="callout callout-danger">
+        <div class="callout-title">🔥 Question 2: How do EF Core Interceptors differ from SaveChanges overrides?</div>
+        <div class="callout-content">
+          <p><strong>Senior Answer:</strong> Overriding <code>SaveChanges()</code> directly couples cross-cutting concerns (auditing, tenant isolation, telemetry) directly into your concrete <code>DbContext</code> class. <strong>Interceptors</strong> (e.g. <code>ISaveChangesInterceptor</code>, <code>IDbCommandInterceptor</code>) are registered into the DI container as standalone, reusable components. They can inspect, mutate, or suppress SQL commands before they hit the wire and run asynchronously (<code>SavingChangesAsync</code>) with zero pollution of domain entities.</p>
+        </div>
+      </div>
+
+      <div class="callout callout-danger">
+        <div class="callout-title">🔥 Question 3: What does EnableRetryOnFailure() do and when can it cause duplicate operations?</div>
+        <div class="callout-content">
+          <p><strong>Senior Answer:</strong> <code>EnableRetryOnFailure()</code> configures a resilient execution strategy that catches transient SQL errors (e.g., error codes 4060, 40197, 40501, 10928 on Azure SQL) and automatically retries the operation with exponential backoff. However, if your code initiates an explicit user transaction (<code>db.Database.BeginTransaction()</code>), EF Core will throw an exception because it cannot safely retry user-managed transactions without knowing if earlier statements committed. To use user transactions with retry policies, you must wrap them in <code>strategy.ExecuteAsync()</code>.</p>
+        </div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<button class="scroll-top" aria-label="Scroll to top">↑</button>
+</body>
+</html>

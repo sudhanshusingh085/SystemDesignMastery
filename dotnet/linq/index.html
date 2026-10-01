@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>The Complete LINQ Encyclopedia — From Scratch to Principal Architect</title>
+  <link rel="stylesheet" href="../css/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.0/dist/mermaid.min.js"></script>
+  <script src="../js/main.js" defer></script>
+</head>
+<body>
+
+<button class="menu-toggle" aria-label="Toggle menu">☰</button>
+
+<div class="page-wrapper">
+  <aside class="sidebar" id="sidebar"></aside>
+
+  <main class="main-content">
+    <div class="platform-switcher">
+      <span>Mastery Portals:</span>
+      <a href="../../index.html">🏛️ System Design</a>
+      <a href="../../corejava/index.html">☕ Core Java 21</a>
+      <a href="../../sqlserver/index.html">🗄️ MS SQL Server</a>
+      <a href="../index.html" class="active">🔷 .NET 8 / C# 12</a>
+    </div>
+
+    <nav class="breadcrumb">
+      <a href="../index.html">.NET Mastery</a> &gt; <span>09 · The LINQ Encyclopedia</span>
+    </nav>
+
+    <header>
+      <h1>🔍 The Complete LINQ Encyclopedia in C# 12 &amp; .NET 8</h1>
+      <p class="subtitle">An architectural reference on Language Integrated Query: IEnumerable vs IQueryable expression trees, deferred streaming vs buffering mechanics, the Roslyn yield return state machine, and an exhaustive breakdown of all LINQ operators.</p>
+    </header>
+
+    <!-- SECTION 1: IENUMERABLE VS IQUERYABLE -->
+    <section id="ienumerable-vs-iqueryable">
+      <h2>1. The Foundation: `IEnumerable<T>` vs `IQueryable<T>`</h2>
+
+      <p>The single most critical concept in LINQ is understanding where execution takes place: in application memory or inside a remote database engine.</p>
+
+      <table class="comparison-table">
+        <thead>
+          <tr>
+            <th>Characteristic</th>
+            <th><code>IEnumerable&lt;T&gt;</code> (LINQ to Objects)</th>
+            <th><code>IQueryable&lt;T&gt;</code> (LINQ to Entities / EF Core)</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Execution Engine</strong></td>
+            <td><strong>In-Memory</strong> inside CLR process space.</td>
+            <td><strong>Remote Server</strong> (SQL Server, PostgreSQL, CosmosDB).</td>
+          </tr>
+          <tr>
+            <td><strong>Underlying Parameter</strong></td>
+            <td>Compiled delegates: <code>Func&lt;T, bool&gt;</code></td>
+            <td><strong>Expression Trees</strong>: <code>Expression&lt;Func&lt;T, bool&gt;&gt;</code></td>
+          </tr>
+          <tr>
+            <td><strong>Execution Model</strong></td>
+            <td>Iterates through local memory collections.</td>
+            <td>Parses the Abstract Syntax Tree (AST) to generate SQL statements.</td>
+          </tr>
+          <tr>
+            <td><strong>Memory Impact</strong></td>
+            <td>Requires all evaluated objects to exist on the heap.</td>
+            <td>Database applies filtering/sorting; returns only needed rows.</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="mermaid">
+flowchart TD
+    subgraph IQueryablePipeline["IQueryable Execution (Database Tier)"]
+        IQ["db.Orders.Where(o =&gt; o.Price &gt; 100)"] --> AST["Roslyn builds Expression Tree (AST)"]
+        AST --> Provider["EF Core Query Provider"]
+        Provider --> SQL["Emits: SELECT * FROM Orders WHERE Price &gt; 100"]
+        SQL --> DB[(SQL Server)]
+    end
+
+    subgraph IEnumerablePipeline["IEnumerable Execution (Application Tier)"]
+        IE["db.Orders.AsEnumerable().Where(o =&gt; o.Price &gt; 100)"]
+        IE --> FetchAll["Emits: SELECT * FROM Orders (Pulls 10M rows!)"]
+        FetchAll --> Heap["Loads 10M rows into CLR RAM"]
+        Heap --> Filter["Applies delegate in C# memory (Slow &amp; OOM)"]
+    end
+      </div>
+    </section>
+
+    <!-- SECTION 2: DEFERRED EXECUTION & YIELD RETURN -->
+    <section id="deferred-execution">
+      <h2>2. Deferred Execution &amp; The `yield return` State Machine</h2>
+
+      <h3>A. Streaming vs Buffering</h3>
+      <ul>
+        <li><strong>Deferred Streaming:</strong> Elements are produced on-demand one at a time as requested by <code>MoveNext()</code>. Memory consumption is O(1) regardless of sequence size (e.g., <code>Where</code>, <code>Select</code>, <code>Take</code>).</li>
+        <li><strong>Deferred Buffering:</strong> Execution is still deferred, but upon requesting the first element, the operator must consume and buffer the <strong>entire input sequence</strong> before it can return even a single item (e.g., <code>OrderBy</code>, <code>GroupBy</code>, <code>Reverse</code>).</li>
+        <li><strong>Immediate (Eager) Execution:</strong> The sequence is executed immediately, materializing results into memory (e.g., <code>ToList</code>, <code>Count</code>, <code>First</code>, <code>Aggregate</code>).</li>
+      </ul>
+
+      <h3>B. The Roslyn `yield return` Compiler Transformation</h3>
+      <p>When you write a method containing <code>yield return</code>, the C# compiler does not emit a simple method. It rewrites your method into a private, nested state machine class implementing <code>IEnumerator&lt;T&gt;</code> and <code>IDisposable</code>:</p>
+
+      <div class="mermaid">
+stateDiagram-v2
+    [*] --> State0 : Initial state (Created)
+    State0 --> State1 : MoveNext() called -> Executes up to yield return
+    State1 --> State1 : MoveNext() called -> Yields next item
+    State1 --> StateNeg1 : End of sequence -> MoveNext() returns false
+    State1 --> StateNeg2 : Caller breaks / exception -> Dispose() executed
+    StateNeg1 --> [*]
+    StateNeg2 --> [*]
+      </div>
+
+      <pre><code class="language-csharp">// Developer writes:
+public static IEnumerable&lt;int&gt; GenerateEvenNumbers(int max)
+{
+    for (int i = 0; i &lt; max; i++)
+    {
+        if (i % 2 == 0)
+            yield return i;
+    }
+}
+
+// Roslyn Compiler generates behind the scenes:
+private sealed class &lt;GenerateEvenNumbers&gt;d__0 : IEnumerable&lt;int&gt;, IEnumerator&lt;int&gt;
+{
+    private int &lt;&gt;1__state;
+    private int &lt;&gt;2__current;
+    public int max;
+    private int &lt;i&gt;5__1;
+
+    public bool MoveNext()
+    {
+        switch (&lt;&gt;1__state)
+        {
+            case 0:
+                &lt;&gt;1__state = -1;
+                &lt;i&gt;5__1 = 0;
+                goto LoopCheck;
+            case 1:
+                &lt;&gt;1__state = -1;
+                &lt;i&gt;5__1++;
+                goto LoopCheck;
+            default:
+                return false;
+        }
+        LoopCheck:
+        while (&lt;i&gt;5__1 &lt; max)
+        {
+            if (&lt;i&gt;5__1 % 2 == 0)
+            {
+                &lt;&gt;2__current = &lt;i&gt;5__1;
+                &lt;&gt;1__state = 1; // Suspends execution until next MoveNext()!
+                return true;
+            }
+            &lt;i&gt;5__1++;
+        }
+        return false;
+    }
+}</code></pre>
+    </section>
+
+    <!-- SECTION 3: OPERATOR ENCYCLOPEDIA -->
+    <section id="operator-encyclopedia">
+      <h2>3. The Comprehensive LINQ Operator Reference</h2>
+
+      <h3>1. Filtering &amp; Type Casting</h3>
+      <ul>
+        <li><code>Where(predicate)</code>: Streams elements satisfying a condition.</li>
+        <li><code>OfType&lt;TResult&gt;()</code>: Filters elements based on whether they can be cast to <code>TResult</code>, ignoring incompatible types without throwing exceptions.</li>
+      </ul>
+
+      <h3>2. Projection &amp; Flattening</h3>
+      <ul>
+        <li><code>Select(selector)</code>: Transforms each element into a new form (1-to-1).</li>
+        <li><code>SelectMany(selector)</code>: Flattens one-to-many collections (e.g. Orders containing Lines &rarr; single flat stream of Lines).</li>
+        <li><code>Zip(secondSequence, resultSelector)</code>: Merges two sequences element-by-element like a zipper.</li>
+      </ul>
+      <pre><code class="language-csharp">// SelectMany Example: Flattening portfolios to order lines
+var allPositions = portfolios.SelectMany(p =&gt; p.Positions);</code></pre>
+
+      <h3>3. Aggregation &amp; Folding</h3>
+      <ul>
+        <li><code>Aggregate((acc, item) =&gt; ...)</code>: Performs custom cumulative folding (like functional <code>reduce</code>).</li>
+        <li><code>MinBy(selector)</code> / <code>MaxBy(selector)</code> (.NET 6+): Returns the entire object having the minimum/maximum key without sorting!</li>
+      </ul>
+      <pre><code class="language-csharp">// Find the largest trade in 1 pass O(N) without OrderByDescending().First()
+Trade largestTrade = trades.MaxBy(t =&gt; t.Notional);</code></pre>
+
+      <h3>4. Partitioning (.NET 6+ Innovations)</h3>
+      <ul>
+        <li><code>Chunk(size)</code>: Splits a sequence into batches of a given maximum size. Essential for batch database inserts.</li>
+        <li><code>Take(range)</code>: C# 8 range syntax support (<code>trades.Take(..10)</code> or <code>trades.Take(10..20)</code>).</li>
+        <li><code>TakeWhile(pred)</code> / <code>SkipWhile(pred)</code>: Streams or skips until a condition becomes false.</li>
+      </ul>
+      <pre><code class="language-csharp">// Process 100,000 orders in batches of 500
+foreach (Order[] batch in orders.Chunk(500))
+{
+    await db.BulkInsertAsync(batch);
+}</code></pre>
+
+      <h3>5. Set Operations with Key Selectors (.NET 6+)</h3>
+      <ul>
+        <li><code>DistinctBy(keySelector)</code>: Eliminates duplicates based on a specific property without implementing <code>IEqualityComparer&lt;T&gt;</code>.</li>
+        <li><code>UnionBy</code>, <code>IntersectBy</code>, <code>ExceptBy</code>: Set operations comparing custom keys.</li>
+      </ul>
+      <pre><code class="language-csharp">// De-duplicate trades by OrderId
+var uniqueOrders = incomingTrades.DistinctBy(t =&gt; t.OrderId);</code></pre>
+
+      <h3>6. Grouping &amp; Joining</h3>
+      <ul>
+        <li><code>GroupBy(keySelector)</code>: Groups elements sharing a common key. Returns <code>IEnumerable&lt;IGrouping&lt;TKey, TElement&gt;&gt;</code>.</li>
+        <li><code>Join(...)</code>: Inner equijoin combining two sequences matching on key.</li>
+        <li><code>GroupJoin(...)</code>: Hierarchical join (Left Outer Join equivalent).</li>
+      </ul>
+    </section>
+
+    <!-- SECTION 4: INTERVIEW GRILL ROUND -->
+    <section id="interview-grill">
+      <h2>4. The Senior Interviewer's Grill Round: LINQ</h2>
+
+      <div class="callout callout-danger">
+        <div class="callout-title">🔥 Question 1: What is the difference between SelectMany and Select?</div>
+        <div class="callout-content">
+          <p><strong>Senior Answer:</strong> <code>Select</code> performs a 1-to-1 projection: if the source has 10 elements, the output has 10 elements. If each element contains a sub-collection (e.g. <code>Customer.Orders</code>), <code>Select</code> returns an <code>IEnumerable&lt;List&lt;Order&gt;&gt;</code>. <code>SelectMany</code> performs a 1-to-many projection: it maps each element to an enumerable and automatically flattens the nested sequences into a single continuous stream of elements (<code>IEnumerable&lt;Order&gt;</code>), equivalent to a nested <code>foreach</code> loop.</p>
+        </div>
+      </div>
+
+      <div class="callout callout-danger">
+        <div class="callout-title">🔥 Question 2: Why is MaxBy(t => t.Price) exponentially faster than OrderByDescending(t => t.Price).First()?</div>
+        <div class="callout-content">
+          <p><strong>Senior Answer:</strong> <code>OrderByDescending</code> is a buffering operator that uses Quicksort/Introsort. It must consume the entire sequence and sort it, incurring <strong>O(N log N)</strong> time complexity and allocating an array to hold all items. In contrast, <code>MaxBy</code> executes in a single streaming pass with <strong>O(N)</strong> time complexity and <strong>O(1)</strong> memory by keeping a running maximum scalar pointer as it iterates.</p>
+        </div>
+      </div>
+
+      <div class="callout callout-danger">
+        <div class="callout-title">🔥 Question 3: What happens when an exception is thrown inside a yield return iterator method?</div>
+        <div class="callout-content">
+          <p><strong>Senior Answer:</strong> Due to deferred execution, if an exception is placed before the first <code>yield return</code> (e.g. argument null check), it will NOT be thrown when the method is invoked! It will only throw later when the caller first invokes <code>MoveNext()</code> (e.g. inside a <code>foreach</code> loop). To fix this, use local functions or split the method into an immediate validation wrapper and a private iterator implementation.</p>
+        </div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<button class="scroll-top" aria-label="Scroll to top">↑</button>
+</body>
+</html>

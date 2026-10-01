@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>.NET 8 &amp; C# 12 Mastery — Zero to Principal Architect</title>
+  <link rel="stylesheet" href="css/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.0/dist/mermaid.min.js"></script>
+  <script src="js/main.js" defer></script>
+</head>
+<body>
+
+<button class="menu-toggle" aria-label="Toggle menu">☰</button>
+
+<div class="page-wrapper">
+  <aside class="sidebar" id="sidebar"></aside>
+
+  <main class="main-content">
+    <div class="platform-switcher">
+      <span>Mastery Portals:</span>
+      <a href="../index.html">🏛️ System Design</a>
+      <a href="../corejava/index.html">☕ Core Java 21</a>
+      <a href="../sqlserver/index.html">🗄️ MS SQL Server</a>
+      <a href="index.html" class="active">🔷 .NET 8 / C# 12</a>
+    </div>
+
+    <h1>🔷 .NET 8 &amp; C# 12 Mastery: Zero to Principal Architect</h1>
+    <p class="subtitle">
+      A definitive, <strong>textbook-grade</strong> masterclass engineered for senior engineers, tech leads, and software architects targeting high-throughput fintech platforms, cloud microservices, and enterprise tier-1 infrastructure.
+    </p>
+
+    <div class="callout callout-info">
+      <div class="callout-title">🎯 The 6-Pillar Engineering Framework</div>
+      <p>Every single module in this masterclass is structured with uncompromising depth: 
+      <strong>Ground-Zero Theory</strong> &rarr; <strong>The Production Pain Point</strong> &rarr; <strong>CLR/Compiler Internals (IL, JIT, Memory Layout)</strong> &rarr; <strong>Production C# 12 Code</strong> &rarr; <strong>The Interviewer's Grill Round</strong> &rarr; <strong>Architectural Trade-offs</strong>.</p>
+    </div>
+
+    <!-- CORE INTERVIEW CURRICULUM -->
+    <h2>💎 Core Enterprise &amp; Architecture Curriculum</h2>
+    <p>The essential pillars evaluated in senior &amp; principal technical interviews across tier-1 financial institutions and cloud companies.</p>
+
+    <div class="card-grid">
+      <a href="solid/index.html" class="topic-card">
+        <span class="card-emoji">💎</span>
+        <h3>1. SOLID Principles in C#</h3>
+        <p>SRP, OCP, Liskov substitution in inheritance, Interface Segregation, Dependency Inversion, with real financial before/after refactoring scenarios.</p>
+      </a>
+
+      <a href="design-patterns/index.html" class="topic-card">
+        <span class="card-emoji">📐</span>
+        <h3>2. Design Patterns in Modern C#</h3>
+        <p>Creational, Structural, and Behavioral patterns. Thread-safe Singleton vs testability anti-pattern, Factory vs Strategy, Repository &amp; Unit of Work with EF Core.</p>
+      </a>
+
+      <a href="cqrs/index.html" class="topic-card">
+        <span class="card-emoji">⚡</span>
+        <h3>3. CQRS &amp; Event Sourcing</h3>
+        <p>Command vs Query separation, MediatR pipeline, CQRS without Event Sourcing (Dapper for queries, EF Core for commands), Eventual Consistency &amp; Outbox pattern.</p>
+      </a>
+
+      <a href="dependency-injection/index.html" class="topic-card">
+        <span class="card-emoji">💉</span>
+        <h3>4. Dependency Injection &amp; Service Lifetimes</h3>
+        <p>IoC containers, Transient vs Scoped vs Singleton, the devastating <strong>Captive Dependency</strong> bug, <code>IServiceScopeFactory</code>, and .NET 8 Keyed Services.</p>
+      </a>
+
+      <a href="practical-optimization/index.html" class="topic-card">
+        <span class="card-emoji">🚀</span>
+        <h3>5. C# Practical Coding &amp; Optimization</h3>
+        <p>LINQ execution costs, loop &amp; collection optimization, async/await traps, diagnosing memory leaks (events, statics, closures), zero-allocation <code>Span&lt;T&gt;</code> &amp; <code>ArrayPool</code>.</p>
+      </a>
+    </div>
+
+    <!-- DEEP ARCHITECTURE & CLR -->
+    <h2>⚙️ Deep CLR, Memory &amp; Systems Architecture</h2>
+    <p>Understanding the runtime execution engine, garbage collector, lock-free concurrency, and microsecond latency optimizations.</p>
+
+    <div class="card-grid">
+      <a href="fundamentals/index.html" class="topic-card">
+        <span class="card-emoji">🧱</span>
+        <h3>6. CLR, JIT &amp; Type System Internals</h3>
+        <p>Roslyn compiler, CIL (IL) bytecode, Tiered JIT (Tier 0, Tier 1, Dynamic PGO, Native AOT), Stack vs Heap, Object headers, Struct vs Class vs Record, <code>ref</code>/<code>in</code>/<code>out</code>.</p>
+      </a>
+
+      <a href="memory-gc/index.html" class="topic-card">
+        <span class="card-emoji">🗑️</span>
+        <h3>7. Garbage Collection &amp; Memory Management</h3>
+        <p>Generations 0/1/2, Large Object Heap (LOH), Pinned Object Heap (POH), Workstation vs Server GC, Finalizers vs <code>IDisposable</code>, <code>Span&lt;T&gt;</code>, <code>stackalloc</code>.</p>
+      </a>
+
+      <a href="collections/index.html" class="topic-card">
+        <span class="card-emoji">📦</span>
+        <h3>8. Collections &amp; Data Structures Internals</h3>
+        <p><code>List&lt;T&gt;</code> dynamic growth, <code>Dictionary&lt;TKey, TValue&gt;</code> prime capacity sizing &amp; chaining, <code>ConcurrentDictionary</code> striped locking, <code>PriorityQueue</code> min-heap.</p>
+      </a>
+
+      <a href="linq/index.html" class="topic-card">
+        <span class="card-emoji">🔍</span>
+        <h3>9. The Complete LINQ Encyclopedia</h3>
+        <p><code>IEnumerable</code> vs <code>IQueryable</code> (Expression Trees), deferred vs eager execution, compiler yield return state machine, every single LINQ operator with code.</p>
+      </a>
+
+      <a href="async-concurrency/index.html" class="topic-card">
+        <span class="card-emoji">🧵</span>
+        <h3>10. Async, Tasks &amp; Lock-Free Concurrency</h3>
+        <p><code>Task</code> vs <code>ValueTask</code>, async state machine, SynchronizationContext, thread pools, <code>lock</code>, <code>SemaphoreSlim</code>, <code>Interlocked</code> CAS loops, high-performance Channels.</p>
+      </a>
+
+      <a href="aspnet-core/index.html" class="topic-card">
+        <span class="card-emoji">🌐</span>
+        <h3>11. ASP.NET Core &amp; Microservices</h3>
+        <p>Kestrel architecture, middleware pipeline execution, Minimal APIs vs Controllers, Response Caching, Output Caching, .NET 7/8 built-in Rate Limiting.</p>
+      </a>
+
+      <a href="efcore/index.html" class="topic-card">
+        <span class="card-emoji">🗄️</span>
+        <h3>12. EF Core 8 Internals &amp; Performance</h3>
+        <p>Change Tracker, <code>AsNoTracking</code>, solving the N+1 problem, Cartesian explosion, <code>AsSplitQuery</code>, interceptors, optimistic concurrency tokens.</p>
+      </a>
+
+      <a href="modern-csharp/index.html" class="topic-card">
+        <span class="card-emoji">✨</span>
+        <h3>13. Modern C# 9–12 Innovations</h3>
+        <p>Primary constructors, Collection expressions &amp; spread operators, advanced pattern matching, raw string literals, init-only setters, and Generic Math.</p>
+      </a>
+
+      <a href="security/index.html" class="topic-card">
+        <span class="card-emoji">🛡️</span>
+        <h3>14. .NET Security &amp; Zero-Trust</h3>
+        <p>Authentication handlers, JWT Bearer configuration, Policy-based authorization, Data Protection API (DPAPI), constant-time comparisons against timing attacks.</p>
+      </a>
+    </div>
+
+    <div class="callout callout-success">
+      <div class="callout-title">🏆 Target Proficiency</div>
+      <p>By completing this track, you will be prepared to tackle senior, lead, and principal .NET software engineering interviews at companies like Microsoft, Amazon, JPMorgan Chase, Citadel, and Bloomberg, as well as lead high-performance cloud architectures.</p>
+    </div>
+  </main>
+</div>
+
+<button class="scroll-top" aria-label="Scroll to top">↑</button>
+</body>
+</html>

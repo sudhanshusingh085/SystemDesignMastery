@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Async, Tasks &amp; Lock-Free Concurrency — From Scratch to Principal Architect</title>
+  <link rel="stylesheet" href="../css/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.0/dist/mermaid.min.js"></script>
+  <script src="../js/main.js" defer></script>
+</head>
+<body>
+
+<button class="menu-toggle" aria-label="Toggle menu">☰</button>
+
+<div class="page-wrapper">
+  <aside class="sidebar" id="sidebar"></aside>
+
+  <main class="main-content">
+    <div class="platform-switcher">
+      <span>Mastery Portals:</span>
+      <a href="../../index.html">🏛️ System Design</a>
+      <a href="../../corejava/index.html">☕ Core Java 21</a>
+      <a href="../../sqlserver/index.html">🗄️ MS SQL Server</a>
+      <a href="../index.html" class="active">🔷 .NET 8 / C# 12</a>
+    </div>
+
+    <nav class="breadcrumb">
+      <a href="../index.html">.NET Mastery</a> &gt; <span>10 · Async &amp; Concurrency Internals</span>
+    </nav>
+
+    <header>
+      <h1>🧵 Async, Tasks &amp; Lock-Free Concurrency in .NET 8</h1>
+      <p class="subtitle">An architectural dissection of the async/await state machine, Task vs ValueTask, IOCP thread dispatching, lock vs SemaphoreSlim, lock-free Interlocked CAS loops, and high-throughput System.Threading.Channels pipelines.</p>
+    </header>
+
+    <!-- SECTION 1: ASYNC STATE MACHINE -->
+    <section id="state-machine">
+      <h2>1. The Roslyn Async State Machine Internals</h2>
+
+      <p>The <code>async</code> and <code>await</code> keywords are compiler-synthesized syntactic sugar. When you compile an async method, the Roslyn compiler rewrites your linear code into an <code>IAsyncStateMachine</code> struct:</p>
+
+      <div class="mermaid">
+flowchart TD
+    Caller["Caller executes method"] --> Init["Initialize State Machine struct"]
+    Init --> Step1["Execute synchronous prologue until first await"]
+    Step1 --> AwaitCheck{"Is awaiter.IsCompleted == true?"}
+    AwaitCheck -->|Yes (Fast Path)| SyncResume["Execute synchronously (0 thread hop!)"]
+    AwaitCheck -->|No (Slow Path)| Suspend["1. Hook up MoveNext callback<br/>2. Return uncompleted Task to caller<br/>3. Current thread returns to ThreadPool"]
+    Suspend --> IOCP["OS I/O completes (IOCP packet)"]
+    IOCP --> Resume["ThreadPool picks up MoveNext()<br/>State jumps to next label"]
+      </div>
+
+      <h3>Compiler Disassembly: What `async` Really Looks Like</h3>
+      <pre><code class="language-csharp">// Developer writes:
+public async Task&lt;int&gt; FetchStockPriceAsync(string ticker)
+{
+    var client = new HttpClient();
+    var response = await client.GetStringAsync($"https://api.market.com/{ticker}");
+    return response.Length;
+}
+
+// Roslyn Compiler generates (simplified):
+[StructLayout(LayoutKind.Auto)]
+private struct &lt;FetchStockPriceAsync&gt;d__0 : IAsyncStateMachine
+{
+    public int &lt;&gt;1__state;
+    public AsyncTaskMethodBuilder&lt;int&gt; &lt;&gt;t__builder;
+    public string ticker;
+    private HttpClient &lt;client&gt;5__1;
+    private TaskAwaiter&lt;string&gt; &lt;&gt;u__1;
+
+    public void MoveNext()
+    {
+        int num = &lt;&gt;1__state;
+        int result;
+        try
+        {
+            TaskAwaiter&lt;string&gt; awaiter;
+            if (num != 0)
+            {
+                &lt;client&gt;5__1 = new HttpClient();
+                awaiter = &lt;client&gt;5__1.GetStringAsync($"https://api.market.com/{ticker}").GetAwaiter();
+                if (!awaiter.IsCompleted)
+                {
+                    &lt;&gt;1__state = 0;
+                    &lt;&gt;u__1 = awaiter;
+                    // Enqueue continuation with ThreadPool without capturing sync context:
+                    &lt;&gt;t__builder.AwaitUnsafeOnCompleted(ref awaiter, ref this);
+                    return; // Thread is liberated here!
+                }
+            }
+            else
+            {
+                awaiter = &lt;&gt;u__1;
+                &lt;&gt;u__1 = default;
+                &lt;&gt;1__state = -1;
+            }
+            string strResult = awaiter.GetResult();
+            result = strResult.Length;
+        }
+        catch (Exception ex)
+        {
+            &lt;&gt;1__state = -1;
+            &lt;&gt;t__builder.SetException(ex);
+            return;
+        }
+        &lt;&gt;1__state = -1;
+        &lt;&gt;t__builder.SetResult(result);
+    }
+
+    public void SetStateMachine(IAsyncStateMachine stateMachine) { }
+}</code></pre>
+    </section>
+
+    <!-- SECTION 2: SYNCHRONIZATION PRIMITIVES -->
+    <section id="synchronization">
+      <h2>2. Synchronization: `lock` vs `SemaphoreSlim` vs `ReaderWriterLockSlim`</h2>
+
+      <table class="comparison-table">
+        <thead>
+          <tr>
+            <th>Primitive</th>
+            <th>Async Compatible?</th>
+            <th>Kernel Transition?</th>
+            <th>Ideal Scenario</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>lock(obj)</code></td>
+            <td>❌ No (Cannot await inside lock)</td>
+            <td>Hybrid (User-mode spin, then kernel monitor)</td>
+            <td>Ultra-fast, microsecond in-memory CPU mutations.</td>
+          </tr>
+          <tr>
+            <td><code>SemaphoreSlim</code></td>
+            <td>✅ Yes (<code>await WaitAsync()</code>)</td>
+            <td>Lightweight hybrid (no heavy OS handle unless contested)</td>
+            <td>Throttling async network requests, async critical sections.</td>
+          </tr>
+          <tr>
+            <td><code>ReaderWriterLockSlim</code></td>
+            <td>❌ No (Thread-affine)</td>
+            <td>Hybrid</td>
+            <td>Read-heavy caches (99% reads, 1% writes).</td>
+          </tr>
+          <tr>
+            <td><code>System.Threading.Lock</code> (.NET 9 / C# 13)</td>
+            <td>❌ No</td>
+            <td>Optimized fast-path lock object</td>
+            <td>Replacement for standard <code>object</code> locks with better diagnostics.</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>Why Can You NOT Await Inside a `lock` Statement?</h3>
+      <p>A C# <code>lock</code> is bound to <strong>Thread Affinity</strong> (<code>Monitor.Enter</code> stores the managed OS Thread ID of the calling thread). When an <code>await</code> expression suspends execution, the current thread is released back to the ThreadPool. When the asynchronous operation finishes, a <em>completely different thread</em> may resume execution! If that different thread attempted to exit the monitor (<code>Monitor.Exit</code>), the CLR would throw a <code>SynchronizationLockException</code> because the unlocking thread is not the thread that acquired the lock.</p>
+    </section>
+
+    <!-- SECTION 3: LOCK-FREE PROGRAMMING -->
+    <section id="lock-free">
+      <h2>3. Lock-Free Concurrency &amp; CAS (Compare-And-Swap) Loops</h2>
+
+      <p>Locks block threads, causing CPU context switches (costing ~2,000 to 5,000 clock cycles per switch). In high-frequency trading and low-latency microservices, <strong>Lock-Free Programming</strong> uses hardware-level atomic CPU instructions (e.g. <code>LOCK CMPXCHG</code> on x86-64) via <code>Interlocked</code>:</p>
+
+      <div class="mermaid">
+flowchart TD
+    Read["1. Read current balance into local variable (snapshot)"] --> Compute["2. Compute new proposed balance (balance - withdrawal)"]
+    Compute --> CAS{"3. Interlocked.CompareExchange<br/>(Is balance still equal to snapshot?)"}
+    CAS -->|Yes (Match)| Success["Atomically update to new balance! 🚀"]
+    CAS -->|No (Contention)| Read
+      </div>
+
+      <h3>High-Performance Lock-Free Bank Account Balance CAS Loop</h3>
+      <pre><code class="language-csharp">public sealed class LockFreeAccount
+{
+    // Stored as long (cents) to allow 64-bit atomic Interlocked operations
+    private long _balanceInCents;
+
+    public LockFreeAccount(decimal initialBalance)
+    {
+        _balanceInCents = (long)(initialBalance * 100m);
+    }
+
+    public decimal Balance =&gt; Interlocked.Read(ref _balanceInCents) / 100m;
+
+    public bool TryWithdraw(decimal amount)
+    {
+        long amountCents = (long)(amount * 100m);
+        SpinWait spinner = new();
+
+        while (true)
+        {
+            // 1. Snapshot current value
+            long currentBalance = Interlocked.Read(ref _balanceInCents);
+
+            if (currentBalance &lt; amountCents)
+                return false; // Insufficient funds
+
+            long newBalance = currentBalance - amountCents;
+
+            // 2. Atomic Compare-And-Swap:
+            // Only writes 'newBalance' if _balanceInCents is STILL equal to 'currentBalance'
+            if (Interlocked.CompareExchange(ref _balanceInCents, newBalance, currentBalance) == currentBalance)
+            {
+                return true; // Withdrawal succeeded without taking any locks!
+            }
+
+            // 3. Contention detected: another thread modified balance; spin and retry
+            spinner.SpinOnce();
+        }
+    }
+}</code></pre>
+    </section>
+
+    <!-- SECTION 4: CHANNELS PIPELINE -->
+    <section id="channels">
+      <h2>4. High-Performance Producer-Consumer with `System.Threading.Channels`</h2>
+
+      <div class="callout callout-info">
+        <div class="callout-title">📖 Why Channels Beat BlockingCollection</div>
+        <p><code>System.Threading.Channels</code> is a zero-allocation, fully asynchronous producer-consumer library. Unlike <code>BlockingCollection&lt;T&gt;</code> (which blocks threads synchronously), Channels allow publishers and consumers to yield execution asynchronously (<code>WriteAsync</code> / <code>WaitToReadAsync</code>) while enforcing strict bounded backpressure limits.</p>
+      </div>
+
+      <pre><code class="language-csharp">using System.Threading.Channels;
+
+public sealed class MarketDataPipeline
+{
+    // Bounded channel: Holds maximum 10,000 ticks in RAM.
+    // If full, producers asynchronously await rather than exhausting server RAM!
+    private readonly Channel&lt;MarketTick&gt; _channel = Channel.CreateBounded&lt;MarketTick&gt;(
+        new BoundedChannelOptions(10_000)
+        {
+            FullMode = BoundedChannelFullMode.Wait,
+            SingleReader = true, // Enables single-consumer CPU optimizations
+            SingleWriter = false
+        });
+
+    public async ValueTask PublishTickAsync(MarketTick tick, CancellationToken ct = default)
+    {
+        await _channel.Writer.WriteAsync(tick, ct);
+    }
+
+    public async Task StartConsumerLoopAsync(CancellationToken ct = default)
+    {
+        // Asynchronously streams items as they arrive:
+        await foreach (MarketTick tick in _channel.Reader.ReadAllAsync(ct))
+        {
+            ProcessTick(tick);
+        }
+    }
+
+    private void ProcessTick(MarketTick tick)
+    {
+        // Process tick without blocking producer threads
+    }
+}</code></pre>
+    </section>
+
+    <!-- SECTION 5: INTERVIEW GRILL ROUND -->
+    <section id="interview-grill">
+      <h2>5. The Senior Interviewer's Grill Round: Async &amp; Concurrency</h2>
+
+      <div class="callout callout-danger">
+        <div class="callout-title">🔥 Question 1: What is ThreadPool Starvation? How does it happen in modern ASP.NET Core?</div>
+        <div class="callout-content">
+          <p><strong>Senior Answer:</strong> ThreadPool Starvation occurs when application threads block synchronously on asynchronous tasks (sync-over-async via <code>Task.Wait()</code> or <code>.Result</code>). When 500 incoming web requests block 500 ThreadPool worker threads waiting for database calls, the ThreadPool runs out of available threads to complete the continuations! The ThreadPool thread injection heuristic only creates 1 or 2 new threads per second, resulting in skyrocketing latency, HTTP request timeouts (504 Gateway Timeout), and service collapse.</p>
+        </div>
+      </div>
+
+      <div class="callout callout-danger">
+        <div class="callout-title">🔥 Question 2: Why should you avoid Task.Run in ASP.NET Core server endpoints?</div>
+        <div class="callout-content">
+          <p><strong>Senior Answer:</strong> In ASP.NET Core, incoming HTTP requests are already executing on a ThreadPool worker thread. Calling <code>await Task.Run(...)</code> takes the current thread, queues the work to another ThreadPool thread, and makes the original thread wait or yield. This incurs an unnecessary thread hop, CPU cache invalidation, and queue scheduling overhead without adding any concurrency throughput. <code>Task.Run</code> is designed for GUI desktop apps to offload CPU work from the UI thread, not for server request pipelines.</p>
+        </div>
+      </div>
+
+      <div class="callout callout-danger">
+        <div class="callout-title">🔥 Question 3: How does C# handle Task cancellation with CancellationToken?</div>
+        <div class="callout-content">
+          <p><strong>Senior Answer:</strong> Cancellation in .NET is cooperative. When a cancellation is requested via <code>CancellationTokenSource.Cancel()</code>, it sets an internal boolean flag. Asynchronous operations periodically inspect the token via <code>ct.ThrowIfCancellationRequested()</code> or register callbacks with the OS socket/kernel driver. When triggered, it throws an <code>OperationCanceledException</code> (or <code>TaskCanceledException</code>), which transitions the <code>Task</code> to the <code>TaskStatus.Canceled</code> state.</p>
+        </div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<button class="scroll-top" aria-label="Scroll to top">↑</button>
+</body>
+</html>

@@ -9,6 +9,8 @@ const NAV_SECTIONS = [
     items: [
       { label: '🏠 Home', href: '/index.html' },
       { label: '☕ Core Java Guide', href: '/corejava/index.html' },
+      { label: '🔷 .NET 8 / C# 12', href: '/dotnet/index.html' },
+      { label: '🗄️ SQL Server Guide', href: '/sqlserver/index.html' },
       { label: 'What is System Design?', href: '/fundamentals/what-is-system-design.html' },
       { label: 'Client & Server', href: '/fundamentals/client-server.html' },
     ]

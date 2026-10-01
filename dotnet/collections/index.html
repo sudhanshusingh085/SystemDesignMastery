@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Collections &amp; Data Structures Internals — From Scratch to Principal Architect</title>
+  <link rel="stylesheet" href="../css/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.0/dist/mermaid.min.js"></script>
+  <script src="../js/main.js" defer></script>
+</head>
+<body>
+
+<button class="menu-toggle" aria-label="Toggle menu">☰</button>
+
+<div class="page-wrapper">
+  <aside class="sidebar" id="sidebar"></aside>
+
+  <main class="main-content">
+    <div class="platform-switcher">
+      <span>Mastery Portals:</span>
+      <a href="../../index.html">🏛️ System Design</a>
+      <a href="../../corejava/index.html">☕ Core Java 21</a>
+      <a href="../../sqlserver/index.html">🗄️ MS SQL Server</a>
+      <a href="../index.html" class="active">🔷 .NET 8 / C# 12</a>
+    </div>
+
+    <nav class="breadcrumb">
+      <a href="../index.html">.NET Mastery</a> &gt; <span>08 · Collections &amp; Data Structures</span>
+    </nav>
+
+    <header>
+      <h1>📦 Collections &amp; Data Structures Internals in .NET 8</h1>
+      <p class="subtitle">An exhaustive engineering breakdown of List&lt;T&gt; capacity doubling, Dictionary&lt;TKey, TValue&gt; prime modulus chaining, ConcurrentDictionary striped locking, PriorityQueue min-heaps, and .NET 8 Frozen collections.</p>
+    </header>
+
+    <!-- SECTION 1: OVERVIEW -->
+    <section id="overview">
+      <h2>1. The .NET Collections Hierarchy</h2>
+      <p>Modern .NET provides four distinct collection namespaces engineered for specific concurrency, immutability, and performance profiles:</p>
+
+      <div class="mermaid">
+flowchart TD
+    subgraph S_Generic["System.Collections.Generic (Single-Threaded / Fast)"]
+        L["List&lt;T&gt;<br/>(Dynamic Array)"]
+        D["Dictionary&lt;TKey, TVal&gt;<br/>(Prime Modulo Chaining)"]
+        Q["Queue&lt;T&gt; &amp; Stack&lt;T&gt;"]
+        PQ["PriorityQueue&lt;T, P&gt;<br/>(4-Ary Min-Heap)"]
+    end
+
+    subgraph S_Concurrent["System.Collections.Concurrent (Thread-Safe)"]
+        CD["ConcurrentDictionary&lt;K, V&gt;<br/>(Striped Locks + Lock-Free Read)"]
+        CB["ConcurrentQueue&lt;T&gt; &amp; Bag&lt;T&gt;"]
+        BC["BlockingCollection&lt;T&gt;<br/>(Producer-Consumer)"]
+    end
+
+    subgraph S_Frozen[".NET 8 Frozen Collections (Read-Only Optimized)"]
+        FD["FrozenDictionary&lt;K, V&gt;<br/>(Zero collision startup table)"]
+        FS["FrozenSet&lt;T&gt;"]
+    end
+      </div>
+    </section>
+
+    <!-- SECTION 2: LIST<T> INTERNALS -->
+    <section id="list-internals">
+      <h2>2. `List&lt;T&gt;` Internals: Capacity Doubling &amp; Array.Copy</h2>
+
+      <p>A C# <code>List&lt;T&gt;</code> is a dynamic wrapper around a contiguous native managed array (<code>T[] _items</code>):</p>
+      <ul>
+        <li><strong>Growth Algorithm:</strong> When the list exceeds its current capacity, it allocates a new array of <strong>2x the current capacity</strong> (or 4 if empty) and copies existing elements using <code>Array.Copy()</code> (which uses vectorized <code>memmove</code> CPU instructions).</li>
+        <li><strong>Capacity vs Count:</strong> <code>Count</code> is the number of active elements. <code>Capacity</code> is the length of the internal <code>_items</code> array.</li>
+      </ul>
+
+      <div class="mermaid">
+flowchart LR
+    List["List&lt;int&gt;<br/>_size = 4, Capacity = 4"] --> Array1["[10, 20, 30, 40]"]
+    Array1 -->|Add(50) triggers Resize| Array2["[10, 20, 30, 40, 50, null, null, null]<br/>New Capacity = 8"]
+      </div>
+
+      <div class="callout callout-warning">
+        <div class="callout-title">⚠️ The Cost of `Insert(0, item)`</div>
+        <p>Inserting at index 0 has a time complexity of <strong>O(N)</strong>. The runtime must shift all N existing elements right by one position in memory. If you require frequent prepending, use <code>LinkedList&lt;T&gt;</code> or a double-ended ring buffer.</p>
+      </div>
+    </section>
+
+    <!-- SECTION 3: DICTIONARY INTERNALS -->
+    <section id="dictionary-internals">
+      <h2>3. `Dictionary&lt;TKey, TValue&gt;` Internals: The Prime Sizing Engine</h2>
+
+      <div class="callout callout-info">
+        <div class="callout-title">📖 Internal Layout</div>
+        <p>Unlike Java's <code>HashMap</code> (which uses linked-list node objects on the heap), .NET's <code>Dictionary&lt;TKey, TValue&gt;</code> stores everything in <strong>two flat arrays</strong> to maximize CPU L1/L2 cache locality and eliminate GC node pressure.</p>
+      </div>
+
+      <h3>The Two Backing Arrays</h3>
+      <pre><code class="language-csharp">private struct Entry
+{
+    public uint hashCode; // 31-bit positive hash code (-1 if unused)
+    public int next;      // Index of next entry in bucket chain (-1 if last)
+    public TKey key;      // The Key
+    public TValue value;  // The Value
+}
+
+private int[] _buckets;      // Array of indices into _entries
+private Entry[] _entries;    // Array of Entry structs containing keys, values & chains</code></pre>
+
+      <div class="mermaid">
+flowchart TD
+    Hash["Hash(Key) % Prime"] --> BucketIndex["Bucket Array: _buckets[index]"]
+    BucketIndex -->|Points to entry index| Entry1["_entries[2]: Key: 'AAPL', Val: 180, next: 0"]
+    Entry1 -->|Collision Chain| Entry2["_entries[0]: Key: 'MSFT', Val: 410, next: -1"]
+      </div>
+
+      <h3>Why Does .NET Use Prime Numbers for Capacity?</h3>
+      <p>In modular arithmetic, computing <code>bucket = hashCode % capacity</code> has a mathematical vulnerability: if <code>capacity</code> is a power of 2, the modulo operation only inspects the lowest bits of the hash code (e.g., <code>hash &amp; (capacity - 1)</code>). If hash codes share common factors or alignment, they all collide into the same few buckets!</p>
+      <p>Using a <strong>prime number</strong> for the bucket array size guarantees that the hash code's full bit entropy is distributed evenly across all buckets, even if the user's hash function is mediocre. .NET maintains an internal static table of 72 prime numbers ranging from 3 up to 7,199,369.</p>
+
+      <h3>Fast Modulo Optimization (.NET 6+)</h3>
+      <p>Division and modulo operations on 64-bit CPUs take ~15-30 clock cycles. Modern .NET replaces division with <strong>fast multiplicative reduction</strong> (Lemire reduction):</p>
+      <pre><code class="language-csharp">// Instead of: bucketIndex = (uint)hashCode % (uint)buckets.Length;
+// RyuJIT emits high-64-bit multiplication:
+bucketIndex = (uint)((((ulong)hashCode) * ((ulong)buckets.Length)) &gt;&gt; 32);</code></pre>
+    </section>
+
+    <!-- SECTION 4: CONCURRENT DICTIONARY -->
+    <section id="concurrent-dictionary">
+      <h2>4. `ConcurrentDictionary&lt;TKey, TValue&gt;`: Striped Locking</h2>
+
+      <p><code>ConcurrentDictionary</code> provides high-concurrency thread safety without locking the entire collection. It achieves this using <strong>Striped Locking</strong>:</p>
+
+      <div class="mermaid">
+flowchart TD
+    Req1["Thread 1: Put('AAPL')"] --> Lock0["Lock Stripe 0"]
+    Req2["Thread 2: Put('GOOG')"] --> Lock1["Lock Stripe 1"]
+    Req3["Thread 3: Read('MSFT')"] --> LockFree["Lock-Free Read (Volatile)"]
+    Lock0 --> Table0["Bucket Partition 0"]
+    Lock1 --> Table1["Bucket Partition 1"]
+      </div>
+
+      <ul>
+        <li><strong>Lock Striping:</strong> By default, it initializes <code>Environment.ProcessorCount * 2</code> lock objects. Each lock protects a distinct subset of the bucket tables. Two threads writing to keys governed by different locks run completely in parallel!</li>
+        <li><strong>Lock-Free Reads:</strong> Reading from a <code>ConcurrentDictionary</code> (via <code>TryGetValue</code> or indexer) takes <strong>zero locks</strong>. The runtime executes lock-free memory reads via volatile bucket pointer dereferencing.</li>
+      </ul>
+
+      <div class="callout callout-danger">
+        <div class="callout-title">🚨 The `GetOrAdd` Factory Trap</div>
+        <p>In <code>ConcurrentDictionary</code>, the <code>valueFactory</code> delegate passed to <code>GetOrAdd</code> or <code>AddOrUpdate</code> is executed <strong>outside the lock</strong> to prevent deadlocks. If 10 threads concurrently request a missing key, the factory delegate may be executed 10 times in parallel! If your factory performs expensive operations (e.g., calling an external REST API or database query), wrap the value in <code>Lazy&lt;T&gt;</code>:</p>
+      </div>
+
+      <pre><code class="language-csharp">// ❌ WRONG: Factory may execute 10 times concurrently!
+var user = cache.GetOrAdd(userId, id =&gt; FetchUserFromSlowDatabase(id));
+
+// ✅ RIGHT: Factory executes cheap Lazy creation; expensive work runs once!
+var lazyCache = new ConcurrentDictionary&lt;string, Lazy&lt;Task&lt;User&gt;&gt;&gt;();
+
+var user = await lazyCache.GetOrAdd(userId, id =&gt; 
+    new Lazy&lt;Task&lt;User&gt;&gt;(() =&gt; FetchUserFromSlowDatabase(id))).Value;</code></pre>
+    </section>
+
+    <!-- SECTION 5: FROZEN COLLECTIONS -->
+    <section id="frozen-collections">
+      <h2>5. .NET 8 Frozen Collections (`FrozenDictionary` &amp; `FrozenSet`)</h2>
+
+      <p>In enterprise microservices, many dictionaries are configured once during application startup (e.g. routing tables, tax calculators, country code lookups) and never modified again. Standard <code>Dictionary</code> incurs overhead because it must support future mutations.</p>
+
+      <p><code>FrozenDictionary&lt;TKey, TValue&gt;</code> analyzes the exact set of keys at startup to synthesize an optimal, collision-free lookup strategy (e.g., perfect hashing, single-byte ASCII direct jumps):</p>
+
+      <pre><code class="language-csharp">using System.Collections.Frozen;
+
+// Read-only reference table initialized once at boot
+private static readonly FrozenDictionary&lt;string, CurrencyRate&gt; ExchangeRates =
+    LoadRatesFromConfig().ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
+
+public decimal ConvertUsd(string targetCurrency, decimal amount)
+{
+    // Up to 50% faster than standard Dictionary with 0 allocation overhead!
+    return amount * ExchangeRates[targetCurrency].Rate;
+}</code></pre>
+    </section>
+
+    <!-- SECTION 6: INTERVIEW GRILL ROUND -->
+    <section id="interview-grill">
+      <h2>6. The Senior Interviewer's Grill Round: Collections</h2>
+
+      <div class="callout callout-danger">
+        <div class="callout-title">🔥 Question 1: What happens if two different keys have the same hash code in Dictionary?</div>
+        <div class="callout-content">
+          <p><strong>Senior Answer:</strong> When two keys produce identical hash codes (a hash collision), they map to the same bucket in <code>_buckets</code>. In .NET's <code>Dictionary</code>, collision resolution is handled via <strong>separate chaining within the _entries array</strong>: the new entry is appended to <code>_entries</code>, and its <code>next</code> field is set to point to the index of the previously mapped entry. When looking up a key, the runtime traverses the linked index chain (<code>entry = _entries[entry.next]</code>) and calls <code>IEqualityComparer&lt;TKey&gt;.Equals(key1, key2)</code> to identify the exact match.</p>
+        </div>
+      </div>
+
+      <div class="callout callout-danger">
+        <div class="callout-title">🔥 Question 2: Why does modifying a List&lt;T&gt; during a foreach loop throw InvalidOperationException?</div>
+        <div class="callout-content">
+          <p><strong>Senior Answer:</strong> <code>List&lt;T&gt;</code> contains an internal integer field called <code>_version</code>, which increments every time an element is added, removed, or the list is cleared. When a <code>foreach</code> loop starts, it creates a struct enumerator (<code>List&lt;T&gt;.Enumerator</code>) that snapshots the initial <code>_version</code> into a local field (<code>_version = list._version</code>). On every call to <code>MoveNext()</code>, the enumerator verifies whether <code>_version == list._version</code>. If any modification occurs during iteration, the versions mismatch, and it immediately throws an <code>InvalidOperationException</code> to prevent unpredictable state corruption (Fail-Fast behavior).</p>
+        </div>
+      </div>
+
+      <div class="callout callout-danger">
+        <div class="callout-title">🔥 Question 3: How does PriorityQueue&lt;TElement, TPriority&gt; work internally?</div>
+        <div class="callout-content">
+          <p><strong>Senior Answer:</strong> Introduced in .NET 6, <code>PriorityQueue&lt;TElement, TPriority&gt;</code> implements a <strong>4-ary (quad) min-heap</strong> backed by an array of <code>(TElement Element, TPriority Priority)</code> tuples. Unlike a standard binary heap (which has 2 children per parent node), a 4-ary heap has 4 children per node. This makes the tree shallower and significantly improves CPU cache hit ratios during heap-up (<code>Enqueue</code>) and heap-down (<code>Dequeue</code>) operations.</p>
+        </div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<button class="scroll-top" aria-label="Scroll to top">↑</button>
+</body>
+</html>

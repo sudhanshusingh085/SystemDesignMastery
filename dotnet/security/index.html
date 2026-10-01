@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>.NET Security, Auth &amp; Cryptography — From Scratch to Principal Architect</title>
+  <link rel="stylesheet" href="../css/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.0/dist/mermaid.min.js"></script>
+  <script src="../js/main.js" defer></script>
+</head>
+<body>
+
+<button class="menu-toggle" aria-label="Toggle menu">☰</button>
+
+<div class="page-wrapper">
+  <aside class="sidebar" id="sidebar"></aside>
+
+  <main class="main-content">
+    <div class="platform-switcher">
+      <span>Mastery Portals:</span>
+      <a href="../../index.html">🏛️ System Design</a>
+      <a href="../../corejava/index.html">☕ Core Java 21</a>
+      <a href="../../sqlserver/index.html">🗄️ MS SQL Server</a>
+      <a href="../index.html" class="active">🔷 .NET 8 / C# 12</a>
+    </div>
+
+    <nav class="breadcrumb">
+      <a href="../index.html">.NET Mastery</a> &gt; <span>14 · Security &amp; Zero-Trust Architecture</span>
+    </nav>
+
+    <header>
+      <h1>🛡️ .NET Security, Auth &amp; Zero-Trust Architecture</h1>
+      <p class="subtitle">An enterprise security guide for .NET 8: JWT Bearer authentication hardening, Policy-based authorization, resource-based security handlers, constant-time cryptographic comparisons, and the ASP.NET Core Data Protection API (DPAPI).</p>
+    </header>
+
+    <!-- SECTION 1: JWT AUTHENTICATION -->
+    <section id="jwt-auth">
+      <h2>1. Hardening JWT Bearer Authentication in ASP.NET Core</h2>
+
+      <p>JSON Web Tokens (JWT) are the standard bearer tokens for stateless microservices. However, misconfigured token validation parameters represent one of the most common security vulnerabilities in enterprise cloud environments.</p>
+
+      <div class="mermaid">
+flowchart LR
+    Client["Client Request<br/>Header: Bearer eyJhbGci..."] --> Handler["JwtBearerHandler"]
+    Handler --> Valid{"TokenValidationParameters"}
+    Valid -->|1. Validate Issuer &amp; Audience| Step1["Verify Authority DNS"]
+    Valid -->|2. Verify Signature| Step2["Validate Public Key (RSA/ECDSA)"]
+    Valid -->|3. Check Lifetime| Step3["Validate Expiration (ClockSkew = 0)"]
+    Step3 --> Principal["Constructs ClaimsPrincipal<br/>(Sets HttpContext.User)"]
+      </div>
+
+      <h3>Hardened JWT Configuration in Program.cs</h3>
+      <pre><code class="language-csharp">using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.IdentityModel.Tokens;
+
+builder.Services.AddAuthentication(options =&gt;
+{
+    options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+    options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+})
+.AddJwtBearer(options =&gt;
+{
+    options.Authority = "https://identity.enterprise.com";
+    options.Audience = "trading-api";
+    options.RequireHttpsMetadata = true;
+
+    options.TokenValidationParameters = new TokenValidationParameters
+    {
+        ValidateIssuer = true,
+        ValidIssuer = "https://identity.enterprise.com",
+
+        ValidateAudience = true,
+        ValidAudience = "trading-api",
+
+        ValidateIssuerSigningKey = true,
+        ValidateLifetime = true,
+
+        // 🚨 CRITICAL: Default ClockSkew is 5 minutes!
+        // An expired token remains valid for 5 additional minutes unless set to TimeSpan.Zero!
+        ClockSkew = TimeSpan.Zero,
+
+        RequireSignedTokens = true,
+        RequireExpirationTime = true
+    };
+});</code></pre>
+    </section>
+
+    <!-- SECTION 2: POLICY AUTHORIZATION -->
+    <section id="policy-auth">
+      <h2>2. Policy-Based &amp; Resource-Based Authorization</h2>
+
+      <div class="callout callout-info">
+        <div class="callout-title">📖 Why Role-Based Security Fails at Scale</div>
+        <p>Hardcoding roles like <code>[Authorize(Roles = "Manager")]</code> creates brittle, inflexible code. If compliance introduces a new "Senior Trader" role with partial permissions, every controller in the enterprise must be modified. <strong>Policy-Based Authorization</strong> decouples permissions from user roles through requirements and handlers.</p>
+      </div>
+
+      <h3>A. Custom Authorization Requirement &amp; Handler</h3>
+      <pre><code class="language-csharp">// 1. The Requirement (Declaration of intent)
+public sealed class TradingLimitRequirement(decimal maxNotional) : IAuthorizationRequirement
+{
+    public decimal MaxNotional { get; } = maxNotional;
+}
+
+// 2. The Handler (Evaluates rules against ClaimsPrincipal)
+public sealed class TradingLimitHandler : AuthorizationHandler&lt;TradingLimitRequirement&gt;
+{
+    protected override Task HandleRequirementAsync(
+        AuthorizationHandlerContext context, 
+        TradingLimitRequirement requirement)
+    {
+        var limitClaim = context.User.FindFirst("TraderLimit")?.Value;
+
+        if (decimal.TryParse(limitClaim, out var userLimit) &amp;&amp; userLimit &gt;= requirement.MaxNotional)
+        {
+            context.Succeed(requirement);
+        }
+
+        return Task.CompletedTask;
+    }
+}
+
+// 3. Registering the policy in Program.cs:
+builder.Services.AddAuthorization(options =&gt;
+{
+    options.AddPolicy("ExecutiveTraderOnly", policy =&gt;
+        policy.Requirements.Add(new TradingLimitRequirement(10_000_000m)));
+});</code></pre>
+
+      <h3>B. Resource-Based Authorization</h3>
+      <p>When authorization depends on the specific database entity being accessed (e.g. <em>"Can this user cancel Order #4812?"</em>), use <code>IAuthorizationService</code> imperatively inside the handler:</p>
+
+      <pre><code class="language-csharp">public sealed class OrderCancellationHandler : AuthorizationHandler&lt;OperationAuthorizationRequirement, Order&gt;
+{
+    protected override Task HandleRequirementAsync(
+        AuthorizationHandlerContext context,
+        OperationAuthorizationRequirement requirement,
+        Order order)
+    {
+        var userId = context.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+
+        // User can only cancel their own order, unless they possess the Compliance Officer role
+        if (order.OwnerId == userId || context.User.IsInRole("ComplianceOfficer"))
+        {
+            context.Succeed(requirement);
+        }
+
+        return Task.CompletedTask;
+    }
+}</code></pre>
+    </section>
+
+    <!-- SECTION 3: CONSTANT-TIME COMPARISONS -->
+    <section id="constant-time">
+      <h2>3. Timing Side-Channel Attacks &amp; Constant-Time Comparisons</h2>
+
+      <div class="callout callout-danger">
+        <div class="callout-title">🚨 The Timing Side-Channel Vulnerability</div>
+        <p>Standard string and byte array comparisons (<code>==</code>, <code>SequenceEqual()</code>) short-circuit on the very first mismatched byte. An attacker measuring HTTP response latency down to nanoseconds can deduce secret API keys or HMAC signatures byte-by-byte! If the first byte is correct, the response takes 10ns longer; if the first two bytes are correct, it takes 20ns longer.</p>
+      </div>
+
+      <h3>Defeating Timing Attacks with `CryptographicOperations.FixedTimeEquals`</h3>
+      <p>.NET provides hardware-assisted constant-time comparisons that inspect all bytes regardless of mismatches:</p>
+
+      <pre><code class="language-csharp">using System.Security.Cryptography;
+using System.Text;
+
+public static bool ValidateWebhookSignature(string payload, string incomingSignature, byte[] secretKey)
+{
+    using var hmac = new HMACSHA256(secretKey);
+    byte[] computedHash = hmac.ComputeHash(Encoding.UTF8.GetBytes(payload));
+    byte[] incomingHash = Convert.FromHexString(incomingSignature);
+
+    // ❌ VULNERABLE TO TIMING ATTACKS:
+    // return computedHash.SequenceEqual(incomingHash);
+
+    // ✅ IMMUNE TO TIMING ATTACKS: Constant-time byte comparison!
+    return CryptographicOperations.FixedTimeEquals(computedHash, incomingHash);
+}</code></pre>
+    </section>
+
+    <!-- SECTION 4: DATA PROTECTION API -->
+    <section id="dpapi">
+      <h2>4. ASP.NET Core Data Protection API (DPAPI)</h2>
+
+      <p>The ASP.NET Core Data Protection system encrypts sensitive data (session cookies, OAuth tokens, anti-forgery tokens) at rest with automatic key rotation and master cryptographic key management:</p>
+
+      <div class="mermaid">
+flowchart TD
+    Plaintext["Sensitive Payload<br/>(Trader Session / Token)"] --> Protector["IDataProtector.Protect()"]
+    Protector --> KeyRing["Cryptographic Key Ring<br/>(Rotated every 90 days)"]
+    KeyRing --> MasterKey["Master Encryption Key<br/>(Azure Key Vault / AWS KMS)"]
+    MasterKey --> Ciphertext["Cryptographically Encrypted Payload<br/>'CfDJ8N...v8='"]
+      </div>
+
+      <pre><code class="language-csharp">using Microsoft.AspNetCore.DataProtection;
+
+// Registering Data Protection with Distributed Redis Key Storage in Cloud Pods:
+builder.Services.AddDataProtection()
+    .SetApplicationName("TradingPlatform")
+    .PersistKeysToStackExchangeRedis(redisConnection, "DataProtection-Keys")
+    .ProtectKeysWithCertificate(encryptionCert);
+
+// Consuming IDataProtector:
+public class SensitiveTokenService(IDataProtectionProvider provider)
+{
+    private readonly IDataProtector _protector = provider.CreateProtector("UserSecretTokens.v1");
+
+    public string EncryptSecret(string secret) =&gt; _protector.Protect(secret);
+    public string DecryptSecret(string cipher) =&gt; _protector.Unprotect(cipher);
+}</code></pre>
+    </section>
+
+    <!-- SECTION 5: INTERVIEW GRILL ROUND -->
+    <section id="interview-grill">
+      <h2>5. The Senior Interviewer's Grill Round: .NET Security</h2>
+
+      <div class="callout callout-danger">
+        <div class="callout-title">🔥 Question 1: How do you handle JWT revocation in a stateless microservice architecture?</div>
+        <div class="callout-content">
+          <p><strong>Senior Answer:</strong> Because JWTs are cryptographically self-contained, they cannot be natively revoked before expiration without checking an external source. The industry standard pattern is:
+          <ol>
+            <li><strong>Short-Lived Access Tokens:</strong> Set access token lifespan to 5-15 minutes, paired with long-lived Refresh Tokens stored in the database.</li>
+            <li><strong>Distributed Blacklist (Deny-list):</strong> When a user logs out or changes their password, push their unique token ID (<code>jti</code> claim) or user ID into a high-speed Redis distributed cache with a TTL equal to the remaining token lifetime.</li>
+            <li><strong>Middleware Inspection:</strong> Fast middleware or custom <code>JwtBearerEvents.OnTokenValidated</code> checks Redis for the <code>jti</code> in under 0.5ms.</li>
+          </ol>
+          </p>
+        </div>
+      </div>
+
+      <div class="callout callout-danger">
+        <div class="callout-title">🔥 Question 2: Why should you never use SHA256 or MD5 for password storage, and what should you use in .NET?</div>
+        <div class="callout-content">
+          <p><strong>Senior Answer:</strong> SHA256 and MD5 are cryptographic digest algorithms designed for maximum speed. Modern GPU clusters can compute billions of SHA256 hashes per second, making rainbow table and brute-force attacks trivial. Passwords must be hashed using a <strong>computationally and memory-intensive Key Derivation Function (KDF)</strong>. In modern .NET, use <strong>Argon2id</strong> or <strong>PBKDF2</strong> with 600,000+ iterations via <code>Rfc2898DeriveBytes.Pbkdf2</code> or the built-in <code>IPasswordHasher&lt;TUser&gt;</code>.</p>
+        </div>
+      </div>
+
+      <div class="callout callout-danger">
+        <div class="callout-title">🔥 Question 3: What happens to Data Protection if you run multiple load-balanced web pods without shared key storage?</div>
+        <div class="callout-content">
+          <p><strong>Senior Answer:</strong> By default, ASP.NET Core stores Data Protection keys in local directory storage (e.g. <code>%LOCALAPPDATA%\ASP.NET\DataProtection-Keys</code>). If you run multiple web pods behind a load balancer without shared storage, Pod A will generate Key Ring A and Pod B will generate Key Ring B. When Pod A creates an authentication cookie or antiforgery token, and the client's next request is routed to Pod B, Pod B cannot decrypt the token and immediately logs the user out or throws a 400 Bad Request error. Production clusters must persist keys to a shared store like Redis, Azure Blob Storage, or SQL Server.</p>
+        </div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<button class="scroll-top" aria-label="Scroll to top">↑</button>
+</body>
+</html>
