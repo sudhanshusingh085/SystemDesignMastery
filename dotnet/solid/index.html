@@ -36,7 +36,33 @@
     <!-- SECTION 1: OVERVIEW -->
     <section id="overview">
       <h2>1. The Ground-Zero Philosophy: Why SOLID?</h2>
-      <p>In high-frequency trading (HFT), risk engines, and enterprise enterprise banking platforms, software decays rapidly under evolving regulatory requirements and volatile market conditions. Without architectural discipline, codebases suffer from the four classic symptoms of rotten architecture:</p>
+
+      <div class="callout callout-info">
+        <div class="callout-title">🧠 The 10-Second Elevator Pitch</div>
+        <p><strong>"The SOLID principles are five architectural guidelines formulated by Robert C. Martin (Uncle Bob) that govern maintainable, extensible object-oriented software design. They eliminate architectural rigidity, fragility, immobility, and viscosity by ensuring every class has a single business actor (SRP), classes are extended via polymorphism rather than mutation (OCP), derived types honor base behavioral contracts (LSP), clients depend only on lean interfaces (ISP), and high-level domain policies depend strictly on abstractions rather than low-level infrastructure concretions (DIP)."</strong></p>
+      </div>
+
+      <div class="definition-box">
+        <h3>Formal Architectural Terminology</h3>
+        <dl>
+          <dt>Single Responsibility Principle (SRP)</dt>
+          <dd>A module or class should be responsible to one, and only one, actor (a business stakeholder or group of users). A class must have only one reason to change.</dd>
+
+          <dt>Open/Closed Principle (OCP)</dt>
+          <dd>Software entities (classes, modules, functions) should be open for extension, but closed for modification. New system behaviors are introduced by writing new code (subclasses, decorators, strategies) rather than altering existing, tested source code.</dd>
+
+          <dt>Liskov Substitution Principle (LSP)</dt>
+          <dd>Formulated by Barbara Liskov: If $S$ is a subtype of $T$, then objects of type $T$ may be replaced with objects of type $S$ without altering any of the desirable properties of the program (correctness, task performed). Subtypes cannot strengthen preconditions or weaken postconditions.</dd>
+
+          <dt>Interface Segregation Principle (ISP)</dt>
+          <dd>No client should be forced to depend on methods it does not use. Fat, monolithic interfaces must be split into smaller, cohesive, role-specific contracts.</dd>
+
+          <dt>Dependency Inversion Principle (DIP)</dt>
+          <dd>High-level modules should not depend on low-level modules; both should depend on abstractions. Abstractions should not depend on details; details should depend on abstractions.</dd>
+        </dl>
+      </div>
+
+      <p>In high-frequency trading (HFT), risk engines, and enterprise banking platforms, software decays rapidly under evolving regulatory requirements and volatile market conditions. Without architectural discipline, codebases suffer from the four classic symptoms of rotten architecture:</p>
       
       <ul>
         <li><strong>Rigidity:</strong> Every small change causes a cascade of modifications across unrelated modules.</li>
@@ -45,7 +71,7 @@
         <li><strong>Viscosity:</strong> Doing things the "hacky" way is easier than doing things the architecturally correct way, leading to technical debt accumulation.</li>
       </ul>
 
-      <p>The <strong>SOLID</strong> principles, coined by Robert C. Martin (Uncle Bob), provide the mathematical and design foundations to build loosely coupled, highly cohesive, and easily testable software in C#.</p>
+      <p>The <strong>SOLID</strong> principles provide the mathematical and design foundations to build loosely coupled, highly cohesive, and easily testable software in C#.</p>
 
       <div class="mermaid">
 flowchart TD
@@ -439,17 +465,101 @@ builder.Services.AddTransient<ArbitrageCalculationService>();</code></pre>
 
     <!-- SECTION 7: INTERVIEW GRILL ROUND -->
     <section id="grill-round">
-      <div class="callout callout-warning">
-        <div class="callout-title">🎯 The Principal Engineer's Grill Round: SOLID in C#</div>
+      <h2>7. The Principal Engineer's 10-Question Grill Round: SOLID in C#</h2>
 
-        <p><strong>Q1: "Can a class violate SRP even if it only has 50 lines of code?"</strong></p>
-        <p><strong>Senior Answer:</strong> "Yes, absolutely. SRP is not measured in lines of code; it is measured in <strong>reasons to change</strong>. A 30-line class that parses a JSON payload, computes an interest rate, and writes an error log to a local file violates SRP because it couples data serialization format, financial calculation rules, and logging infrastructure. Changes to any of those three distinct business drivers will force a modification of that class."</p>
+      <div class="callout callout-danger">
+        <div class="callout-title">🔥 Question 1: Can a class violate the Single Responsibility Principle even if it has only 30 lines of code?</div>
+        <div class="callout-content">
+          <p><strong>Senior Answer:</strong> Absolutely yes. SRP is not measured by lines of code; it is measured strictly by <strong>reasons to change (actors/stakeholders)</strong>. A 30-line class that parses a JSON message, computes an interest rate discount, and logs an error to a database table serves three distinct actors: the Integration Team (data format), the Business/Risk Team (financial calculations), and the DevOps/Infra Team (logging destination). A change requested by any of these three stakeholders forces a modification of that class, creating regression risks across unrelated domains.</p>
+          <p><strong>🚩 Red Flag to Avoid:</strong> Believing that SRP means "a class should only do one thing" or that classes under 100 lines automatically satisfy SRP.</p>
+        </div>
+      </div>
 
-        <p><strong>Q2: "What is the difference between covariant and contravariant generics in C#, and how does that relate to Liskov Substitution?"</strong></p>
-        <p><strong>Senior Answer:</strong> "Covariance (<code>out T</code>) allows a method to return a more derived type than that specified by the interface (preserving assignment compatibility for outputs: <code>IEnumerable&lt;Derived&gt;</code> is assignable to <code>IEnumerable&lt;Base&gt;</code>). Contravariance (<code>in T</code>) allows a method to accept arguments of a less derived type (for inputs: <code>IComparer&lt;Base&gt;</code> can compare <code>Derived</code> instances). This directly enforces LSP mathematically: inputs can broaden their accepted types (weakened preconditions), while outputs can narrow their returned types (strengthened postconditions)."</p>
+      <div class="callout callout-danger">
+        <div class="callout-title">🔥 Question 2: How does the Open/Closed Principle relate to C# sealed classes? Isn't sealing classes anti-OCP?</div>
+        <div class="callout-content">
+          <p><strong>Senior Answer:</strong> Sealing classes (<code>public sealed class</code>) is actually pro-OCP, because <strong>class inheritance is the weakest, most brittle form of extension</strong>. Inheritance breaks encapsulation by exposing base class internal mechanics to derived classes (the fragile base class problem). Modern software engineering favors <strong>Composition over Inheritance</strong>. By sealing concrete classes, you protect their internal invariants from improper overriding. You achieve Open/Closed extensibility by having the sealed class implement interfaces (polymorphic substitution) or by wrapping it using the Decorator Pattern or Strategy Pattern.</p>
+          <p><strong>🚩 Red Flag to Avoid:</strong> Believing OCP means every class must be unsealed and have virtual methods so anyone can subclass it.</p>
+        </div>
+      </div>
 
-        <p><strong>Q3: "How does the Open/Closed Principle apply to C# sealed classes?"</strong></p>
-        <p><strong>Senior Answer:</strong> "Sealing classes (<code>public sealed class</code>) seems contradictory to OCP at first glance because it prevents class inheritance. However, inheritance is the weakest form of extension. True OCP favors <strong>Composition over Inheritance</strong>. By sealing concrete classes, you protect their internal invariants from improper subclassing, and you achieve OCP by having the sealed class implement an interface or by wrapping it via the Decorator Pattern."</p>
+      <div class="callout callout-danger">
+        <div class="callout-title">🔥 Question 3: What is the formal mathematical rule of Liskov Substitution, and how do preconditions and postconditions apply in C#?</div>
+        <div class="callout-content">
+          <p><strong>Senior Answer:</strong> Barbara Liskov's formal rule states: If $S$ is a subtype of $T$, objects of type $T$ must be replaceable with objects of type $S$ without altering the program's correctness. In behavioral contracts:</p>
+          <ol>
+            <li><strong>Preconditions cannot be strengthened:</strong> A derived method cannot demand stricter input requirements than the base contract. (e.g. if base accepts all positive and negative numbers, derived cannot throw if input is negative).</li>
+            <li><strong>Postconditions cannot be weakened:</strong> A derived method must guarantee at least as much as the base contract. (e.g. if base guarantees never returning null, derived cannot return null).</li>
+            <li><strong>Invariants must be preserved:</strong> All internal rules of the base type must remain valid.</li>
+            <li><strong>No unexpected exceptions:</strong> A subtype method cannot throw exceptions not expected by consumers of the base type (such as <code>NotSupportedException</code> or <code>NotImplementedException</code>).</li>
+          </ol>
+          <p><strong>🚩 Red Flag to Avoid:</strong> Stating that LSP is satisfied simply because the code compiles without C# type errors.</p>
+        </div>
+      </div>
+
+      <div class="callout callout-danger">
+        <div class="callout-title">🔥 Question 4: Why does throwing NotImplementedException or NotSupportedException in a subclass violate LSP?</div>
+        <div class="callout-content">
+          <p><strong>Senior Answer:</strong> Throwing <code>NotImplementedException</code> or <code>NotSupportedException</code> directly violates the behavioral contract of the base abstraction. Consumers programming against the base interface or class expect the operation to succeed. If passing a derived subtype causes a runtime crash due to an unsupported method, the subtype cannot substitute for its base type. The canonical example is <code>ReadOnlyCollection&lt;T&gt;</code> inheriting <code>IList&lt;T&gt;</code> where calling <code>.Add()</code> throws <code>NotSupportedException</code>. This indicates an <strong>Interface Segregation Principle violation</strong>—the interface was too broad and should have been split into <code>IReadOnlyList&lt;T&gt;</code> and <code>IList&lt;T&gt;</code>.</p>
+          <p><strong>🚩 Red Flag to Avoid:</strong> Defending <code>throw new NotImplementedException()</code> as an acceptable way to "stub out" unused methods in derived classes.</p>
+        </div>
+      </div>
+
+      <div class="callout callout-danger">
+        <div class="callout-title">🔥 Question 5: How does generic covariance (out T) and contravariance (in T) in C# enforce Liskov Substitution at compile time?</div>
+        <div class="callout-content">
+          <p><strong>Senior Answer:</strong> C# generic variance mathematically mirrors LSP's precondition and postcondition rules:</p>
+          <ul>
+            <li><strong>Contravariance (<code>in T</code>):</strong> Applied to input parameters (e.g. <code>IComparer&lt;in T&gt;</code>). A method expecting a <code>Derived</code> object can accept a comparer for <code>Base</code>, because a comparer that can handle any <code>Base</code> can safely handle <code>Derived</code> (precondition widening).</li>
+            <li><strong>Covariance (<code>out T</code>):</strong> Applied to output return types (e.g. <code>IEnumerable&lt;out T&gt;</code>). A consumer expecting a sequence of <code>Base</code> objects can safely consume a sequence of <code>Derived</code> objects, because any <code>Derived</code> object is guaranteed to satisfy the contract of <code>Base</code> (postcondition narrowing).</li>
+          </ul>
+          <p><strong>🚩 Red Flag to Avoid:</strong> Confusing covariance (output) with contravariance (input).</p>
+        </div>
+      </div>
+
+      <div class="callout callout-danger">
+        <div class="callout-title">🔥 Question 6: What is the architectural difference between Dependency Inversion (DIP), Inversion of Control (IoC), and Dependency Injection (DI)?</div>
+        <div class="callout-content">
+          <p><strong>Senior Answer:</strong></p>
+          <ul>
+            <li><strong>Inversion of Control (IoC):</strong> A high-level architectural design principle where control of execution flow is inverted from application code to a framework (Hollywood Principle: <em>"Don't call us, we'll call you"</em>).</li>
+            <li><strong>Dependency Inversion Principle (DIP):</strong> A foundational SOLID design guideline stating high-level business policies must not depend on low-level database/I/O plumbing; both must depend on abstractions.</li>
+            <li><strong>Dependency Injection (DI):</strong> A concrete implementation pattern used to satisfy DIP and IoC by passing dependent objects (dependencies) to an instance via constructors, methods, or properties rather than allowing the instance to instantiate them via <code>new</code>.</li>
+          </ul>
+          <p><strong>🚩 Red Flag to Avoid:</strong> Using the terms DIP and DI interchangeably as if they are the exact same concept.</p>
+        </div>
+      </div>
+
+      <div class="callout callout-danger">
+        <div class="callout-title">🔥 Question 7: Who should "own" the abstraction in Dependency Inversion: the caller or the implementer?</div>
+        <div class="callout-content">
+          <p><strong>Senior Answer:</strong> The <strong>high-level client (the caller)</strong> must own the abstraction. In Clean Architecture / Hexagonal Architecture, the domain or application layer defines the interface (e.g. <code>IOrderRepository</code>) based on what the domain needs. The infrastructure layer (e.g. EF Core SQL database adapter) references the domain layer and implements the interface. If the interface is designed to mirror database implementation details (e.g. methods like <code>ExecuteSqlRaw</code> or database-specific types), the dependency inversion is illusory—the domain is still conceptually coupled to the database detail.</p>
+          <p><strong>🚩 Red Flag to Avoid:</strong> Saying the database or infrastructure project should define and export the repository interfaces.</p>
+        </div>
+      </div>
+
+      <div class="callout callout-danger">
+        <div class="callout-title">🔥 Question 8: How do C# 8 Default Interface Methods (DIM) impact the Interface Segregation Principle?</div>
+        <div class="callout-content">
+          <p><strong>Senior Answer:</strong> Default Interface Methods allow interfaces to declare default implementations for new methods without breaking existing classes that implement the interface. While useful for backward-compatible library evolution, they introduce an ISP risk: developers may be tempted to bloat interfaces by adding new optional methods to existing contracts instead of creating new, cohesive, segregated interfaces. If an interface acquires multiple default methods that only a minority of implementers need, it becomes a "fat interface" that violates ISP conceptually.</p>
+          <p><strong>🚩 Red Flag to Avoid:</strong> Assuming Default Interface Methods mean you never need to split interfaces anymore.</p>
+        </div>
+      </div>
+
+      <div class="callout callout-danger">
+        <div class="callout-title">🔥 Question 9: Can adhering too strictly to SOLID cause over-engineering? Where is the pragmatic tipping point?</div>
+        <div class="callout-content">
+          <p><strong>Senior Answer:</strong> Yes. Excessive adherence to SOLID without contextual justification leads to <strong>premature abstraction and architecture astronautics</strong>: thousands of 1-method interfaces, single-line classes, indirection layers that obscure business flow, and high cognitive load. The pragmatic tipping point is guided by the <strong>Rule of Three</strong>: do not introduce an abstraction (interface, strategy, decorator) until you have at least two or three concrete variations or a genuine business requirement for substitution (e.g., unit testing or cloud portability). Simplicity and readability should not be sacrificed for speculative flexibility.</p>
+          <p><strong>🚩 Red Flag to Avoid:</strong> Claiming every single class in an application must have an interface and be split into micro-classes regardless of complexity.</p>
+        </div>
+      </div>
+
+      <div class="callout callout-danger">
+        <div class="callout-title">🔥 Question 10: How does the Classic Rectangle-Square problem prove that real-world inheritance hierarchies do not always map cleanly to OOP?</div>
+        <div class="callout-content">
+          <p><strong>Senior Answer:</strong> In mathematics, a Square is a Rectangle. However, in OOP, if a <code>Rectangle</code> class exposes mutable properties <code>Width</code> and <code>Height</code> with independent setters, a <code>Square</code> subclass cannot satisfy the contract without side effects. If <code>Square</code> overrides <code>Width</code> so that setting <code>Width = 5</code> also mutates <code>Height = 5</code>, any method written for <code>Rectangle</code> (such as <code>rect.Width = 5; rect.Height = 10; Assert(rect.Area == 50);</code>) will fail catastrophically when passed a <code>Square</code> (since Area will be 100). This proves that <strong>behavioral contracts, not real-world taxonomy, govern subtyping in software architecture</strong>.</p>
+          <p><strong>🚩 Red Flag to Avoid:</strong> Suggesting that Square inheriting Rectangle is fine as long as you add an <code>if (this is Square)</code> check in the client code.</p>
+        </div>
       </div>
     </section>
 

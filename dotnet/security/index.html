@@ -30,26 +30,72 @@
 
     <header>
       <h1>🛡️ .NET Security, Auth &amp; Zero-Trust Architecture</h1>
-      <p class="subtitle">An enterprise security guide for .NET 8: JWT Bearer authentication hardening, Policy-based authorization, resource-based security handlers, constant-time cryptographic comparisons, and the ASP.NET Core Data Protection API (DPAPI).</p>
+      <p class="subtitle">An architectural masterclass on enterprise security in .NET 8: JWT Bearer authentication hardening, Policy-based and Resource-based authorization, timing side-channel mitigation with FixedTimeEquals, Data Protection API (DPAPI) multi-pod clustering, PBKDF2/Argon2id password hashing, and the Principal Engineer Grill Round.</p>
     </header>
 
-    <!-- SECTION 1: JWT AUTHENTICATION -->
-    <section id="jwt-auth">
-      <h2>1. Hardening JWT Bearer Authentication in ASP.NET Core</h2>
+    <!-- TABLE OF CONTENTS -->
+    <nav class="toc-container">
+      <h3>Table of Contents</h3>
+      <ul>
+        <li><a href="#definitions">1. Formal Textbook Definitions &amp; 10-Second Elevator Pitch</a></li>
+        <li><a href="#jwt-hardening">2. Hardening JWT Bearer Authentication &amp; JWKS Key Rotation</a></li>
+        <li><a href="#policy-auth">3. Policy-Based &amp; Imperative Resource-Based Authorization</a></li>
+        <li><a href="#timing-attacks">4. Cryptographic Timing Side-Channels &amp; FixedTimeEquals</a></li>
+        <li><a href="#dpapi-clustering">5. Data Protection API (DPAPI) in Multi-Pod Cloud Clusters</a></li>
+        <li><a href="#password-storage">6. Enterprise Password Storage: PBKDF2 &amp; Argon2id</a></li>
+        <li><a href="#interview-grill">7. The Principal Engineer's 10-Question Grill Round</a></li>
+      </ul>
+    </nav>
 
-      <p>JSON Web Tokens (JWT) are the standard bearer tokens for stateless microservices. However, misconfigured token validation parameters represent one of the most common security vulnerabilities in enterprise cloud environments.</p>
+    <!-- SECTION 1: DEFINITIONS & ELEVATOR PITCH -->
+    <section id="definitions">
+      <h2>1. Formal Textbook Definitions &amp; 10-Second Elevator Pitch</h2>
+
+      <div class="callout callout-info">
+        <div class="callout-title">🧠 The 10-Second Elevator Pitch</div>
+        <p><strong>"Enterprise .NET security operates on Zero-Trust principles: Authenticate identities using cryptographically hardened JWT Bearer tokens with zero ClockSkew tolerance, enforce fine-grained permissions via Policy and Resource-Based Authorization handlers, mitigate side-channel timing attacks with hardware constant-time comparisons (FixedTimeEquals), and synchronize cryptographic key rings across load-balanced pods via the distributed Data Protection API backed by Redis and Key Vault."</strong></p>
+      </div>
+
+      <div class="definition-box">
+        <h3>Formal Architectural Terminology</h3>
+        <dl>
+          <dt>Authentication (AuthN) vs Authorization (AuthZ)</dt>
+          <dd><strong>Authentication</strong> establishes and verifies the caller's identity (<em>"Who are you?"</em>) through cryptographic tokens, certificates, or credentials, constructing a <code>ClaimsPrincipal</code>. <strong>Authorization</strong> determines whether the verified identity possesses the necessary privileges to perform a requested operation on a given resource (<em>"Are you permitted to do this?"</em>).</dd>
+
+          <dt>ClockSkew</dt>
+          <dd>A time tolerance parameter in <code>TokenValidationParameters</code> configured to accommodate clock drift across distributed servers. By default in .NET, <code>ClockSkew</code> is set to <strong>5 minutes</strong>. If not explicitly set to <code>TimeSpan.Zero</code>, an expired JWT remains valid for an additional 300 seconds after its <code>exp</code> claim timestamp.</dd>
+
+          <dt>Timing Side-Channel Attack</dt>
+          <dd>A cryptographic attack where an adversary measures nanosecond variations in CPU execution time. Standard equality checks (<code>==</code>, <code>SequenceEqual</code>) short-circuit on the first mismatched byte, allowing an attacker to deduce HMAC signatures or API secret keys byte-by-byte by timing server response latencies.</dd>
+
+          <dt>Data Protection API (DPAPI)</dt>
+          <dd>The unified cryptographic subsystem in ASP.NET Core used to encrypt sensitive payload tokens at rest (session cookies, anti-forgery CSRF tokens, OIDC state). It features automatic key derivation, master key isolation, and rotating cryptographic key rings.</dd>
+
+          <dt>Resource-Based Authorization</dt>
+          <dd>An authorization pattern where access control cannot be resolved purely by static route policies or roles, but depends dynamically on the state of the domain entity being accessed (e.g., verifying that <code>order.OwnerId == currentUserId</code> or that an account is active before allowing cancellation).</dd>
+
+          <dt>Crypto-Shredding</dt>
+          <dd>A compliance technique in append-only storage where personal identifiable data is encrypted with a dedicated per-user key. Destroying the key permanently renders the data unrecoverable ciphertext, satisfying privacy regulations without altering historical immutable logs.</dd>
+        </dl>
+      </div>
+    </section>
+
+    <!-- SECTION 2: JWT HARDENING -->
+    <section id="jwt-hardening">
+      <h2>2. Hardening JWT Bearer Authentication &amp; JWKS Key Rotation</h2>
+
+      <p>A common vulnerability in ASP.NET Core microservices is incomplete token validation. An enterprise-grade configuration must validate the issuer, audience, signature, and enforce zero clock skew:</p>
 
       <div class="mermaid">
 flowchart LR
-    Client["Client Request<br/>Header: Bearer eyJhbGci..."] --> Handler["JwtBearerHandler"]
-    Handler --> Valid{"TokenValidationParameters"}
-    Valid -->|1. Validate Issuer &amp; Audience| Step1["Verify Authority DNS"]
-    Valid -->|2. Verify Signature| Step2["Validate Public Key (RSA/ECDSA)"]
-    Valid -->|3. Check Lifetime| Step3["Validate Expiration (ClockSkew = 0)"]
-    Step3 --> Principal["Constructs ClaimsPrincipal<br/>(Sets HttpContext.User)"]
+    Client["Client Request<br/>Authorization: Bearer &lt;token&gt;"] --> AuthMiddleware["JwtBearerMiddleware"]
+    AuthMiddleware --> Validate["TokenValidationParameters"]
+    Validate -->|1. DNS &amp; Discovery| JWKS["Fetch Public Keys via JWKS Endpoint"]
+    Validate -->|2. Crypto Verification| SigCheck["Validate RSA/ECDSA Signature"]
+    Validate -->|3. Strict Clock Check| Lifetime["ClockSkew = TimeSpan.Zero"]
+    Validate -->|4. Claims Extraction| Principal["Populate ClaimsPrincipal (HttpContext.User)"]
       </div>
 
-      <h3>Hardened JWT Configuration in Program.cs</h3>
       <pre><code class="language-csharp">using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 
@@ -61,7 +107,7 @@ builder.Services.AddAuthentication(options =&gt;
 .AddJwtBearer(options =&gt;
 {
     options.Authority = "https://identity.enterprise.com";
-    options.Audience = "trading-api";
+    options.Audience = "trading-microservice";
     options.RequireHttpsMetadata = true;
 
     options.TokenValidationParameters = new TokenValidationParameters
@@ -70,47 +116,58 @@ builder.Services.AddAuthentication(options =&gt;
         ValidIssuer = "https://identity.enterprise.com",
 
         ValidateAudience = true,
-        ValidAudience = "trading-api",
+        ValidAudience = "trading-microservice",
 
         ValidateIssuerSigningKey = true,
         ValidateLifetime = true,
 
-        // 🚨 CRITICAL: Default ClockSkew is 5 minutes!
-        // An expired token remains valid for 5 additional minutes unless set to TimeSpan.Zero!
+        // 🚨 CRITICAL SECURITY HARDENING:
+        // Default ClockSkew is 5 minutes! Must be TimeSpan.Zero to avoid accepting expired tokens!
         ClockSkew = TimeSpan.Zero,
 
         RequireSignedTokens = true,
         RequireExpirationTime = true
     };
+
+    // Real-time JWT Revocation Check via Redis Deny-List
+    options.Events = new JwtBearerEvents
+    {
+        OnTokenValidated = async context =&gt;
+        {
+            var cache = context.HttpContext.RequestServices.GetRequiredService&lt;IConnectionMultiplexer&gt;();
+            var db = cache.GetDatabase();
+
+            var jti = context.Principal?.FindFirst(JwtRegisteredClaimNames.Jti)?.Value;
+            if (!string.IsNullOrEmpty(jti) &amp;&amp; await db.KeyExistsAsync($"denylist:{jti}"))
+            {
+                context.Fail("Token has been revoked by security administrator.");
+            }
+        }
+    };
 });</code></pre>
     </section>
 
-    <!-- SECTION 2: POLICY AUTHORIZATION -->
+    <!-- SECTION 3: POLICY AUTHORIZATION -->
     <section id="policy-auth">
-      <h2>2. Policy-Based &amp; Resource-Based Authorization</h2>
+      <h2>3. Policy-Based &amp; Imperative Resource-Based Authorization</h2>
 
-      <div class="callout callout-info">
-        <div class="callout-title">📖 Why Role-Based Security Fails at Scale</div>
-        <p>Hardcoding roles like <code>[Authorize(Roles = "Manager")]</code> creates brittle, inflexible code. If compliance introduces a new "Senior Trader" role with partial permissions, every controller in the enterprise must be modified. <strong>Policy-Based Authorization</strong> decouples permissions from user roles through requirements and handlers.</p>
-      </div>
+      <p>Role-based security (<code>[Authorize(Roles = "Admin")]</code>) is an architectural anti-pattern that creates brittle code. Policy-based authorization decouples user identities from business permissions:</p>
 
-      <h3>A. Custom Authorization Requirement &amp; Handler</h3>
-      <pre><code class="language-csharp">// 1. The Requirement (Declaration of intent)
-public sealed class TradingLimitRequirement(decimal maxNotional) : IAuthorizationRequirement
+      <pre><code class="language-csharp">// 1. Custom Requirement
+public sealed class TradingLimitRequirement(decimal maxLimit) : IAuthorizationRequirement
 {
-    public decimal MaxNotional { get; } = maxNotional;
+    public decimal MaxLimit { get; } = maxLimit;
 }
 
-// 2. The Handler (Evaluates rules against ClaimsPrincipal)
+// 2. Authorization Handler
 public sealed class TradingLimitHandler : AuthorizationHandler&lt;TradingLimitRequirement&gt;
 {
     protected override Task HandleRequirementAsync(
         AuthorizationHandlerContext context, 
         TradingLimitRequirement requirement)
     {
-        var limitClaim = context.User.FindFirst("TraderLimit")?.Value;
-
-        if (decimal.TryParse(limitClaim, out var userLimit) &amp;&amp; userLimit &gt;= requirement.MaxNotional)
+        var limitClaim = context.User.FindFirst("TradeExecutionLimit")?.Value;
+        if (decimal.TryParse(limitClaim, out var userLimit) &amp;&amp; userLimit &gt;= requirement.MaxLimit)
         {
             context.Succeed(requirement);
         }
@@ -119,27 +176,18 @@ public sealed class TradingLimitHandler : AuthorizationHandler&lt;TradingLimitRe
     }
 }
 
-// 3. Registering the policy in Program.cs:
-builder.Services.AddAuthorization(options =&gt;
-{
-    options.AddPolicy("ExecutiveTraderOnly", policy =&gt;
-        policy.Requirements.Add(new TradingLimitRequirement(10_000_000m)));
-});</code></pre>
-
-      <h3>B. Resource-Based Authorization</h3>
-      <p>When authorization depends on the specific database entity being accessed (e.g. <em>"Can this user cancel Order #4812?"</em>), use <code>IAuthorizationService</code> imperatively inside the handler:</p>
-
-      <pre><code class="language-csharp">public sealed class OrderCancellationHandler : AuthorizationHandler&lt;OperationAuthorizationRequirement, Order&gt;
+// 3. Imperative Resource-Based Authorization (For Domain Entities)
+public sealed class OrderCancellationHandler : AuthorizationHandler&lt;OperationAuthorizationRequirement, Order&gt;
 {
     protected override Task HandleRequirementAsync(
         AuthorizationHandlerContext context,
         OperationAuthorizationRequirement requirement,
         Order order)
     {
-        var userId = context.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        var currentUserId = context.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
 
-        // User can only cancel their own order, unless they possess the Compliance Officer role
-        if (order.OwnerId == userId || context.User.IsInRole("ComplianceOfficer"))
+        // An order can only be cancelled by its creator or a risk compliance officer
+        if (order.CreatorId == currentUserId || context.User.HasClaim("Scope", "risk:compliance"))
         {
             context.Succeed(requirement);
         }
@@ -149,95 +197,246 @@ builder.Services.AddAuthorization(options =&gt;
 }</code></pre>
     </section>
 
-    <!-- SECTION 3: CONSTANT-TIME COMPARISONS -->
-    <section id="constant-time">
-      <h2>3. Timing Side-Channel Attacks &amp; Constant-Time Comparisons</h2>
+    <!-- SECTION 4: TIMING ATTACKS -->
+    <section id="timing-attacks">
+      <h2>4. Cryptographic Timing Side-Channels &amp; FixedTimeEquals</h2>
 
-      <div class="callout callout-danger">
-        <div class="callout-title">🚨 The Timing Side-Channel Vulnerability</div>
-        <p>Standard string and byte array comparisons (<code>==</code>, <code>SequenceEqual()</code>) short-circuit on the very first mismatched byte. An attacker measuring HTTP response latency down to nanoseconds can deduce secret API keys or HMAC signatures byte-by-byte! If the first byte is correct, the response takes 10ns longer; if the first two bytes are correct, it takes 20ns longer.</p>
+      <p>When verifying webhook HMAC signatures or API secret keys, comparing byte arrays with <code>==</code> or <code>SequenceEqual()</code> exposes systems to <strong>timing side-channel attacks</strong>:</p>
+
+      <div class="mermaid">
+sequenceDiagram
+    autonumber
+    participant Attacker
+    participant Server as Vulnerable API Server (SequenceEqual)
+
+    Note over Attacker: Guessing byte 1: tries 0x00..0x7F
+    Attacker->>Server: Signature: [0x4A, 0x00, 0x00...]
+    Server-->>Attacker: 401 Unauthorized (Response latency: 1.002 ms - Mismatch at byte 1)
+    Attacker->>Server: Signature: [0x5B, 0x00, 0x00...]
+    Server-->>Attacker: 401 Unauthorized (Response latency: 1.045 ms - Byte 1 MATCHED! Mismatch at byte 2)
+    Note over Attacker: Attacker learns Byte 1 is 0x5B! Iterates byte 2 next...
       </div>
-
-      <h3>Defeating Timing Attacks with `CryptographicOperations.FixedTimeEquals`</h3>
-      <p>.NET provides hardware-assisted constant-time comparisons that inspect all bytes regardless of mismatches:</p>
 
       <pre><code class="language-csharp">using System.Security.Cryptography;
 using System.Text;
 
-public static bool ValidateWebhookSignature(string payload, string incomingSignature, byte[] secretKey)
+public static class WebhookSecurity
 {
-    using var hmac = new HMACSHA256(secretKey);
-    byte[] computedHash = hmac.ComputeHash(Encoding.UTF8.GetBytes(payload));
-    byte[] incomingHash = Convert.FromHexString(incomingSignature);
+    public static bool VerifyWebhookSignature(string payload, string signatureHeader, byte[] secretKey)
+    {
+        using var hmac = new HMACSHA256(secretKey);
+        byte[] expectedHash = hmac.ComputeHash(Encoding.UTF8.GetBytes(payload));
+        byte[] providedHash = Convert.FromHexString(signatureHeader);
 
-    // ❌ VULNERABLE TO TIMING ATTACKS:
-    // return computedHash.SequenceEqual(incomingHash);
+        // ❌ VULNERABLE: Short-circuits on first mismatch -> Leaks secrets via nanosecond timing!
+        // return expectedHash.SequenceEqual(providedHash);
 
-    // ✅ IMMUNE TO TIMING ATTACKS: Constant-time byte comparison!
-    return CryptographicOperations.FixedTimeEquals(computedHash, incomingHash);
+        // ✅ IMMUNE: Hardware-assisted constant-time comparison (FixedTimeEquals)
+        // Always executes exact same number of CPU cycles regardless of byte matches!
+        return CryptographicOperations.FixedTimeEquals(expectedHash, providedHash);
+    }
 }</code></pre>
     </section>
 
-    <!-- SECTION 4: DATA PROTECTION API -->
-    <section id="dpapi">
-      <h2>4. ASP.NET Core Data Protection API (DPAPI)</h2>
+    <!-- SECTION 5: DPAPI CLUSTERING -->
+    <section id="dpapi-clustering">
+      <h2>5. Data Protection API (DPAPI) in Multi-Pod Cloud Clusters</h2>
 
-      <p>The ASP.NET Core Data Protection system encrypts sensitive data (session cookies, OAuth tokens, anti-forgery tokens) at rest with automatic key rotation and master cryptographic key management:</p>
+      <p>ASP.NET Core uses the Data Protection API to encrypt anti-forgery CSRF tokens, session cookies, and temporary state tokens. In containerized cloud environments (Kubernetes), default in-memory key storage causes catastrophic production failures:</p>
 
       <div class="mermaid">
 flowchart TD
-    Plaintext["Sensitive Payload<br/>(Trader Session / Token)"] --> Protector["IDataProtector.Protect()"]
-    Protector --> KeyRing["Cryptographic Key Ring<br/>(Rotated every 90 days)"]
-    KeyRing --> MasterKey["Master Encryption Key<br/>(Azure Key Vault / AWS KMS)"]
-    MasterKey --> Ciphertext["Cryptographically Encrypted Payload<br/>'CfDJ8N...v8='"]
+    subgraph MultiPodIssue["❌ Default Local Key Storage (Broken Load Balancing)"]
+        Pod1["Pod 1 (Key Ring A)"] -->|Encrypts Cookie| Client["Browser Client"]
+        Client -->|Sends Cookie to Pod 2| Pod2["Pod 2 (Key Ring B)"]
+        Pod2 --> Crash["💥 CryptographicException: Decryption Failed!<br/>Forces immediate user logout!"]
+    end
+
+    subgraph ClusteredDPAPI["✅ Clustered Data Protection (Shared Key Ring)"]
+        K8sPod1["Pod 1"] --> RedisKeyRing[("Shared Redis Key Ring")]
+        K8sPod2["Pod 2"] --> RedisKeyRing
+        RedisKeyRing --> KeyVault["Azure Key Vault / AWS KMS (Master Encryption Key)"]
+    end
       </div>
 
       <pre><code class="language-csharp">using Microsoft.AspNetCore.DataProtection;
+using StackExchange.Redis;
 
-// Registering Data Protection with Distributed Redis Key Storage in Cloud Pods:
+// Production Cloud Configuration in Program.cs:
+var redis = ConnectionMultiplexer.Connect(builder.Configuration.GetConnectionString("Redis")!);
+
 builder.Services.AddDataProtection()
-    .SetApplicationName("TradingPlatform")
-    .PersistKeysToStackExchangeRedis(redisConnection, "DataProtection-Keys")
-    .ProtectKeysWithCertificate(encryptionCert);
+    .SetApplicationName("TradingEnterprisePlatform") // Crucial: All pods must share app name!
+    .PersistKeysToStackExchangeRedis(redis, "DataProtection-Keys")
+    .ProtectKeysWithCertificate(loadProductionCert()); // Or ProtectKeysWithAzureKeyVault()</code></pre>
+    </section>
 
-// Consuming IDataProtector:
-public class SensitiveTokenService(IDataProtectionProvider provider)
+    <!-- SECTION 6: PASSWORD STORAGE -->
+    <section id="password-storage">
+      <h2>6. Enterprise Password Storage: PBKDF2 &amp; Argon2id</h2>
+
+      <table class="comparison-table">
+        <thead>
+          <tr>
+            <th>Algorithm</th>
+            <th>Type</th>
+            <th>Work Factor / Memory Hardness</th>
+            <th>Production Verdict</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>MD5 / SHA-256</strong></td>
+            <td>Cryptographic Digest</td>
+            <td>Zero memory hardness; billions of hashes/sec on GPUs</td>
+            <td><strong>Strictly Prohibited</strong> for credentials.</td>
+          </tr>
+          <tr>
+            <td><strong>PBKDF2</strong></td>
+            <td>Key Derivation Function</td>
+            <td>CPU-intensive (Recommended &ge; 600,000 iterations in .NET 8)</td>
+            <td><strong>Compliant Standard</strong> (FIPS &amp; NIST certified).</td>
+          </tr>
+          <tr>
+            <td><strong>Argon2id</strong></td>
+            <td>Memory-Hard KDF</td>
+            <td>Resistant to both GPU and ASIC hardware brute-force</td>
+            <td><strong>Modern Gold Standard</strong> for maximum security.</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <pre><code class="language-csharp">using System.Security.Cryptography;
+
+public static class SecurePasswordHasher
 {
-    private readonly IDataProtector _protector = provider.CreateProtector("UserSecretTokens.v1");
+    private const int SaltSize = 16;   // 128-bit salt
+    private const int HashSize = 32;   // 256-bit subkey
+    private const int Iterations = 600_000; // OWASP recommended iteration minimum
 
-    public string EncryptSecret(string secret) =&gt; _protector.Protect(secret);
-    public string DecryptSecret(string cipher) =&gt; _protector.Unprotect(cipher);
+    public static string HashPassword(string password)
+    {
+        byte[] salt = RandomNumberGenerator.GetBytes(SaltSize);
+        byte[] hash = Rfc2898DeriveBytes.Pbkdf2(
+            password, 
+            salt, 
+            Iterations, 
+            HashAlgorithmName.SHA256, 
+            HashSize);
+
+        return $"{Iterations}.{Convert.ToBase64String(salt)}.{Convert.ToBase64String(hash)}";
+    }
+
+    public static bool VerifyPassword(string password, string hashedPassword)
+    {
+        var parts = hashedPassword.Split('.');
+        int iterations = int.Parse(parts[0]);
+        byte[] salt = Convert.FromBase64String(parts[1]);
+        byte[] expectedHash = Convert.FromBase64String(parts[2]);
+
+        byte[] actualHash = Rfc2898DeriveBytes.Pbkdf2(
+            password, 
+            salt, 
+            iterations, 
+            HashAlgorithmName.SHA256, 
+            expectedHash.Length);
+
+        return CryptographicOperations.FixedTimeEquals(actualHash, expectedHash);
+    }
 }</code></pre>
     </section>
 
-    <!-- SECTION 5: INTERVIEW GRILL ROUND -->
+    <!-- SECTION 7: INTERVIEW GRILL ROUND -->
     <section id="interview-grill">
-      <h2>5. The Senior Interviewer's Grill Round: .NET Security</h2>
+      <h2>7. The Principal Engineer's 10-Question Grill Round</h2>
 
       <div class="callout callout-danger">
-        <div class="callout-title">🔥 Question 1: How do you handle JWT revocation in a stateless microservice architecture?</div>
+        <div class="callout-title">🔥 Question 1: What is the default ClockSkew in ASP.NET Core JWT authentication, and why is it dangerous?</div>
         <div class="callout-content">
-          <p><strong>Senior Answer:</strong> Because JWTs are cryptographically self-contained, they cannot be natively revoked before expiration without checking an external source. The industry standard pattern is:
+          <p><strong>Senior Answer:</strong> The default <code>ClockSkew</code> in <code>TokenValidationParameters</code> is <strong>5 minutes (300 seconds)</strong>. The framework introduces this buffer to prevent immediate authentication failures due to minor clock drift between identity servers and resource servers. However, in security-sensitive systems, this means a revoked or expired token remains valid for 5 additional minutes after its <code>exp</code> claim timestamp. To enforce strict token expiry, always set <code>ClockSkew = TimeSpan.Zero</code>.</p>
+          <p><strong>🚩 Red Flag to Avoid:</strong> Believing that setting token expiry to 5 minutes automatically prevents the token from working at minute 6 without configuring <code>ClockSkew</code>.</p>
+        </div>
+      </div>
+
+      <div class="callout callout-danger">
+        <div class="callout-title">🔥 Question 2: How do you handle instantaneous JWT revocation in a stateless microservice architecture?</div>
+        <div class="callout-content">
+          <p><strong>Senior Answer:</strong> Because JWT tokens are cryptographically self-contained and verified locally without calling the authorization server, they cannot be natively revoked before expiration. To achieve instant revocation:</p>
           <ol>
-            <li><strong>Short-Lived Access Tokens:</strong> Set access token lifespan to 5-15 minutes, paired with long-lived Refresh Tokens stored in the database.</li>
-            <li><strong>Distributed Blacklist (Deny-list):</strong> When a user logs out or changes their password, push their unique token ID (<code>jti</code> claim) or user ID into a high-speed Redis distributed cache with a TTL equal to the remaining token lifetime.</li>
-            <li><strong>Middleware Inspection:</strong> Fast middleware or custom <code>JwtBearerEvents.OnTokenValidated</code> checks Redis for the <code>jti</code> in under 0.5ms.</li>
+            <li>Issue short-lived access tokens (5–15 minutes) combined with long-lived refresh tokens stored in a database.</li>
+            <li>Maintain a distributed <strong>Deny-List in Redis</strong> storing revoked token identifiers (<code>jti</code> claim) or compromised user IDs with a TTL matching the token's remaining lifespan.</li>
+            <li>Inspect the deny-list inside the <code>JwtBearerEvents.OnTokenValidated</code> event. Because Redis lookups execute in sub-millisecond time, performance remains near-stateless while giving instant revocation capabilities.</li>
           </ol>
-          </p>
+          <p><strong>🚩 Red Flag to Avoid:</strong> Querying a SQL Server database on every single API request to verify if a JWT has been revoked.</p>
         </div>
       </div>
 
       <div class="callout callout-danger">
-        <div class="callout-title">🔥 Question 2: Why should you never use SHA256 or MD5 for password storage, and what should you use in .NET?</div>
+        <div class="callout-title">🔥 Question 3: What is a Timing Side-Channel Attack, and why is CryptographicOperations.FixedTimeEquals mandatory?</div>
         <div class="callout-content">
-          <p><strong>Senior Answer:</strong> SHA256 and MD5 are cryptographic digest algorithms designed for maximum speed. Modern GPU clusters can compute billions of SHA256 hashes per second, making rainbow table and brute-force attacks trivial. Passwords must be hashed using a <strong>computationally and memory-intensive Key Derivation Function (KDF)</strong>. In modern .NET, use <strong>Argon2id</strong> or <strong>PBKDF2</strong> with 600,000+ iterations via <code>Rfc2898DeriveBytes.Pbkdf2</code> or the built-in <code>IPasswordHasher&lt;TUser&gt;</code>.</p>
+          <p><strong>Senior Answer:</strong> Standard equality comparison operators (like <code>==</code> or <code>SequenceEqual</code>) short-circuit and return <code>false</code> as soon as the first non-matching byte is found. An attacker measuring response times with microsecond precision over a network can deduce secret HMAC webhook signatures or API tokens byte-by-byte: if byte 1 is correct, the comparison executes slightly longer before failing. <code>CryptographicOperations.FixedTimeEquals</code> executes a bitwise OR loop across all bytes without early termination, guaranteeing identical CPU cycle execution time regardless of mismatch location.</p>
+          <p><strong>🚩 Red Flag to Avoid:</strong> Claiming network jitter makes timing attacks impossible over the internet; statistical averaging over thousands of requests completely eliminates network noise.</p>
         </div>
       </div>
 
       <div class="callout callout-danger">
-        <div class="callout-title">🔥 Question 3: What happens to Data Protection if you run multiple load-balanced web pods without shared key storage?</div>
+        <div class="callout-title">🔥 Question 4: What production failure occurs when multiple ASP.NET Core pods run behind a load balancer without shared Data Protection?</div>
         <div class="callout-content">
-          <p><strong>Senior Answer:</strong> By default, ASP.NET Core stores Data Protection keys in local directory storage (e.g. <code>%LOCALAPPDATA%\ASP.NET\DataProtection-Keys</code>). If you run multiple web pods behind a load balancer without shared storage, Pod A will generate Key Ring A and Pod B will generate Key Ring B. When Pod A creates an authentication cookie or antiforgery token, and the client's next request is routed to Pod B, Pod B cannot decrypt the token and immediately logs the user out or throws a 400 Bad Request error. Production clusters must persist keys to a shared store like Redis, Azure Blob Storage, or SQL Server.</p>
+          <p><strong>Senior Answer:</strong> By default, ASP.NET Core generates cryptographic keys in local ephemeral directory storage. In a Kubernetes cluster with multiple pods, Pod A creates Key Ring A and Pod B creates Key Ring B. When Pod A encrypts an authentication cookie or Anti-Forgery CSRF token, and the client's next request is load-balanced to Pod B, Pod B cannot decrypt the payload. This results in sporadic <code>CryptographicException</code> errors, random user logouts, and 400 Bad Request form validation failures. The fix is clustering Data Protection by persisting keys to a shared store (Redis or Azure Blob) and securing them with Azure Key Vault or KMS.</p>
+          <p><strong>🚩 Red Flag to Avoid:</strong> Suggesting you should enable sticky sessions (affinity) on the load balancer as a permanent architectural fix for Data Protection key synchronization.</p>
+        </div>
+      </div>
+
+      <div class="callout callout-danger">
+        <div class="callout-title">🔥 Question 5: Why is Role-Based Authorization considered an architectural anti-pattern in enterprise systems?</div>
+        <div class="callout-content">
+          <p><strong>Senior Answer:</strong> Hardcoding roles (e.g. <code>[Authorize(Roles = "Manager,Supervisor")]</code>) tightly couples presentation endpoints to organizational hierarchy. When business requirements introduce a new role (e.g. "LeadAnalyst") that requires a subset of those capabilities, every controller in the system must be modified and re-tested. <strong>Policy-Based Authorization</strong> decouples requirements from roles by defining policies based on claims, scopes, or requirements (e.g. <code>[Authorize(Policy = "CanApproveTrades")]</code>). The mapping of which roles or claims satisfy that policy is configured centrally in <code>Program.cs</code>.</p>
+          <p><strong>🚩 Red Flag to Avoid:</strong> Defending hardcoded role strings inside controller action attributes.</p>
+        </div>
+      </div>
+
+      <div class="callout callout-danger">
+        <div class="callout-title">🔥 Question 6: What is Resource-Based Authorization and how does it differ from Policy-Based Authorization?</div>
+        <div class="callout-content">
+          <p><strong>Senior Answer:</strong> Standard Policy-Based Authorization evaluates permissions before an action executes, using only the caller's <code>ClaimsPrincipal</code> and route data. <strong>Resource-Based Authorization</strong> evaluates permissions against the specific domain entity being accessed. For example: "Can User X edit Order Y?" The answer depends on whether <code>Order.CreatorId == UserX.Id</code> or whether Order Y is already locked/closed. This requires loading the resource first and calling <code>IAuthorizationService.AuthorizeAsync(User, order, "OrderEditPolicy")</code> imperatively within the handler.</p>
+          <p><strong>🚩 Red Flag to Avoid:</strong> Writing separate manual <code>if (order.CreatorId != userId)</code> checks inside every controller method without using <code>IAuthorizationService</code> handlers.</p>
+        </div>
+      </div>
+
+      <div class="callout callout-danger">
+        <div class="callout-title">🔥 Question 7: Why should you never use SHA-256 for password hashing, and what are the NIST/OWASP requirements for PBKDF2 in .NET?</div>
+        <div class="callout-content">
+          <p><strong>Senior Answer:</strong> SHA-256 is an extremely fast cryptographic digest algorithm. Modern consumer GPU rigs can compute tens of billions of SHA-256 hashes per second, making offline dictionary and brute-force attacks trivial. Passwords must be hashed using a deliberately slow, memory-hard Key Derivation Function (KDF). In .NET, use <code>Rfc2898DeriveBytes.Pbkdf2</code> with SHA-256 and at least <strong>600,000 iterations</strong> (OWASP 2023+ recommendation) with a cryptographically secure 128-bit salt, or modern memory-hard algorithms like Argon2id.</p>
+          <p><strong>🚩 Red Flag to Avoid:</strong> Suggesting you should hash a password with "SHA-256 with a salt" for enterprise user accounts.</p>
+        </div>
+      </div>
+
+      <div class="callout callout-danger">
+        <div class="callout-title">🔥 Question 8: How do you protect ASP.NET Core APIs against Cross-Site Request Forgery (CSRF/XSRF)?</div>
+        <div class="callout-content">
+          <p><strong>Senior Answer:</strong> CSRF attacks occur when a malicious site tricks a browser into sending authenticated requests to a target API using the victim's stored ambient session cookies. Defenses include:</p>
+          <ol>
+            <li><strong>Bearer Token Authorization:</strong> Pure stateless REST APIs using <code>Authorization: Bearer &lt;JWT&gt;</code> headers are inherently immune to CSRF because browsers do not automatically attach custom headers cross-origin.</li>
+            <li><strong>SameSite Cookies:</strong> Set cookie policy to <code>SameSite=Strict</code> or <code>SameSite=Lax</code> so the browser refuses to send cookies with cross-site requests.</li>
+            <li><strong>Anti-Forgery Tokens (Synchronizer Token Pattern):</strong> For cookie-authenticated Blazor/MVC applications, enforce <code>[ValidateAntiForgeryToken]</code> or <code>AutoValidateAntiforgeryTokenAttribute</code>.</li>
+          </ol>
+          <p><strong>🚩 Red Flag to Avoid:</strong> Believing that HTTPS encryption protects against CSRF attacks.</p>
+        </div>
+      </div>
+
+      <div class="callout callout-danger">
+        <div class="callout-title">🔥 Question 9: What is the difference between CORS and API security? Does CORS protect your backend from malicious attackers?</div>
+        <div class="callout-content">
+          <p><strong>Senior Answer:</strong> CORS (Cross-Origin Resource Sharing) is a <strong>browser-enforced client security policy</strong>, not a backend firewall. CORS prevents a malicious website loaded in a user's browser from reading responses from an unauthorized origin via JavaScript. CORS offers zero protection against attackers using Postman, curl, Python scripts, or compromised servers, because non-browser clients simply ignore CORS headers. Backend APIs must always authenticate and authorize every inbound request independently of CORS headers.</p>
+          <p><strong>🚩 Red Flag to Avoid:</strong> Believing that configuring CORS prevents hackers from sending requests to your API.</p>
+        </div>
+      </div>
+
+      <div class="callout callout-danger">
+        <div class="callout-title">🔥 Question 10: How does the ASP.NET Core Data Protection Key Ring handle key expiration and rolling keys without downtime?</div>
+        <div class="callout-content">
+          <p><strong>Senior Answer:</strong> The DPAPI manages a <strong>Key Ring</strong> consisting of multiple timestamped cryptographic keys. Keys are set to expire periodically (defaulting to 90 days). When a key nears expiration, the system automatically generates a new key in advance. For encryption operations (<code>Protect</code>), the system always selects the current default active key. For decryption operations (<code>Unprotect</code>), the payload contains a header with the specific Key ID used to encrypt it; the runtime looks up that specific historical key in the key ring and decrypts successfully. Old keys are retained indefinitely as read-only, ensuring historical data remains decryptable across rotations.</p>
+          <p><strong>🚩 Red Flag to Avoid:</strong> Deleting expired keys from the Data Protection store, which permanently destroys the ability to decrypt historical encrypted data.</p>
         </div>
       </div>
     </section>

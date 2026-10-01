@@ -36,6 +36,29 @@
     <!-- SECTION 1: TAXONOMY -->
     <section id="taxonomy">
       <h2>1. The Modern C# Pattern Taxonomy</h2>
+
+      <div class="callout callout-info">
+        <div class="callout-title">🧠 The 10-Second Elevator Pitch</div>
+        <p><strong>"Design patterns in modern C# 12 and .NET 8 are standardized solutions to recurring software engineering challenges across Creational, Structural, Behavioral, and Enterprise Data categories. Modern C# features—such as native Dependency Injection, pattern matching, records with non-destructive mutation, primary constructors, and lambdas—streamline or replace verbose legacy Gang of Four boilerplate with zero-allocation, thread-safe, and composable architectural paradigms."</strong></p>
+      </div>
+
+      <div class="definition-box">
+        <h3>Formal Architectural Terminology</h3>
+        <dl>
+          <dt>Creational Patterns (Singleton, Factory, Builder)</dt>
+          <dd>Patterns concerned with the process of object creation, decoupling client code from instantiation mechanics. In modern .NET, Singleton and Factory are largely orchestrated through the native IoC container (<code>IServiceCollection</code>) and Keyed Services.</dd>
+
+          <dt>Structural Patterns (Adapter, Decorator, Facade)</dt>
+          <dd>Patterns dealing with class and object composition, assembling objects into larger structures while maintaining flexibility. The <strong>Decorator Pattern</strong> is the gold standard for non-invasive cross-cutting concerns (caching, logging, resilience) via Scrutor or extension pipelines.</dd>
+
+          <dt>Behavioral Patterns (Strategy, Observer, Chain of Responsibility)</dt>
+          <dd>Patterns focused on communication and responsibility assignment between objects. <strong>Chain of Responsibility</strong> directly powers the ASP.NET Core middleware pipeline; <strong>Observer</strong> is embodied by <code>System.Threading.Channels</code>, reactive extensions, and event brokers; <strong>Strategy</strong> enables algorithmic hot-swapping.</dd>
+
+          <dt>Enterprise Data Patterns (Repository &amp; Unit of Work)</dt>
+          <dd>Patterns providing an abstraction layer over persistent data stores. The <strong>Repository</strong> mediates between the domain and data mapping layers; the <strong>Unit of Work</strong> maintains a list of business entities affected by a business transaction and coordinates writing changes atomically.</dd>
+        </dl>
+      </div>
+
       <p>Design patterns are standardized architectural blueprints for solving recurring software engineering challenges. In modern C# 12 and .NET 8, many classic 1994 GoF patterns have evolved. Language features like pattern matching, record types, primary constructors, lambdas, and built-in Dependency Injection (DI) have rendered some patterns obsolete while elevating others to enterprise staples.</p>
 
       <div class="mermaid">
@@ -488,31 +511,97 @@ public class EfUnitOfWork(TradingDbContext db) : IUnitOfWork
 
     <!-- SECTION 7: INTERVIEW GRILL ROUND -->
     <section id="interview-grill">
-      <h2>7. The Senior Interviewer's Grill Round: Design Patterns in C#</h2>
+      <h2>7. The Principal Engineer's 10-Question Grill Round: Design Patterns</h2>
 
       <div class="callout callout-danger">
-        <div class="callout-title">🔥 Question 1: How does volatile prevent instruction reordering in Double-Checked Locking?</div>
+        <div class="callout-title">🔥 Question 1: How does the 'volatile' keyword prevent CPU instruction reordering in Double-Checked Locking?</div>
         <div class="callout-content">
-          <p><strong>Senior Answer:</strong> When <code>new DoubleCheckedSingleton()</code> is executed, the runtime performs three operations: (1) allocates uninitialized memory on the heap, (2) invokes the constructor to initialize fields, (3) assigns the memory address to the reference variable <code>_instance</code>. Without the <code>volatile</code> keyword, the CLR JIT compiler or CPU out-of-order execution engine may reorder step 3 before step 2! If another thread executes the 1st lock-free check <code>if (_instance is null)</code> precisely at that microsecond, it observes a non-null reference, returns it, and dereferences fields that have NOT yet been initialized by the constructor, leading to hard-to-reproduce memory corruption bugs. <code>volatile</code> introduces a memory fence/barrier guaranteeing write-release semantics.</p>
+          <p><strong>Senior Answer:</strong> Executing <code>_instance = new DoubleCheckedSingleton();</code> is compiled into three distinct operations: (1) allocate raw memory on the managed heap, (2) execute the constructor to initialize instance fields, and (3) assign the memory address to <code>_instance</code>. Without <code>volatile</code>, RyuJIT or the CPU out-of-order execution pipeline may reorder step 3 before step 2. If a concurrent thread executes the outer lock-free check <code>if (_instance is null)</code> at that precise instant, it observes a non-null reference, returns it, and accesses partially constructed fields, causing fatal runtime faults. The <code>volatile</code> keyword injects a memory barrier (acquire/release fence), guaranteeing that the memory address cannot be published to <code>_instance</code> until the constructor has fully completed.</p>
+          <p><strong>🚩 Red Flag to Avoid:</strong> Believing <code>volatile</code> makes multi-statement operations atomic; it only enforces compiler/CPU read-acquire and write-release memory ordering.</p>
         </div>
       </div>
 
       <div class="callout callout-danger">
         <div class="callout-title">🔥 Question 2: Why should you avoid exposing IQueryable&lt;T&gt; from a Repository?</div>
         <div class="callout-content">
-          <p><strong>Senior Answer:</strong> Exposing <code>IQueryable&lt;T&gt;</code> from a repository completely destroys the purpose of the Repository pattern. It leaks persistence concerns (LINQ-to-Entities expressions) directly into the business/service layer. If a service calls <code>repo.GetAll().Where(...).ToList()</code>, business logic now dictates SQL generation. Furthermore, unit testing becomes extremely difficult because mocking <code>IQueryable</code> expression trees requires complex in-memory query providers. A clean repository should return concrete collections (<code>Task&lt;IReadOnlyList&lt;T&gt;&gt;</code>) or domain aggregates.</p>
+          <p><strong>Senior Answer:</strong> Exposing <code>IQueryable&lt;T&gt;</code> completely destroys the abstraction boundary of the Repository pattern. It leaks persistence mechanics (EF Core LINQ-to-Entities expressions) directly into business services. When service layers call <code>repo.GetAll().Where(...).ToList()</code>, business services dictate SQL queries and table joins. Furthermore, unit testing becomes brittle and painful because mocking <code>IQueryable</code> expression trees requires heavy in-memory query providers. A clean repository should return materialized collections (<code>Task&lt;IReadOnlyList&lt;T&gt;&gt;</code>) or domain aggregates.</p>
+          <p><strong>🚩 Red Flag to Avoid:</strong> Defending <code>IQueryable</code> in repositories as "allowing flexible filtering across layers."</p>
         </div>
       </div>
 
       <div class="callout callout-danger">
-        <div class="callout-title">🔥 Question 3: What is the difference between Strategy pattern and State pattern?</div>
+        <div class="callout-title">🔥 Question 3: What is the exact difference between the Strategy pattern and the State pattern?</div>
         <div class="callout-content">
-          <p><strong>Senior Answer:</strong> Structurally, both patterns share an identical UML class diagram (Context delegating to an interface with multiple concrete subclasses). However, their <strong>architectural intent</strong> and <strong>lifecycle</strong> differ completely:
+          <p><strong>Senior Answer:</strong> Structurally, both patterns share identical class diagrams (Context delegating to an interface with polymorphic implementations). However, their architectural intent and lifecycles are opposite:</p>
           <ul>
-            <li>In the <strong>Strategy Pattern</strong>, the client typically configures the context with a specific algorithm (e.g. TWAP vs VWAP). Strategies are usually unaware of each other, stateless, and do not trigger transitions between one another.</li>
-            <li>In the <strong>State Pattern</strong>, the context's internal behavior changes dynamically as its state changes (e.g. Order in <code>Pending</code> &rarr; <code>Approved</code> &rarr; <code>Filled</code> &rarr; <code>Settled</code>). Concrete states hold references to the context and trigger transitions to other states based on actions or events.</li>
+            <li><strong>Strategy Pattern:</strong> The algorithm is selected externally (often by the client or DI container at startup). Strategies are usually stateless, independent, and do not trigger transitions between one another (e.g. TWAP vs VWAP order execution).</li>
+            <li><strong>State Pattern:</strong> The state changes dynamically over the lifecycle of the entity. Concrete state classes hold a reference back to the context and actively trigger transitions to subsequent states based on events (e.g. Order in <code>Submitted</code> &rarr; <code>Approved</code> &rarr; <code>Filled</code>).</li>
           </ul>
-          </p>
+          <p><strong>🚩 Red Flag to Avoid:</strong> Saying Strategy and State are just different names for the same pattern.</p>
+        </div>
+      </div>
+
+      <div class="callout callout-danger">
+        <div class="callout-title">🔥 Question 4: Is the Singleton pattern considered an anti-pattern in modern .NET? How should it be implemented?</div>
+        <div class="callout-content">
+          <p><strong>Senior Answer:</strong> Classic GoF static singletons (with static <code>Instance</code> properties) are widely considered an anti-pattern because they introduce global mutable state, hide class dependencies, make unit testing and parallel test execution impossible, and cannot be mocked. In modern .NET, singletons should be implemented via <strong>Dependency Injection</strong>: register the service as <code>services.AddSingleton&lt;IService, Service&gt;()</code>. The class itself remains a normal, testable POCO class with a public or internal constructor, allowing consumers to mock its interface easily in test suites.</p>
+          <p><strong>🚩 Red Flag to Avoid:</strong> Continuing to write static <code>MyClass.Instance</code> singletons throughout modern ASP.NET Core applications.</p>
+        </div>
+      </div>
+
+      <div class="callout callout-danger">
+        <div class="callout-title">🔥 Question 5: How does the Decorator pattern provide a cleaner alternative to Subclassing and Inheritance?</div>
+        <div class="callout-content">
+          <p><strong>Senior Answer:</strong> Subclassing binds behavior statically at compile time and leads to combinatorial class explosion if multiple cross-cutting features are needed (e.g. <code>LoggingCachingRetryOrderService</code>). The Decorator pattern implements the same interface as the target service, wraps the inner instance, and adds behavior before/after delegating calls. Decorators can be dynamically stacked in any order at runtime (e.g., <code>RetryDecorator(LoggingDecorator(CachingDecorator(OrderService)))</code>) without modifying the original service code, strictly honoring the Open/Closed Principle.</p>
+          <p><strong>🚩 Red Flag to Avoid:</strong> Using deep inheritance hierarchies to add cross-cutting features like caching or audit logging.</p>
+        </div>
+      </div>
+
+      <div class="callout callout-danger">
+        <div class="callout-title">🔥 Question 6: What is the difference between Abstract Factory and Factory Method?</div>
+        <div class="callout-content">
+          <p><strong>Senior Answer:</strong> <strong>Factory Method</strong> uses inheritance: a base class declares an abstract method (<code>CreateProduct()</code>), and derived classes override it to instantiate a specific concrete product. <strong>Abstract Factory</strong> uses object composition: it provides an interface containing a family of factory methods designed to create families of related or dependent objects (e.g. <code>CreateButton()</code>, <code>CreateWindow()</code>, <code>CreateScrollBar()</code>) without specifying their concrete classes. Abstract Factory coordinates product families, whereas Factory Method focuses on a single product.</p>
+          <p><strong>🚩 Red Flag to Avoid:</strong> Saying Abstract Factory is just an abstract class that has a Factory Method.</p>
+        </div>
+      </div>
+
+      <div class="callout callout-danger">
+        <div class="callout-title">🔥 Question 7: How is the Chain of Responsibility pattern utilized in ASP.NET Core?</div>
+        <div class="callout-content">
+          <p><strong>Senior Answer:</strong> The ASP.NET Core HTTP Middleware pipeline is a direct implementation of the Chain of Responsibility pattern. Each middleware component receives the <code>HttpContext</code> and a delegate pointing to the next component in the chain (<code>RequestDelegate next</code>). Each component decides whether to process the request, modify it, pass execution down the chain via <code>await next(context)</code>, or short-circuit the pipeline completely (e.g. Authentication failing or RateLimiter rejecting with a 429), allowing responses to unwind back up the chain.</p>
+          <p><strong>🚩 Red Flag to Avoid:</strong> Thinking Chain of Responsibility requires classic linked list node objects with manual <code>SetNext()</code> pointer references.</p>
+        </div>
+      </div>
+
+      <div class="callout callout-danger">
+        <div class="callout-title">🔥 Question 8: Why is the generic Repository pattern over Entity Framework Core considered an anti-pattern?</div>
+        <div class="callout-content">
+          <p><strong>Senior Answer:</strong> Entity Framework Core's <code>DbContext</code> already implements the <strong>Unit of Work</strong> pattern, and each <code>DbSet&lt;T&gt;</code> already implements the <strong>Repository</strong> pattern. Wrapping <code>DbSet&lt;T&gt;</code> in a generic <code>IRepository&lt;T&gt;</code> with generic methods like <code>Add</code>, <code>GetById</code>, <code>GetAll</code> creates an redundant abstraction that blinds developers to EF Core's advanced capabilities: explicit eager loading (<code>Include</code>), split queries (<code>AsSplitQuery</code>), batch operations (<code>ExecuteUpdateAsync</code>), and change-tracking optimizations (<code>AsNoTracking</code>). Domain-specific repositories (e.g. <code>IOrderRepository</code> with explicit methods like <code>GetPendingOrdersForSettlementAsync</code>) are valid, but generic <code>IRepository&lt;T&gt;</code> wrappers are an anti-pattern.</p>
+          <p><strong>🚩 Red Flag to Avoid:</strong> Insisting that every entity must have a generic <code>IRepository&lt;T&gt;</code> layer on top of EF Core.</p>
+        </div>
+      </div>
+
+      <div class="callout callout-danger">
+        <div class="callout-title">🔥 Question 9: What is the difference between the Adapter pattern and the Facade pattern?</div>
+        <div class="callout-content">
+          <p><strong>Senior Answer:</strong> Both patterns act as wrappers, but their architectural goals differ:</p>
+          <ul>
+            <li><strong>Adapter Pattern:</strong> Converts an existing incompatible interface into another interface that callers expect. It bridges a gap between two existing interfaces without altering or simplifying the underlying capability.</li>
+            <li><strong>Facade Pattern:</strong> Defines a brand-new, simplified high-level interface over a complex, sprawling subsystem (such as orchestrating billing, inventory, shipping, and email notifications into a single <code>CheckoutFacade.PlaceOrder()</code> call).</li>
+          </ul>
+          <p><strong>🚩 Red Flag to Avoid:</strong> Confusing Adapter (interface translation) with Facade (subsystem simplification).</p>
+        </div>
+      </div>
+
+      <div class="callout callout-danger">
+        <div class="callout-title">🔥 Question 10: How does modern C# 12 simplify classic GoF Builder and Visitor patterns?</div>
+        <div class="callout-content">
+          <p><strong>Senior Answer:</strong></p>
+          <ul>
+            <li><strong>Builder Pattern:</strong> C# records with <code>init</code>-only properties and the <strong><code>with</code> expression</strong> provide clean, immutable, non-destructive mutation syntax (<code>user with { Role = "Admin" }</code>), eliminating hundreds of lines of mutable fluent builder boilerplate.</li>
+            <li><strong>Visitor Pattern:</strong> Classic Visitor required complex double-dispatch interfaces (<code>Accept(IVisitor)</code> and <code>Visit(ConcreteElement)</code>) to add operations without modifying classes. Modern C# <strong>Pattern Matching</strong> (<code>switch</code> expressions with property and type patterns) completely replaces Visitor: algorithms are written as standalone pure functions matching against class hierarchies without touching the classes or building visitor hierarchies.</li>
+          </ul>
+          <p><strong>🚩 Red Flag to Avoid:</strong> Implementing classic double-dispatch Visitor in modern C# instead of using pattern matching.</p>
         </div>
       </div>
     </section>

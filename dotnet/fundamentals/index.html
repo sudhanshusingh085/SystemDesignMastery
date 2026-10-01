@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>CLR, JIT &amp; Type System Internals — From Scratch to Principal Architect</title>
+  <title>CLR, JIT &amp; Type System Internals — Ground-Zero to Principal Architect</title>
   <link rel="stylesheet" href="../css/style.css">
   <script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.0/dist/mermaid.min.js"></script>
   <script src="../js/main.js" defer></script>
@@ -30,22 +30,442 @@
 
     <header>
       <h1>🧱 CLR, JIT &amp; Type System Internals in .NET 8</h1>
-      <p class="subtitle">An architectural journey into the Common Language Runtime (CLR), RyuJIT tiered compilation, Dynamic PGO, Native AOT, Object Header &amp; MethodTable memory layouts, Struct vs Class vs Record, and zero-overhead ref semantics.</p>
+      <p class="subtitle">The definitive architectural encyclopedia of the Common Language Runtime (CLR): OOP keywords (abstract, virtual, override, new, sealed), Java 'final' vs C# mappings, const vs readonly assembly versioning traps, RyuJIT Tiered Compilation &amp; Dynamic PGO, Object Header &amp; MethodTable memory layouts, and the Principal Engineer's 10-Question Grill Round.</p>
     </header>
 
-    <!-- SECTION 1: COMPILATION PIPELINE -->
+    <!-- TABLE OF CONTENTS -->
+    <div class="card" style="margin-bottom: 2rem;">
+      <h3>📑 Curriculum Navigation</h3>
+      <ol style="margin-bottom: 0; padding-left: 1.25rem;">
+        <li><a href="#core-definitions">Formal Definitions &amp; The 10-Second Elevator Pitch</a></li>
+        <li><a href="#oop-keywords">C# Polymorphism &amp; vtable Mechanics: abstract, virtual, override &amp; new</a></li>
+        <li><a href="#sealed-keyword">The sealed Keyword: Classes, Methods &amp; JIT Devirtualization</a></li>
+        <li><a href="#java-final-mapping">Rosetta Stone: Java `final` vs C# `sealed`, `readonly` &amp; `const`</a></li>
+        <li><a href="#const-vs-readonly">const vs readonly vs static readonly &amp; The Assembly Versioning Hazard</a></li>
+        <li><a href="#access-modifiers">Access Modifiers &amp; Assembly Visibility Matrix</a></li>
+        <li><a href="#abstract-vs-interface">Abstract Classes vs Interfaces in Modern C# 12 (.NET 8)</a></li>
+        <li><a href="#compilation-pipeline">The .NET Compilation Pipeline: Roslyn, RyuJIT &amp; Dynamic PGO</a></li>
+        <li><a href="#memory-layout">64-Bit Heap Object Layout: SyncBlock &amp; MethodTable Internals</a></li>
+        <li><a href="#type-matrix">Grand Type System Matrix: Struct vs Class vs Record vs Ref Struct</a></li>
+        <li><a href="#boxing-unboxing">Boxing &amp; Unboxing: IL Disassembly &amp; Zero-Allocation Handlers</a></li>
+        <li><a href="#ref-semantics">Reference Semantics: in, out, ref, and ref readonly</a></li>
+        <li><a href="#interview-grill">The Principal Engineer's 10-Question Grill Round</a></li>
+      </ol>
+    </div>
+
+    <!-- SECTION 1: FORMAL DEFINITIONS & ELEVATOR PITCH -->
+    <section id="core-definitions">
+      <h2>1. Formal Definitions &amp; The 10-Second Elevator Pitch</h2>
+
+      <div class="callout callout-info">
+        <div class="callout-title">📖 Formal Definitions of C# Core Type &amp; OOP Modifiers</div>
+
+        <p><strong>1. <code>abstract</code> (Class / Method / Property):</strong><br>
+        <strong>Textbook Definition:</strong> A modifier indicating that the class is an incomplete abstraction intended solely to be a base class. An abstract class cannot be instantiated directly via <code>new</code>. Abstract members declare a signature but provide zero implementation; non-abstract derived classes <strong>must</strong> provide a concrete implementation using the <code>override</code> keyword.</p>
+
+        <p><strong>2. <code>virtual</code> (Method / Property):</strong><br>
+        <strong>Textbook Definition:</strong> A modifier declaring that a member provides a default implementation but authorizes derived classes to override it. Under the hood, the compiler allocates a slot in the type's Virtual Method Table (<code>vtable</code>), enabling dynamic late-binding polymorphic dispatch at runtime.</p>
+
+        <p><strong>3. <code>override</code>:</strong><br>
+        <strong>Textbook Definition:</strong> A modifier required in a derived class to provide a new implementation of an inherited virtual or abstract member. It explicitly updates the derived type's <code>vtable</code> slot so that calling the method through a base class reference dynamically invokes the derived implementation.</p>
+
+        <p><strong>4. <code>new</code> (Member Modifier — Method Hiding / Shadowing):</strong><br>
+        <strong>Textbook Definition:</strong> A modifier explicitly declaring that a derived member hides an inherited base member with the exact same name and signature. It does <strong>NOT</strong> override the base <code>vtable</code> slot; it creates an independent, unrelated method slot. Calling through a base reference invokes the base method; calling through a derived reference invokes the derived method.</p>
+
+        <p><strong>5. <code>sealed</code> (Class / Method):</strong><br>
+        <strong>Textbook Definition:</strong> Applied to a class, it completely prevents other classes from inheriting from it. Applied to an overridden method (<code>sealed override</code>), it prevents further derived subclasses from overriding that specific member. Beyond design safety, it allows RyuJIT to eliminate indirect vtable lookups and <strong>devirtualize</strong> method calls into direct CPU jumps or inline assembly.</p>
+
+        <p><strong>6. <code>readonly</code> vs <code>const</code>:</strong><br>
+        <strong>Textbook Definition:</strong> <code>const</code> is a compile-time literal evaluated during compilation and hardcoded (inlined) directly into calling assemblies' CIL bytecode. <code>readonly</code> is a runtime immutable field assigned either at declaration or within constructor execution, holding its value in memory.</p>
+
+        <div style="background: rgba(2, 132, 199, 0.12); border-left: 4px solid var(--accent); padding: 0.75rem 1rem; margin-top: 1rem; border-radius: 4px;">
+          <strong>🎙️ The 10-Second Interview Pitch:</strong><br>
+          <em>"In C#, polymorphism is opt-in: methods are non-virtual by default. <code>virtual</code> creates a vtable slot, <code>override</code> replaces it for polymorphic dispatch, while <code>new</code> shadows the method without polymorphism. <code>sealed</code> stops inheritance and enables JIT devirtualization. In Java, <code>final</code> serves three distinct roles that C# splits across <code>sealed</code> (classes/methods), <code>readonly</code> (runtime fields), and <code>const</code> (compile-time literals)."</em>
+        </div>
+      </div>
+    </section>
+
+    <!-- SECTION 2: OOP KEYWORDS & VTABLE DISPATCH -->
+    <section id="oop-keywords">
+      <h2>2. C# Polymorphism &amp; vtable Mechanics: abstract, virtual, override &amp; new</h2>
+
+      <p>The single most notorious interview trap in C# object-oriented programming is the difference between <strong><code>override</code> (Polymorphism)</strong> and <strong><code>new</code> (Method Hiding / Shadowing)</strong>.</p>
+
+      <div class="mermaid">
+flowchart TD
+    subgraph OverrideDispatch["Polymorphic Dispatch (override)"]
+        BaseRef1["BaseClass b = new DerivedOverride();"]
+        BaseRef1 --> Call1["b.Speak();"]
+        Call1 --> VTable1["Looks up vtable slot in Derived's MethodTable"]
+        VTable1 --> Exec1["Executes: Derived Implementation ('Woof') ✅"]
+    end
+
+    subgraph ShadowDispatch["Method Shadowing (new)"]
+        BaseRef2["BaseClass b = new DerivedShadow();"]
+        BaseRef2 --> Call2["b.Speak();"]
+        Call2 --> StaticBind["Resolved at compile time to BaseClass's slot"]
+        StaticBind --> Exec2["Executes: Base Implementation ('Generic Sound') ❌"]
+    end
+      </div>
+
+      <h3>Code Comparison: `override` vs `new`</h3>
+      <pre><code class="language-csharp">public class Animal
+{
+    // Virtual method: Opts into polymorphic vtable dispatch
+    public virtual void Speak() => Console.WriteLine("Animal sound");
+}
+
+public class Dog : Animal
+{
+    // OVERRIDE: Replaces the vtable slot of Animal.Speak
+    public override void Speak() => Console.WriteLine("Dog barks");
+}
+
+public class Cat : Animal
+{
+    // NEW: Hides Animal.Speak without overriding the vtable slot!
+    public new void Speak() => Console.WriteLine("Cat meows");
+}
+
+// Execution demonstrating the runtime trap:
+Animal a1 = new Dog();
+a1.Speak(); // Outputs: "Dog barks" (Polymorphism works!)
+
+Animal a2 = new Cat();
+a2.Speak(); // Outputs: "Animal sound" (TRAP! Base method executed because a2 is typed as Animal!)
+
+Cat c = new Cat();
+c.Speak();  // Outputs: "Cat meows" (Only works when reference is explicitly Cat!)</code></pre>
+
+      <table class="styled-table">
+        <thead>
+          <tr>
+            <th>Feature</th>
+            <th><code>override</code> (Polymorphic Overriding)</th>
+            <th><code>new</code> (Method Hiding / Shadowing)</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>vtable Entry</strong></td>
+            <td><strong>Replaces</strong> the inherited vtable slot in the MethodTable.</td>
+            <td>Creates a <strong>brand new, independent</strong> vtable slot.</td>
+          </tr>
+          <tr>
+            <td><strong>Called via Base Reference</strong></td>
+            <td>Executes the <strong>Derived</strong> class method.</td>
+            <td>Executes the <strong>Base</strong> class method.</td>
+          </tr>
+          <tr>
+            <td><strong>Called via Derived Reference</strong></td>
+            <td>Executes the Derived class method.</td>
+            <td>Executes the Derived class method.</td>
+          </tr>
+          <tr>
+            <td><strong>Architectural Intent</strong></td>
+            <td>True runtime polymorphism (Liskov Substitution Principle).</td>
+            <td>Accidental or emergency backward compatibility when subclassing third-party code that added an identically named method.</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <!-- SECTION 3: SEALED KEYWORD -->
+    <section id="sealed-keyword">
+      <h2>3. The sealed Keyword: Classes, Methods &amp; JIT Devirtualization</h2>
+
+      <p>In C#, classes are open for inheritance by default. Applying <code>sealed</code> has two monumental impacts: architectural safety and extreme runtime performance optimization.</p>
+
+      <h3>A. Sealed Classes vs Sealed Methods</h3>
+      <pre><code class="language-csharp">// 1. Sealed Class: No class can ever inherit from HighSecurityToken
+public sealed class HighSecurityToken
+{
+    public string TokenId { get; set; } = Guid.NewGuid().ToString();
+}
+
+// ❌ Compilation Error: Cannot inherit from sealed class 'HighSecurityToken'
+// public class SubToken : HighSecurityToken { }
+
+// 2. Sealed Method Override:
+public class BaseEngine
+{
+    public virtual void Start() => Console.WriteLine("Engine start");
+}
+
+public class V8Engine : BaseEngine
+{
+    // Sealed Override: Overrides BaseEngine, but prevents any derived classes from overriding further!
+    public sealed override void Start() => Console.WriteLine("V8 roar");
+}
+
+public class SuperV8Engine : V8Engine
+{
+    // ❌ Compilation Error: 'V8Engine.Start()' cannot be overridden because it is sealed!
+    // public override void Start() { }
+}</code></pre>
+
+      <h3>B. The RyuJIT Performance Superweapon: Devirtualization</h3>
+      <p>When the CLR invokes a virtual method, the CPU must perform an <strong>indirect memory lookup</strong>: read the object header &rarr; read the MethodTable pointer &rarr; offset into the vtable array &rarr; jump to the function pointer. This stalls CPU pipelines and prevents inlining.</p>
+
+      <div class="callout callout-success">
+        <div class="callout-title">⚡ How `sealed` Boosts JIT Performance</div>
+        <p>When RyuJIT encounters a call on a <code>sealed class</code>, the compiler knows mathematically that <strong>no derived class can ever exist</strong>. Therefore:</p>
+        <ol style="margin-bottom: 0;">
+          <li>RyuJIT <strong>devirtualizes</strong> the call: it replaces the indirect vtable lookup with a direct, single-cycle CPU <code>call</code> instruction.</li>
+          <li>Because the call is direct, RyuJIT can now <strong>inline</strong> the method body directly into the caller's assembly, eliminating stack frame setup, register spilling, and function call overhead completely!</li>
+        </ol>
+      </div>
+    </section>
+
+    <!-- SECTION 4: JAVA FINAL VS C# -->
+    <section id="java-final-mapping">
+      <h2>4. Rosetta Stone: Java `final` vs C# `sealed`, `readonly` &amp; `const`</h2>
+
+      <p>Engineers coming from Java often ask: <em>"Where is the `final` keyword in C#?"</em>. In Java, <code>final</code> is an overloaded keyword used for three completely different concepts. In C#, the designers split these into dedicated, unambiguous keywords:</p>
+
+      <table class="styled-table">
+        <thead>
+          <tr>
+            <th>Language Context</th>
+            <th>☕ Java Construct</th>
+            <th>🔷 C# 12 / .NET 8 Equivalent</th>
+            <th>Runtime Behavior &amp; Mechanics</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Class cannot be subclassed</strong></td>
+            <td><code>public final class Order</code></td>
+            <td><code>public sealed class Order</code></td>
+            <td>Prevents inheritance; enables JIT devirtualization.</td>
+          </tr>
+          <tr>
+            <td><strong>Method cannot be overridden</strong></td>
+            <td><code>public final void Process()</code></td>
+            <td>Normal method (non-virtual by default!) or <code>public sealed override void Process()</code></td>
+            <td>In Java, all non-static methods are virtual by default! In C#, methods are non-virtual by default, so omitting <code>virtual</code> already achieves <code>final</code>.</td>
+          </tr>
+          <tr>
+            <td><strong>Runtime Immutable Field</strong></td>
+            <td><code>public final int timeout;</code></td>
+            <td><code>public readonly int _timeout;</code></td>
+            <td>Assigned at declaration or inside constructors. Cannot be mutated afterwards.</td>
+          </tr>
+          <tr>
+            <td><strong>Compile-Time Constant Literal</strong></td>
+            <td><code>public static final int MAX = 100;</code></td>
+            <td><code>public const int Max = 100;</code></td>
+            <td>Inlined directly into caller CIL assembly at compile time.</td>
+          </tr>
+          <tr>
+            <td><strong>Local Variable Immutability</strong></td>
+            <td><code>final var x = 10;</code></td>
+            <td>No direct keyword; or pass as <code>in</code> parameter.</td>
+            <td>C# relies on compiler flow analysis rather than local variable const modifiers.</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <!-- SECTION 5: CONST VS READONLY -->
+    <section id="const-vs-readonly">
+      <h2>5. const vs readonly vs static readonly &amp; The Assembly Versioning Hazard</h2>
+
+      <p>One of the most dangerous production deployment bugs in C# is caused by the misunderstanding of <code>const</code> across multiple project assemblies.</p>
+
+      <table class="styled-table">
+        <thead>
+          <tr>
+            <th>Characteristic</th>
+            <th><code>const</code></th>
+            <th><code>readonly</code> (Instance)</th>
+            <th><code>static readonly</code></th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Evaluation Time</strong></td>
+            <td><strong>Compile-Time</strong> only</td>
+            <td><strong>Runtime</strong> (at object construction)</td>
+            <td><strong>Runtime</strong> (at type initialization)</td>
+          </tr>
+          <tr>
+            <td><strong>Memory Allocation</strong></td>
+            <td>Zero memory allocation (inlined as raw IL literal)</td>
+            <td>Occupies memory inside heap object payload</td>
+            <td>Occupies memory in CLR loader heap (type metadata)</td>
+          </tr>
+          <tr>
+            <td><strong>Allowed Types</strong></td>
+            <td>Primitives, enums, strings, and <code>null</code> reference</td>
+            <td><strong>Any type</strong> (primitives, classes, structs)</td>
+            <td><strong>Any type</strong> (e.g., <code>new List&lt;string&gt;()</code>)</td>
+          </tr>
+          <tr>
+            <td><strong>Mutation Timing</strong></td>
+            <td>Never</td>
+            <td>Inside constructor of same instance only</td>
+            <td>Inside <code>static</code> constructor of class only</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>🔥 The Assembly Versioning Catastrophe of `const`</h3>
+      <p>Assume you have two assemblies in production: <code>BillingService.dll</code> (Assembly A) referencing <code>PaymentConfig.dll</code> (Assembly B):</p>
+
+      <pre><code class="language-csharp">// Inside PaymentConfig.dll (Assembly B):
+public static class PaymentConfig
+{
+    public const decimal TaxRate = 0.15m; // 15% Tax
+}
+
+// Inside BillingService.dll (Assembly A):
+public decimal CalculateTotal(decimal subtotal)
+{
+    return subtotal + (subtotal * PaymentConfig.TaxRate);
+}</code></pre>
+
+      <div class="callout callout-danger">
+        <strong>🔥 The Production Bug:</strong><br>
+        Because <code>TaxRate</code> is <code>const</code>, the Roslyn compiler <strong>copies the literal value `0.15` directly into BillingService.dll's bytecode</strong>!<br>
+        Next month, government taxes change. You update <code>PaymentConfig.TaxRate = 0.20m</code>, build Assembly B, and deploy ONLY <code>PaymentConfig.dll</code> to the server.<br>
+        <strong>Result:</strong> BillingService continues charging 15% tax! Because BillingService was not recompiled, it still has the hardcoded literal <code>0.15</code> burned into its IL binary!<br>
+        <strong>Architectural Fix:</strong> For any configuration or cross-assembly values that might change across releases, ALWAYS use <code>public static readonly decimal TaxRate = 0.20m;</code>!
+      </div>
+    </section>
+
+    <!-- SECTION 6: ACCESS MODIFIERS -->
+    <section id="access-modifiers">
+      <h2>6. Access Modifiers &amp; Assembly Visibility Matrix</h2>
+
+      <p>C# offers 6 access modifier levels. Senior engineers must understand how <code>protected internal</code> and <code>private protected</code> behave across assembly boundaries:</p>
+
+      <table class="styled-table">
+        <thead>
+          <tr>
+            <th>Access Modifier</th>
+            <th>Same Class</th>
+            <th>Derived Class (Same Assembly)</th>
+            <th>Non-Derived Class (Same Assembly)</th>
+            <th>Derived Class (Different Assembly)</th>
+            <th>Non-Derived Class (Different Assembly)</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>public</code></td>
+            <td>✅</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td>
+          </tr>
+          <tr>
+            <td><code>protected internal</code> (Union / OR)</td>
+            <td>✅</td><td>✅</td><td>✅</td><td>✅</td><td>❌</td>
+          </tr>
+          <tr>
+            <td><code>internal</code></td>
+            <td>✅</td><td>✅</td><td>✅</td><td>❌</td><td>❌</td>
+          </tr>
+          <tr>
+            <td><code>private protected</code> (Intersection / AND)</td>
+            <td>✅</td><td>✅</td><td>❌</td><td>❌</td><td>❌</td>
+          </tr>
+          <tr>
+            <td><code>protected</code></td>
+            <td>✅</td><td>✅</td><td>❌</td><td>✅</td><td>❌</td>
+          </tr>
+          <tr>
+            <td><code>private</code></td>
+            <td>✅</td><td>❌</td><td>❌</td><td>❌</td><td>❌</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="callout callout-info">
+        <strong>💡 Mental Model for the Compound Modifiers:</strong><br>
+        • <strong><code>protected internal</code> = Protected OR Internal:</strong> Accessible anywhere within the same assembly, PLUS subclasses outside the assembly.<br>
+        • <strong><code>private protected</code> = Protected AND Internal:</strong> Accessible ONLY by subclasses that reside within the same assembly (strict framework API encapsulation).
+      </div>
+    </section>
+
+    <!-- SECTION 7: ABSTRACT VS INTERFACE -->
+    <section id="abstract-vs-interface">
+      <h2>7. Abstract Classes vs Interfaces in Modern C# 12 (.NET 8)</h2>
+
+      <p>With modern C# introducing <strong>Default Interface Methods (DIM)</strong>, <strong>Static Abstract Interface Members</strong>, and <strong>Private Interface Methods</strong>, the boundary between abstract classes and interfaces has evolved significantly:</p>
+
+      <table class="styled-table">
+        <thead>
+          <tr>
+            <th>Characteristic</th>
+            <th><code>abstract class</code></th>
+            <th><code>interface</code> (C# 12 / .NET 8)</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Multiple Inheritance</strong></td>
+            <td>❌ No (Single class inheritance only)</td>
+            <td>✅ <strong>Yes</strong> (Class can implement multiple interfaces)</td>
+          </tr>
+          <tr>
+            <td><strong>Instance State (Fields)</strong></td>
+            <td>✅ <strong>Yes</strong> (Can hold instance fields)</td>
+            <td>❌ <strong>No</strong> (Cannot hold instance state fields)</td>
+          </tr>
+          <tr>
+            <td><strong>Constructors</strong></td>
+            <td>✅ <strong>Yes</strong> (Base constructor initializes state)</td>
+            <td>❌ No instance constructors</td>
+          </tr>
+          <tr>
+            <td><strong>Default Method Implementations</strong></td>
+            <td>✅ Yes</td>
+            <td>✅ Yes (Default Interface Methods - C# 8+)</td>
+          </tr>
+          <tr>
+            <td><strong>Static Abstract Members</strong></td>
+            <td>❌ No static abstract methods</td>
+            <td>✅ <strong>Yes</strong> (C# 11+ Generic Math: <code>INumber&lt;TSelf&gt;</code>)</td>
+          </tr>
+          <tr>
+            <td><strong>Architectural Purpose</strong></td>
+            <td><strong>Identity &amp; Shared State</strong> ("IS-A" relationship with common state lifecycle).</td>
+            <td><strong>Contract &amp; Capabilities</strong> ("CAN-DO" behavioral contract without state).</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>Modern C# 11/12 Innovation: Static Abstract Members</h3>
+      <pre><code class="language-csharp">// Static abstract members allow defining operator and factory contracts on interfaces:
+public interface IFactory&lt;TSelf&gt; where TSelf : IFactory&lt;TSelf&gt;
+{
+    // Derived classes MUST implement this static factory method!
+    static abstract TSelf CreateDefault();
+    
+    // Generic Math contract: static operator!
+    static abstract TSelf operator +(TSelf left, TSelf right);
+}
+
+public class Money : IFactory&lt;Money&gt;
+{
+    public decimal Amount { get; init; }
+
+    public static Money CreateDefault() => new() { Amount = 0m };
+    public static Money operator +(Money left, Money right) => new() { Amount = left.Amount + right.Amount };
+}</code></pre>
+    </section>
+
+    <!-- SECTION 8: COMPILATION PIPELINE -->
     <section id="compilation-pipeline">
-      <h2>1. The .NET Compilation Pipeline: Roslyn to RyuJIT</h2>
-      <p>C# does not compile directly to native machine instructions. Instead, it compiles through a two-phase architecture designed for cross-platform portability, hardware-specific optimization, and dynamic runtime adaptation:</p>
+      <h2>8. The .NET Compilation Pipeline: Roslyn, RyuJIT &amp; Dynamic PGO</h2>
 
       <div class="mermaid">
 flowchart LR
     CS["C# 12 Source Code"] -->|Roslyn Compiler (csc)| CIL["Common Intermediate Language<br/>(CIL / MSIL Bytecode)"]
-    CIL --> PE["Portable Executable (DLL/EXE)<br/>+ Metadata &amp; Type Tables"]
+    CIL --> PE["Portable Executable (DLL/EXE)<br/>+ Metadata & Type Tables"]
     PE --> CLR["Common Language Runtime (CLR)"]
     subgraph JIT["RyuJIT Execution Engine"]
         CLR --> T0["Tier 0: Quick JIT<br/>(Instant startup, minimal opt)"]
-        T0 --> Counter{"Method Call Counter &gt; 30?"}
+        T0 --> Counter{"Method Call Counter > 30?"}
         Counter -->|Hot Method| PGO["Dynamic PGO<br/>(Collect runtime telemetry)"]
         PGO --> T1["Tier 1: Full RyuJIT<br/>(Inlining, Loop unrolling, SIMD)"]
     end
@@ -61,10 +481,10 @@ flowchart LR
       </ul>
     </section>
 
-    <!-- SECTION 2: MEMORY LAYOUT -->
+    <!-- SECTION 9: MEMORY LAYOUT -->
     <section id="memory-layout">
-      <h2>2. Object Memory Layout: SyncBlock &amp; MethodTable</h2>
-      
+      <h2>9. 64-Bit Heap Object Layout: SyncBlock &amp; MethodTable Internals</h2>
+
       <p>Every reference type object allocated on the managed 64-bit heap has a mandatory <strong>16-byte overhead</strong> preceding its instance fields:</p>
 
       <div class="mermaid">
@@ -72,117 +492,151 @@ flowchart TD
     subgraph ObjectLayout["64-Bit Heap Object Memory Layout"]
         Header["Object Header (SyncBlockIndex) — 8 Bytes"]
         MT["MethodTable Pointer (TypeHandle) — 8 Bytes"]
-        Fields["Instance Fields &amp; Padding — Multiples of 8 Bytes"]
+        Fields["Instance Fields & Padding — Multiples of 8 Bytes"]
     end
       </div>
 
       <h3>A. Object Header (SyncBlockIndex — 8 bytes)</h3>
-      <p>The Object Header is a multipurpose 64-bit bitmask used for three distinct runtime systems:</p>
       <ol>
         <li><strong>Synchronization Lock:</strong> When you execute <code>lock(obj)</code>, the CLR stores an index into the CLR global SyncBlock Table here.</li>
-        <li><strong>Default Hash Code:</strong> When <code>GetHashCode()</code> is called on an object that does not override it, the CLR generates a pseudo-random hash and stores it in the header bits so it remains stable even after GC relocates the object.</li>
-        <li><strong>GC Marking Flags:</strong> Used by the Garbage Collector during the mark-and-sweep phases.</li>
+        <li><strong>Default Hash Code:</strong> When <code>GetHashCode()</code> is called on an object that does not override it, the CLR stores the generated hash in the header bits so it remains stable even after GC relocates the object.</li>
+        <li><strong>GC Marking Flags:</strong> Used by the Garbage Collector during mark-and-sweep phases.</li>
       </ol>
 
       <h3>B. MethodTable Pointer (TypeHandle — 8 bytes)</h3>
-      <p>Points directly to the type's <code>MethodTable</code> structure in the CLR loader heap. The MethodTable contains:</p>
-      <ul>
-        <li>Virtual Method Table (vtable) pointers for polymorphic dispatch.</li>
-        <li>Interface Method Tables for interface dispatch.</li>
-        <li>GC descriptive flags (telling GC which byte offsets in the object are managed pointers).</li>
-        <li>Base type pointers and type metadata (used by <code>is</code>, <code>as</code>, and reflection).</li>
-      </ul>
-
-      <div class="callout callout-warning">
-        <div class="callout-title">⚠️ The 24-Byte Minimum Allocation Rule</div>
-        <p>On a 64-bit runtime, an empty reference object (<code>new object()</code>) consumes <strong>24 bytes</strong> on the heap: 8 bytes (Header) + 8 bytes (MethodTable) + 8 bytes (minimum alignment padding). If you allocate 10 million small objects, the metadata overhead alone consumes 160 megabytes of heap memory!</p>
-      </div>
+      <p>Points directly to the type's <code>MethodTable</code> structure in the CLR loader heap, containing the Virtual Method Table (vtable) for polymorphic dispatch, GC layout descriptors, and interface maps.</p>
     </section>
 
-    <!-- SECTION 3: TYPE SYSTEM MATRIX -->
+    <!-- SECTION 10: TYPE MATRIX -->
     <section id="type-matrix">
-      <h2>3. The Grand Type System Matrix: Struct vs Class vs Record</h2>
+      <h2>10. Grand Type System Deep-Dive: Struct vs Class vs Record vs Ref Struct</h2>
 
-      <table class="comparison-table">
+      <div class="callout callout-info">
+        <div class="callout-title">🧠 The 10-Second Elevator Pitch: Struct vs Record vs Class</div>
+        <p><strong>"A class is a reference type allocated on the managed heap with 16-byte object header overhead, identity-based reference equality, and GC lifecycle tracking. A struct is a value type stored inline where declared (on the stack or embedded inside an enclosing object/array) with zero heap overhead and pass-by-value copy semantics. A record is a compiler construct available for both reference types (record class) and value types (record struct) that synthesizes structural value-based equality, formatted ToString(), and non-destructive mutation via the 'with' expression."</strong></p>
+      </div>
+
+      <div class="mermaid">
+flowchart TD
+    subgraph ClassMemory["Class Memory Layout (Heap Allocation)"]
+        StackPtr["Stack Frame:<br/>Pointer (8 bytes)"] -->|References address| HeapObj["Heap Object:<br/>• 8-byte SyncBlock<br/>• 8-byte MethodTable<br/>• Fields + Padding (min 24 bytes)"]
+    end
+
+    subgraph StructMemory["Struct Memory Layout (Inline / Stack)"]
+        StackVal["Stack Frame:<br/>Exact size of fields (e.g. 16 bytes)<br/>• Zero Header<br/>• Zero MethodTable<br/>• Zero GC Overhead"]
+    end
+      </div>
+
+      <table class="styled-table">
         <thead>
           <tr>
             <th>Type Construct</th>
-            <th>Storage Location</th>
+            <th>Type System Kind</th>
+            <th>Memory Storage Location</th>
             <th>Equality Semantics</th>
             <th>Mutation Semantics</th>
-            <th>Primary Use Case</th>
+            <th>Copy Behavior</th>
+            <th>Primary Architectural Use Case</th>
           </tr>
         </thead>
         <tbody>
           <tr>
             <td><code>class</code></td>
-            <td><strong>Managed Heap</strong> (via pointer reference)</td>
+            <td>Reference Type</td>
+            <td><strong>Managed Heap</strong></td>
             <td><strong>Reference Equality</strong> (by default)</td>
             <td>Mutable by default</td>
-            <td>Long-lived business entities, domain aggregates, services.</td>
+            <td>Copies 8-byte reference pointer</td>
+            <td>Domain Aggregates, DI Services, stateful entities.</td>
           </tr>
           <tr>
             <td><code>struct</code></td>
-            <td><strong>Inline</strong> (Stack or inside container)</td>
-            <td><strong>Value Equality</strong> (reflection unless overridden)</td>
+            <td>Value Type</td>
+            <td><strong>Inline</strong> (Stack, or parent container)</td>
+            <td><strong>Value Equality</strong> (uses slow reflection by default!)</td>
             <td>Mutable (dangerous!)</td>
+            <td>Copies entire field payload bitwise</td>
             <td>Small primitive values (&le; 16 bytes), Vector2, Point.</td>
           </tr>
           <tr>
+            <td><code>readonly struct</code></td>
+            <td>Value Type</td>
+            <td><strong>Inline</strong></td>
+            <td><strong>Value Equality</strong></td>
+            <td><strong>Strictly Immutable</strong></td>
+            <td>Bitwise copy (no defensive copy!)</td>
+            <td>High-performance value objects, money/currency, coordinates.</td>
+          </tr>
+          <tr>
             <td><code>record class</code></td>
+            <td>Reference Type</td>
             <td><strong>Managed Heap</strong></td>
-            <td><strong>Value Equality</strong> (compiler synthesized)</td>
+            <td><strong>Value Equality</strong> (fast compiled IL)</td>
             <td>Immutable by default (<code>init</code> + <code>with</code>)</td>
-            <td>Data Transfer Objects (DTOs), CQRS Commands/Queries, Event models.</td>
+            <td>Copies reference pointer</td>
+            <td>DTOs, CQRS Commands/Queries, Domain Events.</td>
           </tr>
           <tr>
             <td><code>record struct</code></td>
+            <td>Value Type</td>
             <td><strong>Inline</strong></td>
             <td><strong>Value Equality</strong> (fast IL-synthesized)</td>
             <td>Mutable or immutable</td>
-            <td>Lightweight DTOs, high-frequency telemetry points.</td>
+            <td>Bitwise field copy</td>
+            <td>High-frequency telemetry data, lightweight value models.</td>
           </tr>
           <tr>
             <td><code>readonly ref struct</code></td>
-            <td><strong>Strictly Execution Stack</strong></td>
+            <td>Value Type (Restricted)</td>
+            <td><strong>Strictly Stack Only</strong></td>
             <td>Cannot be boxed / No <code>object</code> casting</td>
             <td>Immutable stack slice</td>
-            <td><code>Span&lt;T&gt;</code>, zero-allocation network message parsers.</td>
+            <td>Stack copy only</td>
+            <td><code>Span&lt;T&gt;</code>, zero-allocation low-level memory parsers.</td>
           </tr>
         </tbody>
       </table>
 
-      <h3>Why `readonly ref struct` is the Superweapon of High-Performance .NET</h3>
-      <p>A <code>ref struct</code> is enforced by the C# compiler and CLR to <strong>never escape the execution stack</strong>. This guarantees that it can never be collected by GC, never pinned, and incurs zero GC tracking overhead:</p>
-      
-      <div class="callout callout-info">
-        <div class="callout-title">🔒 Compiler Restrictions on `ref struct`</div>
-        <ul>
-          <li>Cannot be boxed to <code>object</code> or <code>ValueType</code>.</li>
-          <li>Cannot implement interfaces (prior to C# 13).</li>
-          <li>Cannot be a field of a regular class or normal struct.</li>
-          <li>Cannot be captured in a lambda expression or local function.</li>
-          <li>Cannot be used across an <code>await</code> expression in an <code>async</code> method.</li>
-        </ul>
-      </div>
+      <h3>A. BUSTING THE MYTH: "Structs Are Always Allocated on the Stack"</h3>
+      <p>A classic junior interview misconception is stating that "classes live on the heap and structs live on the stack." In reality, <strong>a struct lives wherever its containing context lives</strong>:</p>
+      <ul>
+        <li><strong>On the Stack:</strong> Only when declared as a local variable inside a method that is not captured in a closure or async state machine.</li>
+        <li><strong>On the Heap (Inline in a Class):</strong> If a class contains a struct field (e.g. <code>public class Customer { public DateTime CreatedAt; }</code>), the <code>DateTime</code> struct resides <strong>on the managed heap</strong> inside the <code>Customer</code> object's memory payload.</li>
+        <li><strong>On the Heap (In an Array):</strong> An array of structs (<code>Point[] points = new Point[1000];</code>) is allocated as a single contiguous block of memory on the heap; the 1,000 structs live on the heap inside that array slab.</li>
+        <li><strong>On the Heap (Boxed):</strong> If a struct is cast to <code>object</code> or an interface (<code>IComparable</code>), a full 24-byte object is allocated on the managed heap.</li>
+      </ul>
 
-      <pre><code class="language-csharp">public readonly ref struct FastFixParser(ReadOnlySpan&lt;char&gt; rawMessage)
+      <h3>B. The Struct Value Equality Reflection Hazard</h3>
+      <p>When you define a standard <code>struct Point { public int X; public int Y; }</code> and call <code>point1.Equals(point2)</code>, it calls <code>ValueType.Equals</code>. Under the hood, the default CLR implementation uses <strong>reflection and raw byte memory scanning</strong> to compare fields, causing severe CPU performance degradation and boxing allocations!</p>
+      <p><strong>Solution:</strong> Either implement <code>IEquatable&lt;T&gt;</code> manually and override <code>GetHashCode()</code>, or declare it as a <strong><code>record struct</code></strong>, where the Roslyn compiler automatically synthesizes strongly typed, zero-reflection, zero-boxing equality operators!</p>
+
+      <h3>C. The Defensive Copy Trap of Mutable Structs with `in` / `readonly`</h3>
+      <pre><code class="language-csharp">// ❌ BAD: Mutable struct passed with 'in' causes hidden defensive copies!
+public struct MutableMatrix
 {
-    private readonly ReadOnlySpan&lt;char&gt; _buffer = rawMessage;
+    public double M11, M12, M21, M22;
+    public double Determinant() => (M11 * M22) - (M12 * M21);
+}
 
-    public decimal ExtractPrice()
-    {
-        int tagIndex = _buffer.IndexOf("44=");
-        var slice = _buffer[(tagIndex + 3)..];
-        int end = slice.IndexOf('|');
-        return decimal.Parse(slice[..end]);
-    }
-}</code></pre>
+public static void Process(in MutableMatrix matrix)
+{
+    // Because MutableMatrix is NOT 'readonly struct', the compiler fears Determinant()
+    // might mutate internal fields. To preserve 'in' read-only safety, the compiler
+    // SILENTLY COPIES the entire struct to a temporary stack variable before calling!
+    var det = matrix.Determinant(); // Hidden 32-byte copy on EVERY call!
+}
+
+// ✅ FIXED: Mark struct as 'readonly struct'
+public readonly struct ImmutableMatrix
+{
+    public readonly double M11, M12, M21, M22;
+    public double Determinant() => (M11 * M22) - (M12 * M21);
+} // Compiler knows Determinant cannot mutate -> Passes pure reference with 0 copies!</code></pre>
     </section>
 
-    <!-- SECTION 4: BOXING & UNBOXING -->
+    <!-- SECTION 11: BOXING & UNBOXING -->
     <section id="boxing-unboxing">
-      <h2>4. Boxing &amp; Unboxing: IL Disassembly &amp; Performance Traps</h2>
+      <h2>11. Boxing &amp; Unboxing: IL Disassembly &amp; Zero-Allocation Handlers</h2>
 
       <div class="mermaid">
 flowchart LR
@@ -190,31 +644,20 @@ flowchart LR
     Heap -->|unbox.any System.Int32| Stack2["Stack: int y = 42"]
       </div>
 
-      <p><strong>Boxing</strong> occurs when a value type is converted to the type <code>object</code> or to any interface type implemented by it. The CLR allocates a new object on the heap, writes the MethodTable pointer for that value type, and copies the raw bytes from the stack into the heap object payload.</p>
+      <pre><code class="language-csharp">// ❌ BOXING ANTI-PATTERN: Allocates on heap and casts
+int count = 500;
+string s = string.Format("Count: {0}", count); // Boxing System.Int32!
 
-      <h4>The Hidden Boxing Disassembly:</h4>
-      <pre><code class="language-csharp">int tradeCount = 500;
-string message = string.Format("Total trades: {0}", tradeCount); // ❌ BOXING!</code></pre>
-
-      <p>In IL bytecode, this emits:</p>
-      <pre><code class="language-text">IL_0001: ldc.i4 500
-IL_0006: stloc.0
-IL_0007: ldstr "Total trades: {0}"
-IL_000c: ldloc.0
-IL_000d: box [System.Runtime]System.Int32  &lt;--- HEAP ALLOCATION!
-IL_0012: call string [System.Runtime]System.String::Format(string, object)</code></pre>
-
-      <div class="callout callout-success">
-        <div class="callout-title">✅ Modern C# 12 Fix: String Interpolation Handlers</div>
-        <p>In C# 10+, string interpolation (<code>$"Total trades: {tradeCount}"</code>) uses <code>DefaultInterpolatedStringHandler</code>. It writes directly to a stack buffer via <code>ISpanFormattable</code> without boxing primitive numbers!</p>
-      </div>
+// ✅ ZERO-ALLOCATION MODERN C# 12 FIX:
+// String interpolation uses DefaultInterpolatedStringHandler via ISpanFormattable (0 heap allocations!)
+string optimized = $"Count: {count}";</code></pre>
     </section>
 
-    <!-- SECTION 5: REF PARAMETERS -->
+    <!-- SECTION 12: REF SEMANTICS -->
     <section id="ref-semantics">
-      <h2>5. Reference Semantics: `in`, `out`, `ref`, and `ref readonly`</h2>
+      <h2>12. Reference Semantics: in, out, ref, and ref readonly</h2>
 
-      <table class="comparison-table">
+      <table class="styled-table">
         <thead>
           <tr>
             <th>Keyword</th>
@@ -248,53 +691,90 @@ IL_0012: call string [System.Runtime]System.String::Format(string, object)</code
           </tr>
           <tr>
             <td><code>ref readonly</code></td>
-            <td>Return value</td>
-            <td>Caller cannot modify referenced value.</td>
-            <td>Returns reference to memory without copy.</td>
-            <td>Zero-copy access to internal struct fields/buffers.</td>
+            <td>In (Input only)</td>
+            <td>Must pass a variable that cannot be mutated.</td>
+            <td>Read-only reference; prevents defensive copying of structs.</td>
+            <td>Ultra-fast pass-by-reference for large <code>readonly struct</code>s.</td>
           </tr>
         </tbody>
       </table>
-
-      <pre><code class="language-csharp">public struct LargeMatrix256Bytes // 256 bytes
-{
-    // ...
-}
-
-// Without 'in': Copies all 256 bytes onto the call stack per invocation!
-public decimal ComputeRiskBad(LargeMatrix256Bytes matrix) =&gt; 0m;
-
-// With 'in': Passes an 8-byte memory pointer (0-copy!), enforces read-only:
-public decimal ComputeRiskGood(in LargeMatrix256Bytes matrix) =&gt; 0m;</code></pre>
     </section>
 
-    <!-- SECTION 6: INTERVIEW GRILL ROUND -->
+    <!-- SECTION 13: THE PRINCIPAL ENGINEER GRILL ROUND -->
     <section id="interview-grill">
-      <h2>6. The Senior Interviewer's Grill Round: CLR Internals</h2>
+      <h2>13. The Principal Engineer's 10-Question Grill Round</h2>
 
       <div class="callout callout-danger">
-        <div class="callout-title">🔥 Question 1: What is 'defensive copying' with structs and how does 'readonly struct' prevent it?</div>
+        <div class="callout-title">🔥 Question 1: What is the exact difference between override and new in C#, and how do they impact the vtable?</div>
         <div class="callout-content">
-          <p><strong>Senior Answer:</strong> When a struct is passed using <code>in</code> or accessed via a <code>readonly</code> field, the compiler must guarantee that the struct is not mutated. If you call a method or property on a normal struct (e.g. <code>myStruct.Calculate()</code>), the compiler cannot verify whether <code>Calculate()</code> mutates internal fields. To be safe, the compiler creates a secret copy of the struct on the stack (a <strong>defensive copy</strong>) and invokes the method on the copy! Marking the struct as <code>readonly struct</code> tells the compiler that all fields are immutable, completely eliminating defensive copying.</p>
+          <p><strong>Senior Answer:</strong> "<code>override</code> participates in true runtime polymorphism by replacing the base class slot in the derived type's Virtual Method Table (<code>vtable</code>). When invoked through a base class reference (<code>Base b = new Derived()</code>), dynamic dispatch invokes the derived implementation.</p>
+          <p><code>new</code> is method shadowing / hiding. It does NOT touch the base class vtable slot; it introduces a completely separate, independent method slot in the derived type. When invoked through a base class reference, the base implementation runs; the derived method only runs when called through an explicit derived class reference."</p>
         </div>
       </div>
 
       <div class="callout callout-danger">
-        <div class="callout-title">🔥 Question 2: What is Native AOT and what limitations does it impose on C# developers?</div>
+        <div class="callout-title">🔥 Question 2: How does the Java `final` keyword map to C#?</div>
         <div class="callout-content">
-          <p><strong>Senior Answer:</strong> Native AOT compiles CIL code directly into native platform machine instructions during build time, stripping away the JIT compiler and runtime IL emitter. The limitations are:
-          <ol>
-            <li><strong>No Dynamic Code Generation:</strong> <code>System.Reflection.Emit</code> and <code>Assembly.Load</code> are forbidden.</li>
-            <li><strong>Aggressive Trimming:</strong> Code not statically referenced at compile time is stripped by the IL linker (illink). Heavily reflection-based libraries (Newtonsoft.Json, older AutoMapper) will fail unless types are preserved with source generators (e.g. <code>System.Text.Json</code> source generation).</li>
-          </ol>
-          </p>
+          <p><strong>Senior Answer:</strong> "Java overloads <code>final</code> for three distinct concepts, which C# separates into dedicated keywords:
+          1. <strong>Class inheritance prevention:</strong> Java <code>final class</code> &rarr; C# <code>sealed class</code>.
+          2. <strong>Method override prevention:</strong> In Java, methods are virtual by default, so <code>final void M()</code> prevents overrides. In C#, methods are non-virtual by default! If overriding a base virtual method, C# uses <code>sealed override void M()</code>.
+          3. <strong>Variable immutability:</strong> Java <code>final int x</code> maps to C# <code>readonly</code> for fields, or <code>const</code> for compile-time literals."</p>
         </div>
       </div>
 
       <div class="callout callout-danger">
-        <div class="callout-title">🔥 Question 3: Why does struct value equality have poor performance if Equals() is not overridden?</div>
+        <div class="callout-title">🔥 Question 3: Why does sealing a class (sealed) improve RyuJIT execution performance?</div>
         <div class="callout-content">
-          <p><strong>Senior Answer:</strong> By default, <code>ValueType.Equals()</code> uses reflection! If the struct contains any reference type fields or memory alignment padding, the CLR falls back to using reflection (<code>FieldInfo.GetValue</code>) to compare every field one by one, which is orders of magnitude slower than a byte comparison and incurs boxing. To avoid this, high-performance structs should always implement <code>IEquatable&lt;T&gt;</code> and override <code>Equals(T other)</code> and <code>GetHashCode()</code>.</p>
+          <p><strong>Senior Answer:</strong> "By sealing a class, the developer guarantees to the runtime that no derived class can ever inherit from it. When RyuJIT encounters virtual calls or interface calls on that sealed type, it can perform <strong>devirtualization</strong>: it skips the indirect vtable pointer resolution (which stalls CPU branch prediction) and emits a direct CPU <code>call</code> instruction. Furthermore, direct calls can be <strong>inlined</strong> into the calling method, eliminating function prologue and epilogue stack overhead entirely."</p>
+        </div>
+      </div>
+
+      <div class="callout callout-danger">
+        <div class="callout-title">🔥 Question 4: What is the assembly versioning breaking change hazard of using const instead of static readonly?</div>
+        <div class="callout-content">
+          <p><strong>Senior Answer:</strong> "<code>const</code> is a compile-time literal. When Assembly A references a <code>const</code> value from Assembly B, the Roslyn compiler burns the literal value directly into Assembly A's CIL binary. If Assembly B updates the constant and is deployed without recompiling Assembly A, Assembly A will continue executing the stale, hardcoded value! In contrast, <code>static readonly</code> is resolved dynamically at runtime upon type initialization, ensuring consumer assemblies always observe the latest value."</p>
+        </div>
+      </div>
+
+      <div class="callout callout-danger">
+        <div class="callout-title">🔥 Question 5: What is the difference between protected internal and private protected?</div>
+        <div class="callout-content">
+          <p><strong>Senior Answer:</strong> "<code>protected internal</code> represents a logical <strong>OR</strong>: the member is accessible by any code in the same assembly OR by any derived class in another assembly. <code>private protected</code> represents a logical <strong>AND</strong>: the member is accessible ONLY by derived classes that reside within the same assembly."</p>
+        </div>
+      </div>
+
+      <div class="callout callout-danger">
+        <div class="callout-title">🔥 Question 6: What is the 16-byte object overhead in 64-bit .NET, and why does an empty object consume 24 bytes?</div>
+        <div class="callout-content">
+          <p><strong>Senior Answer:</strong> "Every reference type on the 64-bit CLR heap has a mandatory 16-byte header: 8 bytes for the Object Header (SyncBlockIndex, hash code, GC marks) and 8 bytes for the MethodTable pointer (TypeHandle). Because the 64-bit heap aligns allocations on 8-byte boundaries and requires a minimum payload of 8 bytes, <code>new object()</code> consumes exactly <strong>24 bytes</strong> in memory."</p>
+        </div>
+      </div>
+
+      <div class="callout callout-danger">
+        <div class="callout-title">🔥 Question 7: What are Default Interface Methods (DIM), and why does C# have them if abstract classes already exist?</div>
+        <div class="callout-content">
+          <p><strong>Senior Answer:</strong> "Default Interface Methods (introduced in C# 8) allow adding new methods with implementations to an interface without breaking backward compatibility for existing implementers. While abstract classes support default implementations, C# does not support multiple class inheritance. DIM allows providing default behavior across multiple independent interface hierarchies."</p>
+        </div>
+      </div>
+
+      <div class="callout callout-danger">
+        <div class="callout-title">🔥 Question 8: Why does boxing a struct cause memory allocation, and how do you prevent it when using interfaces?</div>
+        <div class="callout-content">
+          <p><strong>Senior Answer:</strong> "Boxing copies the struct's value from the stack onto the heap inside a full 24-byte reference object payload. When calling an interface method on a struct (<code>IComparable.CompareTo</code>), boxing occurs unless the method is called via a generic constraint: <code>public void Sort&lt;T&gt;(T item) where T : IComparable&lt;T&gt;</code>. Generic constraints allow RyuJIT to emit specialized native machine code that invokes the struct method directly without boxing!"</p>
+        </div>
+      </div>
+
+      <div class="callout callout-danger">
+        <div class="callout-title">🔥 Question 9: What are Static Abstract Members in Interfaces (C# 11+), and what problem do they solve?</div>
+        <div class="callout-content">
+          <p><strong>Senior Answer:</strong> "Historically, interfaces could only define instance members. C# 11 introduced static abstract interface members, allowing interfaces to enforce static factory methods (<code>static abstract T Create()</code>) and static operators (<code>static abstract T operator +(T a, T b)</code>). This enabled <strong>Generic Math (<code>INumber&lt;T&gt;</code>)</strong> in .NET 7/8, allowing mathematical algorithms to be written once generically over <code>int</code>, <code>double</code>, <code>decimal</code>, or custom vector types."</p>
+        </div>
+      </div>
+
+      <div class="callout callout-danger">
+        <div class="callout-title">🔥 Question 10: What are the strict compiler restrictions on `ref struct`, and why does it exist?</div>
+        <div class="callout-content">
+          <p><strong>Senior Answer:</strong> "A <code>ref struct</code> (such as <code>Span&lt;T&gt;</code>) is mathematically guaranteed by the compiler to reside <strong>strictly on the execution stack</strong> and never escape onto the managed heap. Therefore, it cannot be boxed, cannot implement interfaces (prior to C# 13), cannot be a field of a regular class or normal struct, cannot be captured in closures, and cannot be used across <code>await</code> boundaries in async methods. This guarantees zero GC tracking, zero pinning, and zero heap allocation."</p>
         </div>
       </div>
     </section>

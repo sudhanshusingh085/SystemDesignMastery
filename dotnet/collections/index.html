@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Collections &amp; Data Structures Internals — From Scratch to Principal Architect</title>
+  <title>Collections &amp; Data Structures Internals — Ground-Zero to Principal Architect</title>
   <link rel="stylesheet" href="../css/style.css">
   <script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.0/dist/mermaid.min.js"></script>
   <script src="../js/main.js" defer></script>
@@ -30,175 +30,510 @@
 
     <header>
       <h1>📦 Collections &amp; Data Structures Internals in .NET 8</h1>
-      <p class="subtitle">An exhaustive engineering breakdown of List&lt;T&gt; capacity doubling, Dictionary&lt;TKey, TValue&gt; prime modulus chaining, ConcurrentDictionary striped locking, PriorityQueue min-heaps, and .NET 8 Frozen collections.</p>
+      <p class="subtitle">The definitive architectural encyclopedia of .NET data structures: List&lt;T&gt; dynamic array growth, Dictionary&lt;K,V&gt; prime-modulus flat array layout, Java HashMap vs .NET Dictionary memory layout, ConcurrentDictionary striped locking, PriorityQueue 4-ary min-heaps, .NET 8 Frozen collections, and 10 Senior Interview Grill Rounds.</p>
     </header>
 
-    <!-- SECTION 1: OVERVIEW -->
-    <section id="overview">
-      <h2>1. The .NET Collections Hierarchy</h2>
-      <p>Modern .NET provides four distinct collection namespaces engineered for specific concurrency, immutability, and performance profiles:</p>
+    <!-- TABLE OF CONTENTS -->
+    <div class="card" style="margin-bottom: 2rem;">
+      <h3>📑 Curriculum Navigation</h3>
+      <ol style="margin-bottom: 0; padding-left: 1.25rem;">
+        <li><a href="#core-definitions">Formal Definitions &amp; The 10-Second Elevator Pitch</a></li>
+        <li><a href="#complexity-matrix">Master Time &amp; Space Complexity Matrix</a></li>
+        <li><a href="#list-internals">List&lt;T&gt; Internals: Dynamic Doubling &amp; Array.Copy Mechanics</a></li>
+        <li><a href="#dictionary-internals">Dictionary&lt;K, V&gt; Internals: The Two Flat Arrays &amp; Prime Modulo</a></li>
+        <li><a href="#java-vs-dotnet-collections">Java Collections vs .NET Collections: Architectural Differences</a></li>
+        <li><a href="#concurrent-collections">Concurrent Collections: Striped Locks &amp; The GetOrAdd Trap</a></li>
+        <li><a href="#priority-queue">PriorityQueue&lt;TElement, TPriority&gt; (.NET 6+ 4-Ary Heap)</a></li>
+        <li><a href="#sorted-collections">SortedDictionary vs SortedList: Red-Black Tree vs Binary Search</a></li>
+        <li><a href="#frozen-collections">.NET 8 Frozen Collections: Zero-Collision Perfect Hashes</a></li>
+        <li><a href="#immutable-collections">ImmutableArray vs ImmutableList: Structural Sharing Trade-Offs</a></li>
+        <li><a href="#interview-grill">The Principal Engineer's 10-Question Grill Round</a></li>
+      </ol>
+    </div>
 
-      <div class="mermaid">
-flowchart TD
-    subgraph S_Generic["System.Collections.Generic (Single-Threaded / Fast)"]
-        L["List&lt;T&gt;<br/>(Dynamic Array)"]
-        D["Dictionary&lt;TKey, TVal&gt;<br/>(Prime Modulo Chaining)"]
-        Q["Queue&lt;T&gt; &amp; Stack&lt;T&gt;"]
-        PQ["PriorityQueue&lt;T, P&gt;<br/>(4-Ary Min-Heap)"]
-    end
+    <!-- SECTION 1: FORMAL DEFINITIONS & ELEVATOR PITCH -->
+    <section id="core-definitions">
+      <h2>1. Formal Definitions &amp; The 10-Second Elevator Pitch</h2>
 
-    subgraph S_Concurrent["System.Collections.Concurrent (Thread-Safe)"]
-        CD["ConcurrentDictionary&lt;K, V&gt;<br/>(Striped Locks + Lock-Free Read)"]
-        CB["ConcurrentQueue&lt;T&gt; &amp; Bag&lt;T&gt;"]
-        BC["BlockingCollection&lt;T&gt;<br/>(Producer-Consumer)"]
-    end
+      <div class="callout callout-info">
+        <div class="callout-title">📖 Formal Definitions of Key .NET Collection Types</div>
 
-    subgraph S_Frozen[".NET 8 Frozen Collections (Read-Only Optimized)"]
-        FD["FrozenDictionary&lt;K, V&gt;<br/>(Zero collision startup table)"]
-        FS["FrozenSet&lt;T&gt;"]
-    end
+        <p><strong>1. <code>List&lt;T&gt;</code> (Namespace: <code>System.Collections.Generic</code>):</strong><br>
+        <strong>Textbook Definition:</strong> A strongly typed, dynamically resizing array. It wraps a contiguous native managed array (<code>T[] _items</code>), maintaining an internal <code>_size</code> counter and doubling capacity upon exhaustion. It provides O(1) indexed read/write, amortized O(1) appending, and O(N) arbitrary insertion/deletion.</p>
+
+        <p><strong>2. <code>Dictionary&lt;TKey, TValue&gt;</code> (Namespace: <code>System.Collections.Generic</code>):</strong><br>
+        <strong>Textbook Definition:</strong> A hash table mapping keys to values with O(1) average lookup. Unlike Java's node-based <code>HashMap</code>, .NET's Dictionary is backed by two flat arrays: an integer array of prime-sized buckets (<code>int[] _buckets</code>) and an entry struct array (<code>Entry[] _entries</code>) that stores hash codes, keys, values, and collision chain indices in contiguous memory.</p>
+
+        <p><strong>3. <code>ConcurrentDictionary&lt;TKey, TValue&gt;</code> (Namespace: <code>System.Collections.Concurrent</code>):</strong><br>
+        <strong>Textbook Definition:</strong> A thread-safe associative map optimized for high-concurrency read/write operations. It utilizes <strong>striped locking</strong> (allocating <code>ProcessorCount × 2</code> fine-grained lock objects) so multiple threads can write to different buckets concurrently, while read operations execute completely <strong>lock-free</strong> via volatile memory dereferencing.</p>
+
+        <p><strong>4. <code>FrozenDictionary&lt;TKey, TValue&gt;</code> (Namespace: <code>System.Collections.Frozen</code>, .NET 8+):</strong><br>
+        <strong>Textbook Definition:</strong> An immutable, read-optimized associative map created via <code>.ToFrozenDictionary()</code>. During creation, it analyzes keys to construct a collision-free or branch-optimized jump table. Read operations are up to <strong>50% faster</strong> than standard Dictionary lookups with zero lock or mutation overhead.</p>
+
+        <div style="background: rgba(2, 132, 199, 0.12); border-left: 4px solid var(--accent); padding: 0.75rem 1rem; margin-top: 1rem; border-radius: 4px;">
+          <strong>🎙️ The 10-Second Interview Pitch:</strong><br>
+          <em>".NET collections are optimized for CPU cache locality and zero GC node allocation. <code>Dictionary&lt;K,V&gt;</code> uses two flat contiguous arrays with prime sizing rather than linked-list heap nodes. For concurrent systems, <code>ConcurrentDictionary</code> provides lock-free reads and striped-lock writes, while .NET 8 <code>FrozenDictionary</code> precomputes perfect hash lookups for read-heavy caches."</em>
+        </div>
       </div>
     </section>
 
-    <!-- SECTION 2: LIST<T> INTERNALS -->
-    <section id="list-internals">
-      <h2>2. `List&lt;T&gt;` Internals: Capacity Doubling &amp; Array.Copy</h2>
+    <!-- SECTION 2: COMPLEXITY MATRIX -->
+    <section id="complexity-matrix">
+      <h2>2. Master Time &amp; Space Complexity Matrix</h2>
 
-      <p>A C# <code>List&lt;T&gt;</code> is a dynamic wrapper around a contiguous native managed array (<code>T[] _items</code>):</p>
-      <ul>
-        <li><strong>Growth Algorithm:</strong> When the list exceeds its current capacity, it allocates a new array of <strong>2x the current capacity</strong> (or 4 if empty) and copies existing elements using <code>Array.Copy()</code> (which uses vectorized <code>memmove</code> CPU instructions).</li>
-        <li><strong>Capacity vs Count:</strong> <code>Count</code> is the number of active elements. <code>Capacity</code> is the length of the internal <code>_items</code> array.</li>
-      </ul>
+      <table class="styled-table">
+        <thead>
+          <tr>
+            <th>Data Structure</th>
+            <th>Index Access <code>[i]</code></th>
+            <th>Search / Contains</th>
+            <th>Append / Add</th>
+            <th>Prepend / Insert(0)</th>
+            <th>Remove</th>
+            <th>Space Complexity</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>List&lt;T&gt;</code></td>
+            <td><strong>O(1)</strong></td>
+            <td>O(N)</td>
+            <td><strong>O(1) amortized</strong></td>
+            <td>O(N) (shifts array)</td>
+            <td>O(N)</td>
+            <td>O(N) contiguous</td>
+          </tr>
+          <tr>
+            <td><code>LinkedList&lt;T&gt;</code></td>
+            <td>O(N)</td>
+            <td>O(N)</td>
+            <td>O(1) (tail pointer)</td>
+            <td><strong>O(1)</strong></td>
+            <td>O(1) (with node ref)</td>
+            <td>O(N) + 24 bytes/node</td>
+          </tr>
+          <tr>
+            <td><code>Dictionary&lt;K, V&gt;</code></td>
+            <td><strong>O(1) by key</strong></td>
+            <td><strong>O(1) average</strong>, O(N) worst</td>
+            <td><strong>O(1) amortized</strong></td>
+            <td>N/A</td>
+            <td><strong>O(1)</strong></td>
+            <td>O(N) (2 flat arrays)</td>
+          </tr>
+          <tr>
+            <td><code>HashSet&lt;T&gt;</code></td>
+            <td>N/A</td>
+            <td><strong>O(1) average</strong>, O(N) worst</td>
+            <td><strong>O(1) amortized</strong></td>
+            <td>N/A</td>
+            <td><strong>O(1)</strong></td>
+            <td>O(N)</td>
+          </tr>
+          <tr>
+            <td><code>SortedDictionary&lt;K, V&gt;</code></td>
+            <td>O(log N) by key</td>
+            <td><strong>O(log N)</strong></td>
+            <td><strong>O(log N)</strong></td>
+            <td>N/A</td>
+            <td><strong>O(log N)</strong></td>
+            <td>O(N) (Red-Black tree)</td>
+          </tr>
+          <tr>
+            <td><code>SortedList&lt;K, V&gt;</code></td>
+            <td><strong>O(1) by index</strong></td>
+            <td>O(log N) binary search</td>
+            <td>O(N) (insertion shift)</td>
+            <td>O(N)</td>
+            <td>O(N)</td>
+            <td>O(N) (compact arrays)</td>
+          </tr>
+          <tr>
+            <td><code>PriorityQueue&lt;T, P&gt;</code></td>
+            <td>N/A</td>
+            <td>O(N)</td>
+            <td><strong>O(log₄ N) enqueue</strong></td>
+            <td>N/A</td>
+            <td><strong>O(log₄ N) dequeue</strong></td>
+            <td>O(N) (4-ary heap array)</td>
+          </tr>
+          <tr>
+            <td><code>Queue&lt;T&gt; / Stack&lt;T&gt;</code></td>
+            <td>N/A</td>
+            <td>O(N)</td>
+            <td><strong>O(1) amortized</strong></td>
+            <td>N/A</td>
+            <td><strong>O(1)</strong></td>
+            <td>O(N) (circular buffer)</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <!-- SECTION 3: LIST<T> INTERNALS -->
+    <section id="list-internals">
+      <h2>3. `List&lt;T&gt;` Internals: Dynamic Doubling &amp; Array.Copy Mechanics</h2>
+
+      <p>A C# <code>List&lt;T&gt;</code> wraps a single contiguous managed array <code>T[] _items</code>:</p>
 
       <div class="mermaid">
 flowchart LR
-    List["List&lt;int&gt;<br/>_size = 4, Capacity = 4"] --> Array1["[10, 20, 30, 40]"]
-    Array1 -->|Add(50) triggers Resize| Array2["[10, 20, 30, 40, 50, null, null, null]<br/>New Capacity = 8"]
+    L1["List&lt;int&gt;<br/>Count = 4, Capacity = 4"] --> A1["Array: [10, 20, 30, 40]"]
+    A1 -->|Add(50) triggers Resize| Alloc["Allocates new array of size 8"]
+    Alloc --> Copy["Array.Copy() vectorized memmove"]
+    Copy --> A2["Array: [10, 20, 30, 40, 50, 0, 0, 0]<br/>Count = 5, Capacity = 8"]
       </div>
 
-      <div class="callout callout-warning">
-        <div class="callout-title">⚠️ The Cost of `Insert(0, item)`</div>
-        <p>Inserting at index 0 has a time complexity of <strong>O(N)</strong>. The runtime must shift all N existing elements right by one position in memory. If you require frequent prepending, use <code>LinkedList&lt;T&gt;</code> or a double-ended ring buffer.</p>
-      </div>
+      <h3>The Growth Algorithm Formula</h3>
+      <ul>
+        <li>Default initial capacity when elements are added to an empty list is <strong>4</strong>.</li>
+        <li>When <code>_size == _items.Length</code>, new capacity is calculated as: <code>newCapacity = _items.Length == 0 ? 4 : _items.Length * 2;</code>.</li>
+        <li>If inserting 1,000,000 items without pre-allocating, the runtime resizes and copies the array <strong>19 consecutive times</strong>, allocating and discarding millions of temporary objects on the GC heap.</li>
+      </ul>
+
+      <pre><code class="language-csharp">// ❌ BAD: 19 reallocations, 19 memory copies, high GC pressure
+var list = new List&lt;Order&gt;();
+for (int i = 0; i &lt; 1_000_000; i++) list.Add(orders[i]);
+
+// ✅ ARCHITECTURAL BEST PRACTICE: Single allocation, 0 reallocations
+var listOptimized = new List&lt;Order&gt;(capacity: 1_000_000);</code></pre>
     </section>
 
-    <!-- SECTION 3: DICTIONARY INTERNALS -->
+    <!-- SECTION 4: DICTIONARY INTERNALS -->
     <section id="dictionary-internals">
-      <h2>3. `Dictionary&lt;TKey, TValue&gt;` Internals: The Prime Sizing Engine</h2>
+      <h2>4. `Dictionary&lt;K, V&gt;` Internals: The Two Flat Arrays &amp; Prime Modulo</h2>
 
-      <div class="callout callout-info">
-        <div class="callout-title">📖 Internal Layout</div>
-        <p>Unlike Java's <code>HashMap</code> (which uses linked-list node objects on the heap), .NET's <code>Dictionary&lt;TKey, TValue&gt;</code> stores everything in <strong>two flat arrays</strong> to maximize CPU L1/L2 cache locality and eliminate GC node pressure.</p>
+      <p>Unlike Java's <code>HashMap</code> which links separate heap node objects, .NET's <code>Dictionary&lt;TKey, TValue&gt;</code> is engineered around <strong>two flat contiguous arrays</strong> for maximum CPU cache line utilization:</p>
+
+      <div class="mermaid">
+flowchart TD
+    subgraph Arrays["Internal Memory Layout of Dictionary&lt;TKey, TValue&gt;"]
+        Buckets["int[] _buckets (Prime size e.g. 7)<br/>Stores index into _entries"]
+        Entries["Entry[] _entries (Prime size e.g. 7)<br/>Stores: hashCode, next, Key, Value"]
+    end
+
+    Hash["Hash(Key) % Prime"] --> BIdx["_buckets[3] = 0"]
+    BIdx --> E0["_entries[0]: Key='AAPL', Val=180, next=2"]
+    E0 -->|Collision Chain| E2["_entries[2]: Key='MSFT', Val=410, next=-1"]
       </div>
 
-      <h3>The Two Backing Arrays</h3>
-      <pre><code class="language-csharp">private struct Entry
+      <pre><code class="language-csharp">// Internal struct inside System.Collections.Generic.Dictionary:
+private struct Entry
 {
-    public uint hashCode; // 31-bit positive hash code (-1 if unused)
-    public int next;      // Index of next entry in bucket chain (-1 if last)
-    public TKey key;      // The Key
-    public TValue value;  // The Value
+    public uint hashCode; // 31-bit positive hash code (-1 if free)
+    public int next;      // Index of next entry in collision chain (-1 if last)
+    public TKey key;      // The Key payload
+    public TValue value;  // The Value payload
 }
 
-private int[] _buckets;      // Array of indices into _entries
-private Entry[] _entries;    // Array of Entry structs containing keys, values & chains</code></pre>
-
-      <div class="mermaid">
-flowchart TD
-    Hash["Hash(Key) % Prime"] --> BucketIndex["Bucket Array: _buckets[index]"]
-    BucketIndex -->|Points to entry index| Entry1["_entries[2]: Key: 'AAPL', Val: 180, next: 0"]
-    Entry1 -->|Collision Chain| Entry2["_entries[0]: Key: 'MSFT', Val: 410, next: -1"]
-      </div>
+private int[] _buckets;    // Maps bucket index -> head of chain in _entries
+private Entry[] _entries;  // Contiguous array of Entry structs</code></pre>
 
       <h3>Why Does .NET Use Prime Numbers for Capacity?</h3>
-      <p>In modular arithmetic, computing <code>bucket = hashCode % capacity</code> has a mathematical vulnerability: if <code>capacity</code> is a power of 2, the modulo operation only inspects the lowest bits of the hash code (e.g., <code>hash &amp; (capacity - 1)</code>). If hash codes share common factors or alignment, they all collide into the same few buckets!</p>
-      <p>Using a <strong>prime number</strong> for the bucket array size guarantees that the hash code's full bit entropy is distributed evenly across all buckets, even if the user's hash function is mediocre. .NET maintains an internal static table of 72 prime numbers ranging from 3 up to 7,199,369.</p>
+      <p>When computing <code>bucket = hashCode % capacity</code>, if <code>capacity</code> is a power of 2, the modulo operation only inspects the lowest bits of the hash code (equivalent to <code>hash &amp; (capacity - 1)</code>). If keys share common alignments, all keys collide into the same bucket.</p>
+      <p>Using a <strong>prime number</strong> guarantees that the hash code's full bit entropy is distributed evenly across all buckets, regardless of the hash algorithm quality. .NET maintains an internal static table of 72 prime numbers ranging from 3 to 7,199,369.</p>
 
-      <h3>Fast Modulo Optimization (.NET 6+)</h3>
-      <p>Division and modulo operations on 64-bit CPUs take ~15-30 clock cycles. Modern .NET replaces division with <strong>fast multiplicative reduction</strong> (Lemire reduction):</p>
+      <h3>Fast Modulo Reduction (.NET 6+)</h3>
+      <p>Hardware 64-bit division/modulo takes 15–30 CPU cycles. RyuJIT replaces modulo with <strong>Lemire fast multiplicative reduction</strong>:</p>
       <pre><code class="language-csharp">// Instead of: bucketIndex = (uint)hashCode % (uint)buckets.Length;
-// RyuJIT emits high-64-bit multiplication:
-bucketIndex = (uint)((((ulong)hashCode) * ((ulong)buckets.Length)) &gt;&gt; 32);</code></pre>
+// RyuJIT emits a single 64-bit multiplication and shift:
+bucketIndex = (uint)((((ulong)hashCode) * ((ulong)buckets.Length)) >> 32);</code></pre>
     </section>
 
-    <!-- SECTION 4: CONCURRENT DICTIONARY -->
-    <section id="concurrent-dictionary">
-      <h2>4. `ConcurrentDictionary&lt;TKey, TValue&gt;`: Striped Locking</h2>
+    <!-- SECTION 5: JAVA VS DOTNET COLLECTIONS -->
+    <section id="java-vs-dotnet-collections">
+      <h2>5. Java Collections vs .NET Collections: Architectural Differences</h2>
 
-      <p><code>ConcurrentDictionary</code> provides high-concurrency thread safety without locking the entire collection. It achieves this using <strong>Striped Locking</strong>:</p>
+      <table class="styled-table">
+        <thead>
+          <tr>
+            <th>Feature</th>
+            <th>☕ Java Collections Framework</th>
+            <th>🔷 .NET 8 BCL Collections</th>
+            <th>Architectural Impact</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>HashMap / Dictionary Layout</strong></td>
+            <td>Array of references to separate heap <code>Node&lt;K,V&gt;</code> objects. Transforms to Red-Black Tree (<code>TreeNode</code>) when bucket exceeds 8 items.</td>
+            <td><strong>Two flat contiguous arrays</strong> (<code>int[] _buckets</code> and <code>Entry[] _entries</code>). Collision chains are array indices, not object pointers.</td>
+            <td><strong>.NET has vastly superior CPU L1/L2 cache locality</strong> and causes zero GC node allocations.</td>
+          </tr>
+          <tr>
+            <td><strong>Bucket Sizing Algorithm</strong></td>
+            <td>Powers of 2 (<code>capacity = 16, 32, 64...</code>) using bitwise masking (<code>hash &amp; (n-1)</code>).</td>
+            <td><strong>Prime numbers</strong> (3, 7, 11, 17, 23...) using fast multiplicative reduction.</td>
+            <td>.NET resists hash collisions far better when hash codes have poor low-bit distribution.</td>
+          </tr>
+          <tr>
+            <td><strong>Primitive Collections</strong></td>
+            <td>Requires boxing primitives (e.g. <code>ArrayList&lt;Integer&gt;</code> boxes <code>int</code> to <code>Integer</code> heap object).</td>
+            <td><strong>Reified Generics</strong> (<code>List&lt;int&gt;</code> stores raw 4-byte integers directly in contiguous memory; 0 boxing!).</td>
+            <td>.NET primitive collections consume up to <strong>75% less memory</strong> than Java equivalents.</td>
+          </tr>
+          <tr>
+            <td><strong>Read-Only Optimization</strong></td>
+            <td><code>Collections.unmodifiableList(list)</code> (Runtime check; throws at runtime).</td>
+            <td><code>IReadOnlyList&lt;T&gt;</code> (Compile-time interface) and .NET 8 <code>FrozenDictionary&lt;K,V&gt;</code>.</td>
+            <td>.NET enforces read-only safety at compile time without wrapper exceptions.</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <!-- SECTION 6: CONCURRENT COLLECTIONS -->
+    <section id="concurrent-collections">
+      <h2>6. Concurrent Collections: Striped Locks &amp; The GetOrAdd Trap</h2>
+
+      <p><code>ConcurrentDictionary&lt;TKey, TValue&gt;</code> uses <strong>Striped Locking</strong>:</p>
 
       <div class="mermaid">
 flowchart TD
-    Req1["Thread 1: Put('AAPL')"] --> Lock0["Lock Stripe 0"]
-    Req2["Thread 2: Put('GOOG')"] --> Lock1["Lock Stripe 1"]
-    Req3["Thread 3: Read('MSFT')"] --> LockFree["Lock-Free Read (Volatile)"]
-    Lock0 --> Table0["Bucket Partition 0"]
-    Lock1 --> Table1["Bucket Partition 1"]
+    T1["Thread 1: Put('AAPL')"] --> Lock0["Stripe Lock 0"]
+    T2["Thread 2: Put('GOOG')"] --> Lock1["Stripe Lock 1"]
+    T3["Thread 3: Read('MSFT')"] --> LockFree["Lock-Free Read (Volatile)"]
+    Lock0 --> Buckets0["Bucket Stripe 0"]
+    Lock1 --> Buckets1["Bucket Stripe 1"]
       </div>
 
       <ul>
-        <li><strong>Lock Striping:</strong> By default, it initializes <code>Environment.ProcessorCount * 2</code> lock objects. Each lock protects a distinct subset of the bucket tables. Two threads writing to keys governed by different locks run completely in parallel!</li>
-        <li><strong>Lock-Free Reads:</strong> Reading from a <code>ConcurrentDictionary</code> (via <code>TryGetValue</code> or indexer) takes <strong>zero locks</strong>. The runtime executes lock-free memory reads via volatile bucket pointer dereferencing.</li>
+        <li><strong>Fine-Grained Striped Locks:</strong> The dictionary initializes <code>Environment.ProcessorCount * 2</code> independent lock objects. Two threads writing to different stripes run in parallel without blocking each other.</li>
+        <li><strong>Lock-Free Reads:</strong> Reading from a <code>ConcurrentDictionary</code> via <code>TryGetValue</code> acquires <strong>zero locks</strong>. It dereferences memory via volatile bucket head pointers.</li>
       </ul>
 
       <div class="callout callout-danger">
-        <div class="callout-title">🚨 The `GetOrAdd` Factory Trap</div>
-        <p>In <code>ConcurrentDictionary</code>, the <code>valueFactory</code> delegate passed to <code>GetOrAdd</code> or <code>AddOrUpdate</code> is executed <strong>outside the lock</strong> to prevent deadlocks. If 10 threads concurrently request a missing key, the factory delegate may be executed 10 times in parallel! If your factory performs expensive operations (e.g., calling an external REST API or database query), wrap the value in <code>Lazy&lt;T&gt;</code>:</p>
+        <div class="callout-title">🚨 The Dangerous `GetOrAdd` Delegate Execution Trap</div>
+        <p>In <code>ConcurrentDictionary</code>, the <code>valueFactory</code> delegate passed to <code>GetOrAdd</code> is executed <strong>OUTSIDE the lock</strong> to avoid deadlocks! If 10 concurrent requests ask for a missing key at the same millisecond, the factory may execute 10 times in parallel! If the factory queries a database or calls a paid third-party API, you execute duplicate operations.</p>
       </div>
 
-      <pre><code class="language-csharp">// ❌ WRONG: Factory may execute 10 times concurrently!
-var user = cache.GetOrAdd(userId, id =&gt; FetchUserFromSlowDatabase(id));
+      <pre><code class="language-csharp">// ❌ WRONG: FetchFromDatabase executed multiple times concurrently!
+var user = cache.GetOrAdd(userId, id => FetchFromDatabase(id));
 
-// ✅ RIGHT: Factory executes cheap Lazy creation; expensive work runs once!
-var lazyCache = new ConcurrentDictionary&lt;string, Lazy&lt;Task&lt;User&gt;&gt;&gt;();
+// ✅ SENIOR ARCHITECT FIX: Wrap value in Lazy<T> with LazyThreadSafetyMode.ExecutionAndPublication
+var cache = new ConcurrentDictionary&lt;string, Lazy&lt;Task&lt;UserData&gt;&gt;&gt;();
 
-var user = await lazyCache.GetOrAdd(userId, id =&gt; 
-    new Lazy&lt;Task&lt;User&gt;&gt;(() =&gt; FetchUserFromSlowDatabase(id))).Value;</code></pre>
-    </section>
-
-    <!-- SECTION 5: FROZEN COLLECTIONS -->
-    <section id="frozen-collections">
-      <h2>5. .NET 8 Frozen Collections (`FrozenDictionary` &amp; `FrozenSet`)</h2>
-
-      <p>In enterprise microservices, many dictionaries are configured once during application startup (e.g. routing tables, tax calculators, country code lookups) and never modified again. Standard <code>Dictionary</code> incurs overhead because it must support future mutations.</p>
-
-      <p><code>FrozenDictionary&lt;TKey, TValue&gt;</code> analyzes the exact set of keys at startup to synthesize an optimal, collision-free lookup strategy (e.g., perfect hashing, single-byte ASCII direct jumps):</p>
-
-      <pre><code class="language-csharp">using System.Collections.Frozen;
-
-// Read-only reference table initialized once at boot
-private static readonly FrozenDictionary&lt;string, CurrencyRate&gt; ExchangeRates =
-    LoadRatesFromConfig().ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
-
-public decimal ConvertUsd(string targetCurrency, decimal amount)
+public async Task&lt;UserData&gt; GetUserSafeAsync(string userId)
 {
-    // Up to 50% faster than standard Dictionary with 0 allocation overhead!
-    return amount * ExchangeRates[targetCurrency].Rate;
+    var lazy = cache.GetOrAdd(
+        userId,
+        id => new Lazy&lt;Task&lt;UserData&gt;&gt;(() => FetchFromDatabaseAsync(id)));
+
+    // Only ONE task executes; all concurrent threads await the exact same task!
+    return await lazy.Value;
 }</code></pre>
     </section>
 
-    <!-- SECTION 6: INTERVIEW GRILL ROUND -->
+    <!-- SECTION 7: PRIORITYQUEUE -->
+    <section id="priority-queue">
+      <h2>7. PriorityQueue&lt;TElement, TPriority&gt; (.NET 6+ 4-Ary Heap)</h2>
+
+      <p>Introduced in .NET 6, <code>PriorityQueue&lt;TElement, TPriority&gt;</code> implements a min-heap where elements are dequeued in order of lowest priority value.</p>
+
+      <div class="callout callout-info">
+        <strong>💡 Why .NET uses a 4-Ary Heap instead of Binary Heap:</strong><br>
+        Standard textbook heaps are binary (2 children per node). .NET uses a <strong>4-ary heap (4 children per node)</strong>. Because children are stored contiguously in an array, a 4-ary heap is much shallower, reducing tree height by half. When shifting elements down, scanning 4 adjacent elements fits into a single <strong>CPU 64-byte cache line</strong>, maximizing memory hardware prefetching.
+      </div>
+
+      <pre><code class="language-csharp">// Min-Heap: Lowest integer priority dequeues first
+var queue = new PriorityQueue&lt;string, int&gt;();
+
+queue.Enqueue("Low Priority Background Job", 100);
+queue.Enqueue("CRITICAL: Payment Timeout Alert", 1);
+queue.Enqueue("Standard Email Notification", 50);
+
+// Dequeues: "CRITICAL: Payment Timeout Alert"
+string first = queue.Dequeue();</code></pre>
+    </section>
+
+    <!-- SECTION 8: SORTED COLLECTIONS -->
+    <section id="sorted-collections">
+      <h2>8. SortedDictionary vs SortedList: Red-Black Tree vs Binary Search</h2>
+
+      <table class="styled-table">
+        <thead>
+          <tr>
+            <th>Characteristic</th>
+            <th><code>SortedDictionary&lt;K, V&gt;</code></th>
+            <th><code>SortedList&lt;K, V&gt;</code></th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Underlying Data Structure</strong></td>
+            <td><strong>Red-Black Balanced Binary Search Tree</strong></td>
+            <td><strong>Two flat contiguous arrays</strong> (Keys &amp; Values)</td>
+          </tr>
+          <tr>
+            <td><strong>Insertion &amp; Deletion</strong></td>
+            <td><strong>O(log N)</strong> (Fast pointer rewiring)</td>
+            <td><strong>O(N)</strong> (Must shift array elements right/left)</td>
+          </tr>
+          <tr>
+            <td><strong>Search by Key</strong></td>
+            <td><strong>O(log N)</strong> tree traversal</td>
+            <td><strong>O(log N)</strong> binary search</td>
+          </tr>
+          <tr>
+            <td><strong>Indexed Access by Index <code>[i]</code></strong></td>
+            <td>❌ No (Cannot access by integer index)</td>
+            <td>✅ <strong>O(1)</strong> (Direct array index access)</td>
+          </tr>
+          <tr>
+            <td><strong>Memory Overhead</strong></td>
+            <td>High: allocates a node object per item</td>
+            <td><strong>Minimal:</strong> zero node overhead, compact arrays</td>
+          </tr>
+          <tr>
+            <td><strong>When to Choose</strong></td>
+            <td>Frequent random insertions and deletions.</td>
+            <td>Populated once or modified rarely; frequent indexed lookups.</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <!-- SECTION 9: FROZEN COLLECTIONS -->
+    <section id="frozen-collections">
+      <h2>9. .NET 8 Frozen Collections: Zero-Collision Perfect Hashes</h2>
+
+      <p>Introduced in .NET 8 (<code>System.Collections.Frozen</code>), <code>FrozenDictionary&lt;K,V&gt;</code> and <code>FrozenSet&lt;T&gt;</code> are engineered for scenarios where a collection is initialized once during startup and read millions of times without further mutations (e.g., routing tables, configuration maps, security policies).</p>
+
+      <pre><code class="language-csharp">using System.Collections.Frozen;
+
+// Build initial mutable dictionary at startup:
+var config = new Dictionary&lt;string, string&gt;
+{
+    ["ApiUrl"] = "https://api.internal.com",
+    ["MaxRetries"] = "5",
+    ["Timeout"] = "30"
+};
+
+// Freeze it for read-only runtime execution:
+FrozenDictionary&lt;string, string&gt; frozenConfig = config.ToFrozenDictionary();
+
+// Lookups are up to 50% faster than standard Dictionary!
+string url = frozenConfig["ApiUrl"];</code></pre>
+
+      <div class="callout callout-success">
+        <strong>⚡ How Frozen Collections Achieve Superior Speed:</strong><br>
+        During <code>ToFrozenDictionary()</code>, EF Core inspects the exact keys provided. If there are few keys with distinct lengths or ASCII prefixes, it generates a custom hash algorithm or a minimal perfect hash function that eliminates collision chains entirely and reduces lookup to 2–3 CPU instructions!
+      </div>
+    </section>
+
+    <!-- SECTION 10: IMMUTABLE COLLECTIONS -->
+    <section id="immutable-collections">
+      <h2>10. ImmutableArray vs ImmutableList: Structural Sharing Trade-Offs</h2>
+
+      <table class="styled-table">
+        <thead>
+          <tr>
+            <th>Characteristic</th>
+            <th><code>ImmutableArray&lt;T&gt;</code></th>
+            <th><code>ImmutableList&lt;T&gt;</code></th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Underlying Structure</strong></td>
+            <td>A <code>struct</code> wrapping a single <code>T[]</code> array</td>
+            <td>An AVL Balanced Binary Search Tree</td>
+          </tr>
+          <tr>
+            <td><strong>Read Performance <code>[i]</code></strong></td>
+            <td><strong>O(1)</strong> (Identical to native array)</td>
+            <td><strong>O(log N)</strong> (Must traverse tree nodes)</td>
+          </tr>
+          <tr>
+            <td><strong>Add / Mutate Performance</strong></td>
+            <td><strong>O(N)</strong> (Allocates and copies entire new array)</td>
+            <td><strong>O(log N)</strong> (Structural sharing of tree branches)</td>
+          </tr>
+          <tr>
+            <td><strong>Memory Overhead</strong></td>
+            <td>Zero extra bytes (struct pointer wrapper)</td>
+            <td>High: allocates tree node objects for structural sharing</td>
+          </tr>
+          <tr>
+            <td><strong>Best Practice Rule</strong></td>
+            <td><strong>Default choice</strong> for immutability when reading often and mutating rarely.</td>
+            <td>Use ONLY when adding/removing elements frequently to large immutable collections.</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <!-- SECTION 11: THE PRINCIPAL ENGINEER GRILL ROUND -->
     <section id="interview-grill">
-      <h2>6. The Senior Interviewer's Grill Round: Collections</h2>
+      <h2>11. The Principal Engineer's 10-Question Grill Round</h2>
 
       <div class="callout callout-danger">
-        <div class="callout-title">🔥 Question 1: What happens if two different keys have the same hash code in Dictionary?</div>
+        <div class="callout-title">🔥 Question 1: How does .NET's Dictionary&lt;TKey, TValue&gt; memory layout differ fundamentally from Java's HashMap?</div>
         <div class="callout-content">
-          <p><strong>Senior Answer:</strong> When two keys produce identical hash codes (a hash collision), they map to the same bucket in <code>_buckets</code>. In .NET's <code>Dictionary</code>, collision resolution is handled via <strong>separate chaining within the _entries array</strong>: the new entry is appended to <code>_entries</code>, and its <code>next</code> field is set to point to the index of the previously mapped entry. When looking up a key, the runtime traverses the linked index chain (<code>entry = _entries[entry.next]</code>) and calls <code>IEqualityComparer&lt;TKey&gt;.Equals(key1, key2)</code> to identify the exact match.</p>
+          <p><strong>Senior Answer:</strong> "Java's <code>HashMap</code> allocates an array of references pointing to individual <code>Node&lt;K,V&gt;</code> objects scattered across the heap, incurring 24–32 bytes of heap overhead per entry and frequent CPU cache misses. In contrast, .NET's <code>Dictionary&lt;K,V&gt;</code> uses <strong>two flat contiguous arrays</strong>: an integer array of buckets (<code>int[] _buckets</code>) and an entry array (<code>Entry[] _entries</code>) holding structs with hash code, next index, key, and value. This eliminates separate heap node allocations and provides superior CPU L1/L2 cache locality."</p>
         </div>
       </div>
 
       <div class="callout callout-danger">
-        <div class="callout-title">🔥 Question 2: Why does modifying a List&lt;T&gt; during a foreach loop throw InvalidOperationException?</div>
+        <div class="callout-title">🔥 Question 2: Why does .NET use prime numbers for Dictionary bucket capacities rather than powers of two?</div>
         <div class="callout-content">
-          <p><strong>Senior Answer:</strong> <code>List&lt;T&gt;</code> contains an internal integer field called <code>_version</code>, which increments every time an element is added, removed, or the list is cleared. When a <code>foreach</code> loop starts, it creates a struct enumerator (<code>List&lt;T&gt;.Enumerator</code>) that snapshots the initial <code>_version</code> into a local field (<code>_version = list._version</code>). On every call to <code>MoveNext()</code>, the enumerator verifies whether <code>_version == list._version</code>. If any modification occurs during iteration, the versions mismatch, and it immediately throws an <code>InvalidOperationException</code> to prevent unpredictable state corruption (Fail-Fast behavior).</p>
+          <p><strong>Senior Answer:</strong> "Computing <code>hashCode % capacity</code> with power-of-two capacities only evaluates the lowest bits of the hash code (equivalent to bitwise <code>hash &amp; (capacity - 1)</code>). If keys have common factors, alignments, or suboptimal hash code implementations, they all cluster into the same few buckets. Prime modulus arithmetic distributes bit entropy uniformly across all buckets regardless of low-bit distribution, preventing hash collision degradation."</p>
         </div>
       </div>
 
       <div class="callout callout-danger">
-        <div class="callout-title">🔥 Question 3: How does PriorityQueue&lt;TElement, TPriority&gt; work internally?</div>
+        <div class="callout-title">🔥 Question 3: What is the concurrency hazard of ConcurrentDictionary's GetOrAdd method?</div>
         <div class="callout-content">
-          <p><strong>Senior Answer:</strong> Introduced in .NET 6, <code>PriorityQueue&lt;TElement, TPriority&gt;</code> implements a <strong>4-ary (quad) min-heap</strong> backed by an array of <code>(TElement Element, TPriority Priority)</code> tuples. Unlike a standard binary heap (which has 2 children per parent node), a 4-ary heap has 4 children per node. This makes the tree shallower and significantly improves CPU cache hit ratios during heap-up (<code>Enqueue</code>) and heap-down (<code>Dequeue</code>) operations.</p>
+          <p><strong>Senior Answer:</strong> "The <code>valueFactory</code> delegate passed to <code>GetOrAdd</code> executes <strong>outside the bucket lock</strong> to prevent deadlocks. If multiple threads concurrently request an absent key, the factory delegate can run simultaneously on all threads! If the factory performs an expensive database query or network call, it causes redundant operations. The production fix is to store <code>Lazy&lt;Task&lt;T&gt;&gt;</code> as the dictionary value, ensuring only a single asynchronous task runs."</p>
+        </div>
+      </div>
+
+      <div class="callout callout-danger">
+        <div class="callout-title">🔥 Question 4: How does PriorityQueue in .NET 6+ achieve superior CPU performance compared to standard binary heaps?</div>
+        <div class="callout-content">
+          <p><strong>Senior Answer:</strong> ".NET implements a <strong>4-ary min-heap</strong> (4 children per node) rather than a binary heap (2 children). A 4-ary heap reduces tree depth by half, cutting down on pointer chasing. Furthermore, because the 4 children reside consecutively in the backing array, inspecting all 4 children during a sift-down operation fits within a single <strong>64-byte CPU cache line</strong>, maximizing hardware memory prefetching."</p>
+        </div>
+      </div>
+
+      <div class="callout callout-danger">
+        <div class="callout-title">🔥 Question 5: What is the difference between SortedDictionary and SortedList in C#?</div>
+        <div class="callout-content">
+          <p><strong>Senior Answer:</strong> "<code>SortedDictionary</code> is implemented as a <strong>Red-Black Balanced Binary Search Tree</strong> with O(log N) insertions, deletions, and searches, but consumes extra memory for tree node pointers. <code>SortedList</code> is implemented as <strong>two flat contiguous arrays</strong> that are kept sorted; search is O(log N) via binary search, but insertion/deletion is O(N) because elements must be shifted. However, <code>SortedList</code> supports O(1) index access by integer position and consumes significantly less memory."</p>
+        </div>
+      </div>
+
+      <div class="callout callout-danger">
+        <div class="callout-title">🔥 Question 6: What are .NET 8 Frozen Collections, and when should you use them over standard collections?</div>
+        <div class="callout-content">
+          <p><strong>Senior Answer:</strong> "<code>FrozenDictionary</code> and <code>FrozenSet</code> (in <code>System.Collections.Frozen</code>) are immutable, read-only collections optimized for scenarios where keys are fixed at startup and read frequently at runtime (e.g., routing tables, configuration, dependency maps). During the initial 'freeze' phase, the collection analyzes the key set to construct a minimal perfect hash or branch-free jump table. Reads are up to 50% faster than standard Dictionary lookups with zero lock contention."</p>
+        </div>
+      </div>
+
+      <div class="callout callout-danger">
+        <div class="callout-title">🔥 Question 7: When should you choose ImmutableArray&lt;T&gt; over ImmutableList&lt;T&gt;?</div>
+        <div class="callout-content">
+          <p><strong>Senior Answer:</strong> "<code>ImmutableArray&lt;T&gt;</code> is a value-type struct wrapping a single array with O(1) indexed read performance identical to native arrays, but mutating it requires copying the entire array (O(N)). <code>ImmutableList&lt;T&gt;</code> is an AVL tree with O(log N) mutations via structural sharing, but O(log N) reads and significant heap node overhead. <code>ImmutableArray&lt;T&gt;</code> should be the default choice whenever reads outnumber writes by 90%+."</p>
+        </div>
+      </div>
+
+      <div class="callout callout-danger">
+        <div class="callout-title">🔥 Question 8: Why is prepending to List&lt;T&gt; via list.Insert(0, item) an anti-pattern?</div>
+        <div class="callout-content">
+          <p><strong>Senior Answer:</strong> "<code>List&lt;T&gt;</code> is backed by a contiguous array. Inserting at index 0 requires shifting all N existing elements to the right by one position in memory via <code>Array.Copy</code>, yielding <strong>O(N) time complexity</strong>. If prepending repeatedly in a loop of N elements, the total cost is <strong>O(N²)</strong>. For frequent prepending, developers should use <code>LinkedList&lt;T&gt;</code> or a double-ended circular buffer (<code>Queue&lt;T&gt;</code>)."</p>
+        </div>
+      </div>
+
+      <div class="callout callout-danger">
+        <div class="callout-title">🔥 Question 9: What is the performance impact of failing to override GetHashCode and Equals on custom struct keys in a Dictionary?</div>
+        <div class="callout-content">
+          <p><strong>Senior Answer:</strong> "If a custom <code>struct</code> is used as a Dictionary key without implementing <code>IEquatable&lt;T&gt;</code> and overriding <code>GetHashCode()</code>, the runtime falls back to <code>ValueType.Equals</code> and <code>ValueType.GetHashCode</code>. These base methods use <strong>Reflection</strong> under the hood to compare struct fields and cause <strong>boxing allocations on every single lookup</strong>, degrading performance by 10x to 100x. Always implement <code>IEquatable&lt;T&gt;</code> on custom struct keys."</p>
+        </div>
+      </div>
+
+      <div class="callout callout-danger">
+        <div class="callout-title">🔥 Question 10: How does CollectionsMarshal.AsSpan&lt;T&gt; eliminate iteration overhead on List&lt;T&gt; in high-throughput C#?</div>
+        <div class="callout-content">
+          <p><strong>Senior Answer:</strong> "Standard <code>foreach</code> on a <code>List&lt;T&gt;</code> uses a struct enumerator and checks the list's version on every step to detect concurrent modification, while indexer <code>list[i]</code> performs array bounds checking. <code>CollectionsMarshal.AsSpan(list)</code> (in <code>System.Runtime.InteropServices</code>) bypasses the wrapper entirely and returns a direct <code>Span&lt;T&gt;</code> pointing to the internal <code>_items</code> array, allowing RyuJIT to eliminate bounds checks and vectorize loop iterations via SIMD instructions."</p>
         </div>
       </div>
     </section>
