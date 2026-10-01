@@ -103,9 +103,13 @@
       <h2>Java 21 Code: Load Balancing Strategies</h2>
       <p>Let's use Java 21's modern features to represent different load balancing algorithms.</p>
       
-      <span class="code-label">Java</span>
-      <pre>
-import java.util.List;
+      <div class="code-tabs">
+        <div class="code-tabs-header">
+          <button class="code-tab-btn active" data-tab="java">☕ Java 21</button>
+          <button class="code-tab-btn" data-tab="csharp">🔷 C# 12</button>
+        </div>
+        <div class="code-tab-content active" data-tab-content="java">
+          <pre><code class="language-java">import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.Comparator;
@@ -114,7 +118,6 @@ record ServerNode(String ip, int weight, AtomicInteger activeConnections) {}
 
 sealed interface LoadBalancingStrategy 
     permits RoundRobin, WeightedRoundRobin, LeastConnections, IPHash, RandomStrategy {
-    
     ServerNode selectServer(List&lt;ServerNode&gt; servers, String clientIp);
 }
 
@@ -130,15 +133,13 @@ final class RoundRobin implements LoadBalancingStrategy {
 
 final class WeightedRoundRobin implements LoadBalancingStrategy {
     private final AtomicInteger counter = new AtomicInteger(0);
-    // Simplified implementation: in reality, you'd expand the list or use a weighted selection algorithm
     @Override
     public ServerNode selectServer(List&lt;ServerNode&gt; servers, String clientIp) {
         int totalWeight = servers.stream().mapToInt(ServerNode::weight).sum();
         int index = Math.abs(counter.getAndIncrement()) % totalWeight;
-        
         for (ServerNode server : servers) {
             index -= server.weight();
-            if (index < 0) return server;
+            if (index &lt; 0) return server;
         }
         return servers.getFirst();
     }
@@ -148,7 +149,7 @@ final class LeastConnections implements LoadBalancingStrategy {
     @Override
     public ServerNode selectServer(List&lt;ServerNode&gt; servers, String clientIp) {
         return servers.stream()
-                .min(Comparator.comparingInt(s -> s.activeConnections().get()))
+                .min(Comparator.comparingInt(s -&gt; s.activeConnections().get()))
                 .orElseThrow();
     }
 }
@@ -167,8 +168,60 @@ final class RandomStrategy implements LoadBalancingStrategy {
         int index = ThreadLocalRandom.current().nextInt(servers.size());
         return servers.get(index);
     }
+}</code></pre>
+        </div>
+        <div class="code-tab-content" data-tab-content="csharp">
+          <pre><code class="language-csharp">public record ServerNode(string Ip, int Weight)
+{
+    private int _activeConnections;
+    public int ActiveConnections =&gt; Volatile.Read(ref _activeConnections);
+    public void Increment() =&gt; Interlocked.Increment(ref _activeConnections);
+    public void Decrement() =&gt; Interlocked.Decrement(ref _activeConnections);
 }
-      </pre>
+
+public interface ILoadBalancingStrategy
+{
+    ServerNode SelectServer(IReadOnlyList&lt;ServerNode&gt; servers, string clientIp);
+}
+
+public sealed class RoundRobin : ILoadBalancingStrategy
+{
+    private int _counter;
+
+    public ServerNode SelectServer(IReadOnlyList&lt;ServerNode&gt; servers, string clientIp)
+    {
+        uint next = unchecked((uint)Interlocked.Increment(ref _counter));
+        return servers[(int)(next % servers.Count)];
+    }
+}
+
+public sealed class LeastConnections : ILoadBalancingStrategy
+{
+    public ServerNode SelectServer(IReadOnlyList&lt;ServerNode&gt; servers, string clientIp)
+    {
+        return servers.MinBy(s =&gt; s.ActiveConnections) ?? servers[0];
+    }
+}
+
+public sealed class IpHash : ILoadBalancingStrategy
+{
+    public ServerNode SelectServer(IReadOnlyList&lt;ServerNode&gt; servers, string clientIp)
+    {
+        uint hash = unchecked((uint)clientIp.GetHashCode());
+        return servers[(int)(hash % servers.Count)];
+    }
+}
+
+public sealed class RandomStrategy : ILoadBalancingStrategy
+{
+    public ServerNode SelectServer(IReadOnlyList&lt;ServerNode&gt; servers, string clientIp)
+    {
+        int index = Random.Shared.Next(servers.Count);
+        return servers[index];
+    }
+}</code></pre>
+        </div>
+      </div>
     </section>
 
     <div class="callout callout-success">

@@ -76,10 +76,13 @@
       <h2>4. Request/Response Design</h2>
       <p>An envelope pattern wraps all responses in a standard structure. This makes it easier for clients to parse results and errors consistently.</p>
       
-      <span class="code-label">Java 21</span>
-      <pre>
-public sealed interface ApiResponse&lt;T&gt; permits ApiResponse.Success, ApiResponse.Error {
-    
+      <div class="code-tabs">
+        <div class="code-tabs-header">
+          <button class="code-tab-btn active" data-tab="java">☕ Java 21</button>
+          <button class="code-tab-btn" data-tab="csharp">🔷 C# 12</button>
+        </div>
+        <div class="code-tab-content active" data-tab-content="java">
+          <pre><code class="language-java">public sealed interface ApiResponse&lt;T&gt; permits ApiResponse.Success, ApiResponse.Error {
     // Success record holds the payload
     record Success&lt;T&gt;(T data, String message) implements ApiResponse&lt;T&gt; {}
     
@@ -94,18 +97,42 @@ public sealed interface ApiResponse&lt;T&gt; permits ApiResponse.Success, ApiRes
         return new Error&lt;&gt;(code, message, List.of());
     }
 }
-      </pre>
-      
-      <p>With Java 21's pattern matching, handling responses is very clean:</p>
-      <span class="code-label">Java 21</span>
-      <pre>
+
+// Pattern matching consumption in Java 21:
 void handleResponse(ApiResponse&lt;User&gt; response) {
     switch (response) {
         case ApiResponse.Success&lt;User&gt; s -> System.out.println("Got user: " + s.data().name());
-        case ApiResponse.Error&lt;User&gt; e -> System.err.println("Failed: " + e.message());
+        case ApiResponse.Error&lt;User&gt; e   -> System.err.println("Failed: " + e.message());
     }
+}</code></pre>
+        </div>
+        <div class="code-tab-content" data-tab-content="csharp">
+          <pre><code class="language-csharp">using System.Text.Json.Serialization;
+
+public abstract record ApiResponse&lt;T&gt;
+{
+    private ApiResponse() { } // Closed discriminated union hierarchy
+
+    public sealed record Success(T Data, string Message = "Operation successful") : ApiResponse&lt;T&gt;;
+    public sealed record Error(string Code, string Message, IReadOnlyList&lt;string&gt;? Details = null) : ApiResponse&lt;T&gt;;
+
+    public static ApiResponse&lt;T&gt; Ok(T data) =&gt; new Success(data);
+    public static ApiResponse&lt;T&gt; Fail(string code, string message) =&gt; new Error(code, message);
 }
-      </pre>
+
+// Pattern matching switch expression in C# 12:
+void HandleResponse(ApiResponse&lt;User&gt; response)
+{
+    var message = response switch
+    {
+        ApiResponse&lt;User&gt;.Success s =&gt; $"Got user: {s.Data.Name}",
+        ApiResponse&lt;User&gt;.Error e   =&gt; $"Failed [{e.Code}]: {e.Message}",
+        _                           =&gt; throw new InvalidOperationException("Unreachable case")
+    };
+    Console.WriteLine(message);
+}</code></pre>
+        </div>
+      </div>
     </section>
 
     <section>
@@ -128,16 +155,30 @@ void handleResponse(ApiResponse&lt;User&gt; response) {
         </div>
       </div>
 
-      <span class="code-label">Java 21</span>
-      <pre>
-// Offset-based request and response
+      <div class="code-tabs">
+        <div class="code-tabs-header">
+          <button class="code-tab-btn active" data-tab="java">☕ Java 21</button>
+          <button class="code-tab-btn" data-tab="csharp">🔷 C# 12</button>
+        </div>
+        <div class="code-tab-content active" data-tab-content="java">
+          <pre><code class="language-java">// Offset-based request and response
 public record PageRequest(int page, int size) {}
 public record PageResponse&lt;T&gt;(List&lt;T&gt; items, int totalPages, long totalElements) {}
 
 // Cursor-based request and response
 public record CursorRequest(String cursor, int limit) {}
-public record CursorPageResponse&lt;T&gt;(List&lt;T&gt; items, String nextCursor, boolean hasMore) {}
-      </pre>
+public record CursorPageResponse&lt;T&gt;(List&lt;T&gt; items, String nextCursor, boolean hasMore) {}</code></pre>
+        </div>
+        <div class="code-tab-content" data-tab-content="csharp">
+          <pre><code class="language-csharp">// Offset-based request and response (C# 12 positional records)
+public record PageRequest(int Page, int Size);
+public record PageResponse&lt;T&gt;(IReadOnlyList&lt;T&gt; Items, int TotalPages, long TotalElements);
+
+// Cursor-based request and response
+public record CursorRequest(string? Cursor, int Limit);
+public record CursorPageResponse&lt;T&gt;(IReadOnlyList&lt;T&gt; Items, string? NextCursor, bool HasMore);</code></pre>
+        </div>
+      </div>
     </section>
 
     <section>
@@ -165,9 +206,14 @@ public record CursorPageResponse&lt;T&gt;(List&lt;T&gt; items, String nextCursor
       <h2>8. Idempotency</h2>
       <p><div class="jargon">📖 <strong>Idempotency</strong>: An operation is idempotent if doing it once has the same effect as doing it multiple times.</div></p>
       <p>Crucial for payment APIs. If a network drops during a POST, the client retries. An idempotency key ensures the payment isn't processed twice.</p>
-      <span class="code-label">Java 21</span>
-      <pre>
-public class IdempotencyFilter {
+      
+      <div class="code-tabs">
+        <div class="code-tabs-header">
+          <button class="code-tab-btn active" data-tab="java">☕ Java 21</button>
+          <button class="code-tab-btn" data-tab="csharp">🔷 C# 12</button>
+        </div>
+        <div class="code-tab-content active" data-tab-content="java">
+          <pre><code class="language-java">public class IdempotencyFilter {
     private final Set&lt;String&gt; processedKeys = ConcurrentHashMap.newKeySet();
 
     public void processPayment(String idempotencyKey, PaymentRequest request) {
@@ -179,8 +225,35 @@ public class IdempotencyFilter {
         processedKeys.add(idempotencyKey);
         System.out.println("Payment processed successfully.");
     }
-}
-      </pre>
+}</code></pre>
+        </div>
+        <div class="code-tab-content" data-tab-content="csharp">
+          <pre><code class="language-csharp">using System.Collections.Concurrent;
+
+public class IdempotencyFilter
+{
+    private readonly ConcurrentDictionary&lt;string, PaymentResult&gt; _processedKeys = new();
+
+    public async Task&lt;PaymentResult&gt; ProcessPaymentAsync(string idempotencyKey, PaymentRequest request)
+    {
+        // TryAdd atomically prevents concurrent duplicate execution
+        if (_processedKeys.TryGetValue(idempotencyKey, out var existingResult))
+        {
+            Console.WriteLine("Duplicate request detected. Returning cached response.");
+            return existingResult;
+        }
+
+        var result = await ExecutePaymentAsync(request);
+        _processedKeys.TryAdd(idempotencyKey, result);
+        Console.WriteLine("Payment processed successfully.");
+        return result;
+    }
+
+    private Task&lt;PaymentResult&gt; ExecutePaymentAsync(PaymentRequest req) =&gt;
+        Task.FromResult(new PaymentResult(Guid.NewGuid(), "COMPLETED", req.Amount));
+}</code></pre>
+        </div>
+      </div>
     </section>
 
     <section>

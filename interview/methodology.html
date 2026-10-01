@@ -101,11 +101,16 @@
       </div>
     </div>
 
-    <h2>Java 21 Code Example</h2>
-    <p>Here is a quick skeleton of how you might structure a basic design in code using Java 21 records and interfaces:</p>
-    <span class="code-label">Java</span>
-    <pre>
-/**
+    <h2>Code Implementation: Design Skeleton</h2>
+    <p>Here is a quick skeleton of how you structure a clean design in code using modern records and interfaces:</p>
+
+    <div class="code-tabs">
+      <div class="code-tabs-header">
+        <button class="code-tab-btn active" data-tab="java">☕ Java 21</button>
+        <button class="code-tab-btn" data-tab="csharp">🔷 C# 12 (.NET 8)</button>
+      </div>
+      <div class="code-tab-content active" data-tab-content="java">
+        <pre><code class="language-java">/**
  * A basic design skeleton demonstrating how to frame interfaces and records.
  */
 public class PastebinDesign {
@@ -143,8 +148,55 @@ public class PastebinDesign {
             return Integer.toHexString(content.hashCode());
         }
     }
-}
-    </pre>
+}</code></pre>
+      </div>
+      <div class="code-tab-content" data-tab-content="csharp">
+        <pre><code class="language-csharp">using System;
+using System.Collections.Concurrent;
+
+/// <summary>
+/// A clean design skeleton demonstrating C# 12 records, abstractions, and thread-safe stores.
+/// </summary>
+public static class PastebinDesign
+{
+    // C# 12 Positional Records
+    public record PasteRequest(string Content, long ExpirationSeconds);
+    public record PasteResponse(string ShortUrl);
+
+    // Interface representing core abstraction
+    public interface IPasteService
+    {
+        PasteResponse CreatePaste(PasteRequest request);
+        string GetPaste(string shortUrl);
+    }
+
+    // Concrete implementation
+    public class PasteService : IPasteService
+    {
+        // Thread-safe in-memory cache/store simulation
+        private readonly ConcurrentDictionary<string, string> _dataStore = new();
+
+        public PasteResponse CreatePaste(PasteRequest request)
+        {
+            var hash = GenerateHash(request.Content);
+            _dataStore[hash] = request.Content;
+            return new PasteResponse($"https://paste.bin/{hash}");
+        }
+
+        public string GetPaste(string shortUrl)
+        {
+            var hash = shortUrl[(shortUrl.LastIndexOf('/') + 1)..];
+            return _dataStore.TryGetValue(hash, out var content) ? content : "Not Found";
+        }
+
+        private static string GenerateHash(string content)
+        {
+            return content.GetHashCode().ToString("x");
+        }
+    }
+}</code></pre>
+      </div>
+    </div>
 
     <h2>Time Management in a 45-Minute Interview</h2>
     <div class="card">

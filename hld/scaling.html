@@ -110,22 +110,23 @@
       <h2>Java 21 Code Example: Simulating Scaling</h2>
       <p>Let's use Java 21 to simulate how vertical and horizontal scaling might look conceptually when handling requests.</p>
       
-      <span class="code-label">Java</span>
-      <pre>
-import java.util.List;
+      <div class="code-tabs">
+        <div class="code-tabs-header">
+          <button class="code-tab-btn active" data-tab="java">☕ Java 21</button>
+          <button class="code-tab-btn" data-tab="csharp">🔷 C# 12</button>
+        </div>
+        <div class="code-tab-content active" data-tab-content="java">
+          <pre><code class="language-java">import java.util.List;
 import java.util.ArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
 
-// Represent a request in the system
 record Request(String id, String payload) {}
 
-// A server that can process requests
 sealed interface Server permits WebServer {
     boolean process(Request request);
     int capacity();
 }
 
-// Our concrete WebServer implementation
 final class WebServer implements Server {
     private final String name;
     private final int maxCapacityPerSecond;
@@ -138,14 +139,13 @@ final class WebServer implements Server {
 
     @Override
     public boolean process(Request request) {
-        if (currentLoad.get() < maxCapacityPerSecond) {
+        if (currentLoad.get() &lt; maxCapacityPerSecond) {
             currentLoad.incrementAndGet();
             System.out.println(name + " processed request: " + request.id());
-            // Simulate processing time...
             currentLoad.decrementAndGet();
             return true;
         }
-        System.out.println(name + " is OVERLOADED! Dropped request: " + request.id());
+        System.out.println(name + " OVERLOADED! Dropped request: " + request.id());
         return false;
     }
 
@@ -157,30 +157,73 @@ final class WebServer implements Server {
 
 public class ScalingDemo {
     public static void main(String[] args) {
-        System.out.println("--- Vertical Scaling ---");
-        // Start with a small server
-        Server smallServer = new WebServer("Small-Server", 10);
-        
-        // Upgrade it! (Vertical Scaling)
-        Server bigServer = new WebServer("Big-Server-Upgraded", 100);
-        
-        System.out.println("--- Horizontal Scaling ---");
-        // Add multiple small servers behind a load balancer abstraction
         List&lt;Server&gt; serverPool = new ArrayList&lt;&gt;();
         serverPool.add(new WebServer("Node-1", 10));
         serverPool.add(new WebServer("Node-2", 10));
         serverPool.add(new WebServer("Node-3", 10));
         
-        // Simple round-robin load distribution
-        int requestCount = 25;
-        for (int i = 0; i < requestCount; i++) {
+        for (int i = 0; i &lt; 25; i++) {
             Request req = new Request("REQ-" + i, "data");
-            Server nodeToUse = serverPool.get(i % serverPool.size());
-            nodeToUse.process(req);
+            serverPool.get(i % serverPool.size()).process(req);
         }
     }
+}</code></pre>
+        </div>
+        <div class="code-tab-content" data-tab-content="csharp">
+          <pre><code class="language-csharp">public record Request(string Id, string Payload);
+
+public interface IServer
+{
+    bool Process(Request request);
+    int Capacity { get; }
 }
-      </pre>
+
+public sealed class WebServer(string name, int maxCapacityPerSecond) : IServer
+{
+    private int _currentLoad;
+    public int Capacity =&gt; maxCapacityPerSecond;
+
+    public bool Process(Request request)
+    {
+        if (Interlocked.Increment(ref _currentLoad) &lt;= maxCapacityPerSecond)
+        {
+            try
+            {
+                Console.WriteLine($"{name} processed request: {request.Id}");
+                return true;
+            }
+            finally
+            {
+                Interlocked.Decrement(ref _currentLoad);
+            }
+        }
+
+        Interlocked.Decrement(ref _currentLoad);
+        Console.WriteLine($"{name} OVERLOADED! Dropped: {request.Id}");
+        return false;
+    }
+}
+
+public static class Program
+{
+    public static void Main()
+    {
+        // Horizontal Scaling pool (.NET 8 collection expression)
+        IServer[] serverPool = [
+            new WebServer("Node-1", 10),
+            new WebServer("Node-2", 10),
+            new WebServer("Node-3", 10)
+        ];
+
+        for (int i = 0; i &lt; 25; i++)
+        {
+            var req = new Request($"REQ-{i}", "data");
+            serverPool[i % serverPool.Length].Process(req);
+        }
+    }
+}</code></pre>
+        </div>
+      </div>
     </section>
 
     <section>

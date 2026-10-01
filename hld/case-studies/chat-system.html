@@ -103,11 +103,67 @@
     <h3>Deep Dive 4: Online Presence System</h3>
     <p>Clients send a heartbeat every 5 seconds. The Presence Service updates a Redis key with an expiration (TTL) of 30 seconds. If a user drops connection silently, Redis natively deletes the key after 30s, broadcasting an "Offline" event to their friends.</p>
 
-    <h2>PILLAR 4: Production-Grade Java 21 Code</h2>
 
-    <span class="code-label">Java 21</span>
-    <pre>
-import java.util.concurrent.ConcurrentHashMap;
+    <!-- WHY THIS, WHY NOT OTHER? -->
+    <h2>⚖️ Architectural Decision Matrix: Why This, Why Not Other?</h2>
+    <table class="comparison-table">
+      <thead>
+        <tr>
+          <th>Architectural Decision</th>
+          <th>Chosen Approach</th>
+          <th>Alternative Considered</th>
+          <th>WHY THIS? (Winning Strengths)</th>
+          <th>WHY NOT THE OTHER? (Disqualifying Trade-offs)</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Transport Protocol</strong></td>
+          <td><strong>WebSockets (Bi-directional TCP)</strong></td>
+          <td>HTTP Long Polling / SSE</td>
+          <td>Persistent, full-duplex TCP socket with negligible framing overhead (~2-6 bytes per frame). Real-time message exchange &lt; 50ms.</td>
+          <td>Long polling requires tearing down and establishing a brand new HTTP handshake for every message, overloading server CPU and draining mobile battery.</td>
+        </tr>
+        <tr>
+          <td><strong>Message History Database</strong></td>
+          <td><strong>Wide-Column NoSQL (Cassandra / ScyllaDB)</strong></td>
+          <td>Relational DB (PostgreSQL)</td>
+          <td>Chat history is 95% write volume and sequential range scans (fetching recent 50 messages by timestamp). Cassandra's append-only LSM trees handle 500k writes/sec effortlessly.</td>
+          <td>PostgreSQL B-Tree indexes fragment heavily under massive concurrent chat inserts. Auto-scaling past 10TB of chat logs requires painful manual sharding.</td>
+        </tr>
+        <tr>
+          <td><strong>User Presence (Online/Offline)</strong></td>
+          <td><strong>Redis Key-Value with Heartbeat TTL (30s)</strong></td>
+          <td>Relational DB Status Column</td>
+          <td>Sub-millisecond in-memory updates. When a mobile client loses connection silently, Redis automatically evicts the expired key via TTL, emitting an offline event.</td>
+          <td>Updating a database table on every 5-second heartbeat from 100M active mobile devices generates 20M writes/second, destroying the relational DB.</td>
+        </tr>
+        <tr>
+          <td><strong>Message Fan-Out</strong></td>
+          <td><strong>Hybrid Fan-Out (Push for 1:1, Pull for Massive Groups)</strong></td>
+          <td>Pure Fan-Out on Write</td>
+          <td>For 1:1 and small groups (&lt; 256 members), pushing directly to individual message queues guarantees instant delivery.</td>
+          <td>A pure write fan-out in a 50,000-member community channel (like Discord/Telegram) generates 50,000 duplicated messages per single post, completely crashing message brokers.</td>
+        </tr>
+        <tr>
+          <td><strong>Message ID Ordering</strong></td>
+          <td><strong>Twitter Snowflake 64-bit ID</strong></td>
+          <td>Database Auto-Increment</td>
+          <td>Decentralized generation without network round-trips. Encodes millisecond timestamp into the highest bits, guaranteeing chronological timeline ordering.</td>
+          <td>Single database auto-increment is a single point of failure and bottleneck across distributed data centers. Server NTP timestamps suffer from clock drift.</td>
+        </tr>
+      </tbody>
+    </table>
+    <h2>PILLAR 4: Production-Grade Code (Java 21 &amp; C# 12)</h2>
+    <p>Compare the real-time chat routing implementations in Java 21 (Virtual Threads, Records) and C# 12 (Concurrent Collections, WebSocket Handlers, Snowflake Generators).</p>
+
+    <div class="code-tabs">
+      <div class="code-tabs-header">
+        <button class="code-tab-btn active" data-tab="java">☕ Java 21</button>
+        <button class="code-tab-btn" data-tab="csharp">🔷 C#</button>
+      </div>
+      <div class="code-tab-content active" data-tab-content="java">
+        <pre><code class="language-java">import java.util.concurrent.ConcurrentHashMap;
 import java.time.Instant;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.Optional;
@@ -219,6 +275,115 @@ interface Database {
     void save(ChatMessage msg);
 }
     </pre>
+</code></pre>
+      </div>
+      <div class="code-tab-content" data-tab-content="csharp">
+        <pre><code class="language-csharp">using System;
+using System.Collections.Concurrent;
+using System.Net.WebSockets;
+using System.Text;
+using System.Text.Json;
+using System.Threading;
+using System.Threading.Tasks;
+
+// Domain Model: C# 12 Record
+public record ChatMessage(
+    long MessageId, 
+    string SenderId, 
+    string ReceiverId, 
+    string Content, 
+    DateTime TimestampUtc);
+
+// Discriminated union outcome
+public abstract record RoutingResult
+{
+    public sealed record Delivered : RoutingResult;
+    public sealed record QueuedForOffline : RoutingResult;
+}
+
+// Twitter Snowflake Distributed ID Generator in C#
+public sealed class SnowflakeIdGenerator(long machineId)
+{
+    private long _sequence = 0L;
+    private long _lastTimestamp = -1L;
+    private readonly object _lock = new();
+
+    public long NextId()
+    {
+        lock (_lock)
+        {
+            long currentTimestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+
+            if (currentTimestamp < _lastTimestamp)
+                throw new InvalidOperationException("System clock moved backwards.");
+
+            if (currentTimestamp == _lastTimestamp)
+            {
+                _sequence = (_sequence + 1) & 4095; // 12-bit sequence (max 4096 per ms)
+                if (_sequence == 0)
+                {
+                    // Wait for next millisecond
+                    while (currentTimestamp <= _lastTimestamp)
+                    {
+                        currentTimestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+                    }
+                }
+            }
+            else
+            {
+                _sequence = 0;
+            }
+
+            _lastTimestamp = currentTimestamp;
+            // 41 bits timestamp | 10 bits machineId | 12 bits sequence
+            return (currentTimestamp << 22) | (machineId << 12) | _sequence;
+        }
+    }
+}
+
+// Thread-Safe WebSocket Session Registry
+public class WebSocketSessionManager
+{
+    private readonly ConcurrentDictionary<string, WebSocket> _activeSockets = new();
+
+    public void Register(string userId, WebSocket socket) => _activeSockets[userId] = socket;
+    public void Unregister(string userId) => _activeSockets.TryRemove(userId, out _);
+    public WebSocket? GetSocket(string userId) => _activeSockets.GetValueOrDefault(userId);
+}
+
+// Production Message Router (C# 12 Primary Constructor)
+public class MessageRouter(
+    WebSocketSessionManager sessionManager,
+    INotificationService pushService,
+    IChatRepository db)
+{
+    public async Task<RoutingResult> RouteMessageAsync(ChatMessage msg, CancellationToken ct = default)
+    {
+        // 1. Asynchronously persist to distributed database (Cassandra / ScyllaDB)
+        await db.SaveMessageAsync(msg, ct);
+
+        // 2. Check if recipient has an active WebSocket on THIS gateway pod
+        var socket = sessionManager.GetSocket(msg.ReceiverId);
+
+        if (socket is not null && socket.State == WebSocketState.Open)
+        {
+            byte[] payload = JsonSerializer.SerializeToUtf8Bytes(msg);
+            await socket.SendAsync(payload, WebSocketMessageType.Text, endOfMessage: true, ct);
+            return new RoutingResult.Delivered();
+        }
+        else
+        {
+            // 3. User is offline or connected to another pod: queue Push Notification (APNS/FCM)
+            await pushService.SendPushAsync(msg.ReceiverId, $"New message from {msg.SenderId}", ct);
+            return new RoutingResult.QueuedForOffline();
+        }
+    }
+}
+
+public interface IChatRepository { Task SaveMessageAsync(ChatMessage msg, CancellationToken ct); }
+public interface INotificationService { Task SendPushAsync(string userId, string text, CancellationToken ct); }</code></pre>
+      </div>
+    </div>
 
     <h2>PILLAR 5: The Interviewer's Deep Follow-Up Questions (The Grill Round)</h2>
     <div class="callout callout-warning">

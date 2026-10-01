@@ -128,9 +128,13 @@ com.example.system
     <h2>7. Practice Problem Walkthrough: Task Management System</h2>
     <p>Let's design a simple Task Management System following our template.</p>
 
-    <span class="code-label">Java 21</span>
-    <pre>
-import java.util.*;
+    <div class="code-tabs">
+      <div class="code-tabs-header">
+        <button class="code-tab-btn active" data-tab="java">☕ Java 21</button>
+        <button class="code-tab-btn" data-tab="csharp">🔷 C#</button>
+      </div>
+      <div class="code-tab-content active" data-tab-content="java">
+        <pre><code class="language-java">import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
@@ -254,7 +258,110 @@ public class Main {
     }
 }
     </pre>
+</code></pre>
+      </div>
+      <div class="code-tab-content" data-tab-content="csharp">
+        <pre><code class="language-csharp">using System;
+using System.Collections.Concurrent;
+using System.Collections.Generic;
+using System.Linq;
 
+// --- 1. Enums & Models (Using C# Records) ---
+public enum Priority { Low, Medium, High }
+public enum Status { Todo, InProgress, Done }
+
+public record TaskId(string Value)
+{
+    public TaskId() : this(Guid.NewGuid().ToString("N")[..8]) { }
+}
+
+public class TaskItem(string title, Priority priority)
+{
+    public TaskId Id { get; } = new();
+    public string Title { get; set; } = title;
+    public Priority Priority { get; set; } = priority;
+    public Status Status { get; set; } = Status.Todo;
+
+    public override string ToString() =>
+        $"Task[{Id.Value}] {Title} ({Priority}, {Status})";
+}
+
+// --- 2. Exceptions ---
+public class TaskNotFoundException(string message) : Exception(message);
+
+// --- 3. Repository (Data Layer) ---
+public interface ITaskRepository
+{
+    void Save(TaskItem task);
+    TaskItem? FindById(TaskId id);
+    IReadOnlyList<TaskItem> FindAll();
+}
+
+public class InMemoryTaskRepository : ITaskRepository
+{
+    private readonly ConcurrentDictionary<TaskId, TaskItem> _storage = new();
+
+    public void Save(TaskItem task) => _storage[task.Id] = task;
+    public TaskItem? FindById(TaskId id) => _storage.GetValueOrDefault(id);
+    public IReadOnlyList<TaskItem> FindAll() => _storage.Values.ToList();
+}
+
+// --- 4. Service (Business Logic with C# 12 Primary Constructor) ---
+public class TaskService(ITaskRepository repository)
+{
+    public TaskId CreateTask(string title, Priority priority)
+    {
+        var task = new TaskItem(title, priority);
+        repository.Save(task);
+        return task.Id;
+    }
+
+    public void UpdateStatus(TaskId id, Status newStatus)
+    {
+        var task = repository.FindById(id) 
+            ?? throw new TaskNotFoundException($"Task {id.Value} not found");
+        task.Status = newStatus;
+        repository.Save(task);
+    }
+
+    public List<TaskItem> GetTasksByStatus(Status status) =>
+        repository.FindAll().Where(t => t.Status == status).ToList();
+}
+
+// --- 5. Main Demo ---
+public class Program
+{
+    public static void Main()
+    {
+        Console.WriteLine("--- Task Management System Demo (C# 12) ---");
+
+        ITaskRepository repo = new InMemoryTaskRepository();
+        var service = new TaskService(repo);
+
+        var task1 = service.CreateTask("Setup Database", Priority.High);
+        var task2 = service.CreateTask("Write API Docs", Priority.Medium);
+
+        Console.WriteLine("Created Tasks:");
+        service.GetTasksByStatus(Status.Todo).ForEach(Console.WriteLine);
+
+        Console.WriteLine("\nUpdating Task 1 to InProgress...");
+        service.UpdateStatus(task1, Status.InProgress);
+
+        Console.WriteLine("\nTasks In Progress:");
+        service.GetTasksByStatus(Status.InProgress).ForEach(Console.WriteLine);
+
+        try
+        {
+            service.UpdateStatus(new TaskId("invalid-id"), Status.Done);
+        }
+        catch (TaskNotFoundException ex)
+        {
+            Console.WriteLine($"\nExpected Error: {ex.Message}");
+        }
+    }
+}</code></pre>
+      </div>
+    </div>
     <div class="callout callout-purple">
       <strong>🚀 Important Note:</strong> All LLD Case Studies in Section 22 of this site follow this exact template approach. Familiarize yourself with this structure!
     </div>

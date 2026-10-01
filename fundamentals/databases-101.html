@@ -135,76 +135,81 @@
     <h2>Java 21 Code: Simulating a Simple Database Repository</h2>
     <p>In Java, we typically wrap database logic in a "Repository" or "Data Access Object (DAO)". Here is a simple in-memory simulation using a HashMap and Java records.</p>
 
-    <span class="code-label">Java</span>
-    <pre>
-import java.util.HashMap;
+    <div class="code-tabs">
+      <div class="code-tabs-header">
+        <button class="code-tab-btn active" data-tab="java">☕ Java 21</button>
+        <button class="code-tab-btn" data-tab="csharp">🔷 C# 12</button>
+      </div>
+      <div class="code-tab-content active" data-tab-content="java">
+        <pre><code class="language-java">import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 
-/**
- * Simulating a simple Database operations (CRUD) using Java 21 Records
- * and an in-memory Map structure.
- */
 public class DatabaseBasics {
-
-    // Record representing a row in our "Users" table
     public record User(Integer id, String name, String role) {}
 
-    // Our "Repository" handles all the CRUD logic
     public static class UserRepository {
-        // Simulating a database table with an Index (Primary Key -> Row)
-        private final Map<Integer, User> dataStore = new HashMap<>();
+        private final Map&lt;Integer, User&gt; dataStore = new HashMap&lt;&gt;();
         private int currentId = 1;
 
-        // CREATE
         public User create(String name, String role) {
             User newUser = new User(currentId++, name, role);
             dataStore.put(newUser.id(), newUser);
             return newUser;
         }
 
-        // READ
-        public Optional<User> read(Integer id) {
-            // Optional helps us handle the case where the ID isn't found safely
+        public Optional&lt;User&gt; read(Integer id) {
             return Optional.ofNullable(dataStore.get(id));
         }
 
-        // UPDATE
         public boolean update(Integer id, String newName, String newRole) {
             if (dataStore.containsKey(id)) {
                 dataStore.put(id, new User(id, newName, newRole));
-                return true; // Success
+                return true;
             }
-            return false; // Not found
+            return false;
         }
 
-        // DELETE
         public boolean delete(Integer id) {
             return dataStore.remove(id) != null;
         }
     }
+}</code></pre>
+      </div>
+      <div class="code-tab-content" data-tab-content="csharp">
+        <pre><code class="language-csharp">using System.Collections.Concurrent;
 
-    public static void main(String[] args) {
-        UserRepository repo = new UserRepository();
+public record User(int Id, string Name, string Role);
 
-        // C: Create
-        User alice = repo.create("Alice", "Admin");
-        User bob = repo.create("Bob", "User");
-        System.out.println("Created: " + alice);
+public class UserRepository
+{
+    private readonly ConcurrentDictionary&lt;int, User&gt; _dataStore = new();
+    private int _currentId;
 
-        // R: Read
-        repo.read(1).ifPresent(user -> System.out.println("Found User 1: " + user.name()));
-
-        // U: Update
-        repo.update(2, "Robert", "User");
-        System.out.println("Updated Bob to: " + repo.read(2).get().name());
-
-        // D: Delete
-        repo.delete(1);
-        System.out.println("Does Alice exist? " + repo.read(1).isPresent()); // false
+    public User Create(string name, string role)
+    {
+        int id = Interlocked.Increment(ref _currentId);
+        var user = new User(id, name, role);
+        _dataStore[id] = user;
+        return user;
     }
-}
-    </pre>
+
+    public User? Read(int id) =&gt; _dataStore.GetValueOrDefault(id);
+
+    public bool Update(int id, string newName, string newRole)
+    {
+        if (_dataStore.ContainsKey(id))
+        {
+            _dataStore[id] = new User(id, newName, newRole);
+            return true;
+        }
+        return false;
+    }
+
+    public bool Delete(int id) =&gt; _dataStore.TryRemove(id, out _);
+}</code></pre>
+      </div>
+    </div>
 
     <div class="callout callout-purple">
       <strong>Interview Tip:</strong> In an interview, don't just say "I will use MongoDB." You must explain <em>why</em>. If the system needs strict ACID transactions (like a banking app), choose SQL. If it needs to store massive amounts of unstructured data quickly, choose NoSQL.

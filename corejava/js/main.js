@@ -2,6 +2,23 @@
 // Core Java Mastery — Navigation & Utilities
 // ============================================================
 
+// --- Immediate Theme Initialization (prevents FOUC) ---
+(function initThemeImmediately() {
+  try {
+    const saved = localStorage.getItem('sdm-theme');
+    const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+    const theme = saved || (prefersDark ? 'dark' : 'light');
+    document.documentElement.setAttribute('data-theme', theme);
+    if (theme === 'dark') {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+  } catch (e) {
+    console.warn('Theme init error:', e);
+  }
+})();
+
 const NAV_SECTIONS = [
   {
     title: '00 · Java Fundamentals',
@@ -215,10 +232,22 @@ function initMermaid() {
   const m = window.mermaid || (typeof mermaid !== 'undefined' ? mermaid : null);
   if (m) {
     try {
+      const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
       m.initialize({
         startOnLoad: false,
-        theme: 'base',
-        themeVariables: {
+        theme: isDark ? 'dark' : 'base',
+        themeVariables: isDark ? {
+          darkMode: true,
+          background: '#151e2e',
+          primaryColor: '#1e293b',
+          primaryTextColor: '#f1f5f9',
+          primaryBorderColor: '#38bdf8',
+          lineColor: '#94a3b8',
+          secondaryColor: '#0f172a',
+          tertiaryColor: '#1e293b',
+          fontFamily: 'Segoe UI, system-ui, sans-serif',
+          fontSize: '14px',
+        } : {
           primaryColor: '#dbeafe', primaryTextColor: '#1e293b', primaryBorderColor: '#2563eb',
           lineColor: '#64748b', secondaryColor: '#f1f5f9', tertiaryColor: '#f8fafc',
           fontFamily: 'Segoe UI, system-ui, sans-serif', fontSize: '14px',
@@ -294,10 +323,47 @@ function setupNotesWidget() {
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && panel.classList.contains('open')) panel.classList.remove('open'); });
 }
 
+// --- Theme Toggle Floating Button ---
+function setupThemeToggle() {
+  let toggle = document.getElementById('theme-toggle');
+  if (!toggle) {
+    toggle = document.createElement('button');
+    toggle.id = 'theme-toggle';
+    toggle.className = 'theme-toggle';
+    toggle.setAttribute('aria-label', 'Toggle dark or light theme');
+    document.body.appendChild(toggle);
+  }
+
+  function updateToggleIcon() {
+    const isDark = document.documentElement.getAttribute('data-theme') === 'dark' || document.documentElement.classList.contains('dark');
+    toggle.innerHTML = isDark ? '☀️' : '🌙';
+    toggle.setAttribute('title', isDark ? 'Switch to Light Mode' : 'Switch to Dark Mode');
+  }
+
+  toggle.addEventListener('click', (e) => {
+    e.preventDefault();
+    const isDark = document.documentElement.getAttribute('data-theme') === 'dark' || document.documentElement.classList.contains('dark');
+    const nextTheme = isDark ? 'light' : 'dark';
+    document.documentElement.setAttribute('data-theme', nextTheme);
+    if (nextTheme === 'dark') {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+    try {
+      localStorage.setItem('sdm-theme', nextTheme);
+    } catch (e) {}
+    updateToggleIcon();
+  });
+
+  updateToggleIcon();
+}
+
 document.addEventListener('DOMContentLoaded', () => {
   buildSidebar();
   setupMenuToggle();
   setupScrollTop();
   initMermaid();
   setupNotesWidget();
+  setupThemeToggle();
 });

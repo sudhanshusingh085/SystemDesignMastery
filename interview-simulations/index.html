@@ -152,12 +152,15 @@
                 <p class="caption">Figure 2: Class Diagram for Movie Booking</p>
             </div>
 
-            <p><strong>🎓 CANDIDATE:</strong> I'll now write the Java 21 code for this. I'll use <code>record</code> types for immutable data and the Strategy Pattern for payments.</p>
+            <p><strong>🎓 CANDIDATE:</strong> I'll now write the implementation for this. We'll use immutable data records and the Strategy Pattern for pluggable payment providers.</p>
 
-            <span class="code-label">Java 21</span>
-            <pre>
-<code>
-import java.util.List;
+            <div class="code-tabs">
+              <div class="code-tabs-header">
+                <button class="code-tab-btn active" data-tab="java">☕ Java 21</button>
+                <button class="code-tab-btn" data-tab="csharp">🔷 C# 12 (.NET 8)</button>
+              </div>
+              <div class="code-tab-content active" data-tab-content="java">
+                <pre><code class="language-java">import java.util.List;
 import java.util.concurrent.locks.ReentrantLock;
 
 // Using Java records for simple data carriers (Immutable)
@@ -225,8 +228,7 @@ final class UPIPayment implements PaymentStrategy {
 
 // Booking Service handling the core logic
 class BookingManager {
-    // SOLID: Single Responsibility Principle - This class only handles the booking flow.
-    public boolean bookTickets(User user, Show show, List<Seat> selectedSeats, PaymentStrategy paymentMethod) {
+    public boolean bookTickets(User user, List<Seat> selectedSeats, PaymentStrategy paymentMethod) {
         // 1. Try to lock all seats to prevent double booking
         boolean allLocked = true;
         for (Seat seat : selectedSeats) {
@@ -237,13 +239,12 @@ class BookingManager {
         }
 
         if (!allLocked) {
-            // Rollback: unlock seats if we couldn't lock all of them
             System.out.println("Sorry, some seats were just taken!");
             return false;
         }
 
         // 2. Process Payment
-        double totalAmount = calculateTotal(selectedSeats);
+        double totalAmount = selectedSeats.size() * 10.0;
         boolean paymentSuccess = paymentMethod.pay(totalAmount);
 
         // 3. Confirm or Release
@@ -252,19 +253,125 @@ class BookingManager {
             System.out.println("Booking successful for " + user.name());
             return true;
         } else {
-            // Handle payment failure, release locks (implementation omitted for brevity)
             System.out.println("Payment failed.");
             return false;
         }
     }
+}</code></pre>
+              </div>
+              <div class="code-tab-content" data-tab-content="csharp">
+                <pre><code class="language-csharp">using System;
+using System.Collections.Generic;
+using System.Linq;
 
-    private double calculateTotal(List<Seat> seats) {
-        // Simplified pricing
-        return seats.stream().mapToDouble(s -> 10.0).sum(); 
+// Using C# 12 positional records for immutable data carriers
+public record User(string Id, string Name, string Email);
+public record Movie(string Id, string Title, int DurationInMinutes);
+
+public enum SeatStatus { Available, Locked, Booked }
+public enum SeatType { Regular, Premium }
+
+public class Seat
+{
+    public string Id { get; }
+    public SeatType Type { get; }
+    public SeatStatus Status { get; private set; }
+    private readonly object _lock = new();
+
+    public Seat(string id, SeatType type)
+    {
+        Id = id;
+        Type = type;
+        Status = SeatStatus.Available;
+    }
+
+    // Thread-safe method to lock a seat temporarily during checkout
+    public bool TryLockSeat()
+    {
+        lock (_lock)
+        {
+            if (Status == SeatStatus.Available)
+            {
+                Status = SeatStatus.Locked;
+                return true;
+            }
+            return false;
+        }
+    }
+
+    public void ConfirmBooking()
+    {
+        lock (_lock)
+        {
+            Status = SeatStatus.Booked;
+        }
     }
 }
-</code>
-            </pre>
+
+// Strategy Pattern for Payments (Open/Closed Principle)
+public interface IPaymentStrategy
+{
+    bool Pay(decimal amount);
+}
+
+public sealed class CreditCardPayment : IPaymentStrategy
+{
+    public bool Pay(decimal amount)
+    {
+        Console.WriteLine($"Paid {amount:C} via Credit Card.");
+        return true;
+    }
+}
+
+public sealed class UpiPayment : IPaymentStrategy
+{
+    public bool Pay(decimal amount)
+    {
+        Console.WriteLine($"Paid {amount:C} via UPI.");
+        return true;
+    }
+}
+
+// Booking Service handling orchestrations
+public class BookingManager
+{
+    public bool BookTickets(User user, List<Seat> selectedSeats, IPaymentStrategy paymentMethod)
+    {
+        // 1. Try to lock all seats to prevent double booking
+        bool allLocked = true;
+        foreach (var seat in selectedSeats)
+        {
+            if (!seat.TryLockSeat())
+            {
+                allLocked = false;
+                break;
+            }
+        }
+
+        if (!allLocked)
+        {
+            Console.WriteLine("Sorry, some seats were just taken!");
+            return false;
+        }
+
+        // 2. Process Payment
+        decimal totalAmount = selectedSeats.Sum(_ => 10.0m);
+        bool paymentSuccess = paymentMethod.Pay(totalAmount);
+
+        // 3. Confirm booking
+        if (paymentSuccess)
+        {
+            selectedSeats.ForEach(s => s.ConfirmBooking());
+            Console.WriteLine($"Booking successful for {user.Name}");
+            return true;
+        }
+
+        Console.WriteLine("Payment failed.");
+        return false;
+    }
+}</code></pre>
+              </div>
+            </div>
 
             <p><strong>🎙️ INTERVIEWER:</strong> The lock on the Seat object handles threads in a single JVM. What if we have multiple instances of this backend service running across different servers?</p>
 
@@ -319,20 +426,22 @@ class BookingManager {
 
             <div class="jargon">📖 <strong>Idempotency</strong>: The property of an operation where doing it once has the same effect as doing it multiple times. If a user clicks "Pay" twice by accident, an idempotent API ensures they are only charged once.</div>
 
-            <p><strong>🎙️ INTERVIEWER:</strong> Perfect. Now, let's write the core Java code for the Payment Processor, focusing on how you'd structure the result handling and retries.</p>
+            <p><strong>🎙️ INTERVIEWER:</strong> Perfect. Now, let's write the core code for the Payment Processor, focusing on how you'd structure result handling, idempotency, and retries.</p>
 
-            <p><strong>🎓 CANDIDATE:</strong> I'll use Java 21's sealed interfaces and pattern matching for safe and exhaustive handling of different payment outcomes.</p>
+            <p><strong>🎓 CANDIDATE:</strong> We'll use sealed hierarchies / discriminated records and exhaustive pattern matching for safe handling of all payment outcomes.</p>
 
-            <span class="code-label">Java 21</span>
-            <pre>
-<code>
-import java.util.UUID;
+            <div class="code-tabs">
+              <div class="code-tabs-header">
+                <button class="code-tab-btn active" data-tab="java">☕ Java 21</button>
+                <button class="code-tab-btn" data-tab="csharp">🔷 C# 12 (.NET 8)</button>
+              </div>
+              <div class="code-tab-content active" data-tab-content="java">
+                <pre><code class="language-java">import java.util.UUID;
 
 // Immutable record for the request
 public record PaymentRequest(String idempotencyKey, double amount, String merchantId, String currency) {}
 
-// Sealed interface for strict outcome control
-// SOLID: Open/Closed - We know exactly what outcomes are possible.
+// Sealed interface for strict outcome control (SOLID: Open/Closed Principle)
 sealed interface PaymentResult {
     record Success(String transactionId) implements PaymentResult {}
     record Failure(String reason, boolean retryable) implements PaymentResult {}
@@ -384,9 +493,77 @@ class PaymentProcessor {
 
         return result;
     }
+}</code></pre>
+              </div>
+              <div class="code-tab-content" data-tab-content="csharp">
+                <pre><code class="language-csharp">using System;
+
+// Immutable positional record for request
+public record PaymentRequest(string IdempotencyKey, decimal Amount, string MerchantId, string Currency);
+
+// Discriminated result hierarchy for compile-time exhaustive checking
+public abstract record PaymentResult
+{
+    public sealed record Success(string TransactionId) : PaymentResult;
+    public sealed record Failure(string Reason, bool Retryable) : PaymentResult;
+    public sealed record Pending(string StatusUrl) : PaymentResult;
 }
-</code>
-            </pre>
+
+public interface IBankClient
+{
+    PaymentResult ExecuteTransfer(PaymentRequest request);
+}
+
+public interface IDatabase
+{
+    bool Exists(string key);
+    PaymentResult GetPreviousResult(string key);
+    void Save(string key, PaymentResult result);
+}
+
+// C# 12 Primary Constructor
+public class PaymentProcessor(IBankClient bankClient, IDatabase db)
+{
+    public PaymentResult Process(PaymentRequest request)
+    {
+        // 1. Check Idempotency (Prevent double charging)
+        if (db.Exists(request.IdempotencyKey))
+        {
+            return db.GetPreviousResult(request.IdempotencyKey);
+        }
+
+        // 2. Process with the bank
+        var result = bankClient.ExecuteTransfer(request);
+
+        // 3. Handle result using C# 12 Pattern Matching switch
+        switch (result)
+        {
+            case PaymentResult.Success s:
+                Console.WriteLine($"Payment successful! TX: {s.TransactionId}");
+                db.Save(request.IdempotencyKey, s);
+                break;
+
+            case PaymentResult.Failure f when f.Retryable:
+                Console.WriteLine($"Payment failed due to: {f.Reason}. Queuing for retry.");
+                db.Save(request.IdempotencyKey, f);
+                break;
+
+            case PaymentResult.Failure f:
+                Console.WriteLine($"Hard failure: {f.Reason}. Do not retry.");
+                db.Save(request.IdempotencyKey, f);
+                break;
+
+            case PaymentResult.Pending p:
+                Console.WriteLine($"Payment pending, check status at: {p.StatusUrl}");
+                db.Save(request.IdempotencyKey, p);
+                break;
+        }
+
+        return result;
+    }
+}</code></pre>
+              </div>
+            </div>
 
             <p><strong>🎙️ INTERVIEWER:</strong> Very clean. Using switch expressions with sealed types ensures you never forget to handle an outcome type. Great job.</p>
         </div>

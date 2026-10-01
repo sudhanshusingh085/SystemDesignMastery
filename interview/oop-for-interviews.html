@@ -30,16 +30,30 @@
     <div class="card">
       <h3>1. Encapsulation</h3>
       <p>Hiding internal state and requiring all interaction to be performed through an object's methods. <strong>Analogy:</strong> A capsule pill; you swallow it without needing to know the chemical powder inside.</p>
-      <span class="code-label">Java</span>
-      <pre>
-public class BankAccount {
+      <div class="code-tabs">
+        <div class="code-tabs-header">
+          <button class="code-tab-btn active" data-tab="java">☕ Java</button>
+          <button class="code-tab-btn" data-tab="csharp">🔷 C#</button>
+        </div>
+        <div class="code-tab-content active" data-tab-content="java">
+          <pre><code class="language-java">public class BankAccount {
     private double balance; // Hidden state
 
     public void deposit(double amount) {
         if (amount > 0) balance += amount; // Controlled access
     }
-}
-      </pre>
+}</code></pre>
+        </div>
+        <div class="code-tab-content" data-tab-content="csharp">
+          <pre><code class="language-csharp">public class BankAccount {
+    private decimal _balance; // Hidden private state
+
+    public void Deposit(decimal amount) {
+        if (amount > 0) _balance += amount; // Controlled mutation
+    }
+}</code></pre>
+        </div>
+      </div>
 
       <h3>2. Abstraction</h3>
       <p>Hiding complex implementation details and showing only the essential features. <strong>Analogy:</strong> Driving a car; you press the accelerator without needing to understand fuel injection.</p>
@@ -59,78 +73,157 @@ public class BankAccount {
     <h3>abstract class</h3>
     <p>A <div class="jargon">📖 <strong>abstract class</strong>: A blueprint that cannot be instantiated on its own. It can contain both complete methods (with bodies) and abstract methods (without bodies).</div></p>
     <p><strong>When to use:</strong> When you want to share code among several closely related classes.</p>
-    <span class="code-label">Java</span>
-    <pre>
-public abstract class Vehicle {
+    <div class="code-tabs">
+      <div class="code-tabs-header">
+        <button class="code-tab-btn active" data-tab="java">☕ Java</button>
+        <button class="code-tab-btn" data-tab="csharp">🔷 C#</button>
+      </div>
+      <div class="code-tab-content active" data-tab-content="java">
+        <pre><code class="language-java">public abstract class Vehicle {
     // Shared behavior
     public void startEngine() { System.out.println("Engine started"); }
     // Must be implemented by subclasses
     public abstract void drive();
-}
-    </pre>
+}</code></pre>
+      </div>
+      <div class="code-tab-content" data-tab-content="csharp">
+        <pre><code class="language-csharp">public abstract class Vehicle {
+    // Shared behavior
+    public void StartEngine() => Console.WriteLine("Engine started");
+    // Must be implemented by derived classes
+    public abstract void Drive();
+}</code></pre>
+      </div>
+    </div>
 
     <h3>interface</h3>
     <p>A contract that defines a set of methods a class must implement. Unlike abstract classes, interfaces are primarily about defining <em>what</em> an object can do, not <em>how</em> it does it.</p>
     <p><strong>When to use:</strong> To define capabilities for disparate classes (e.g., `Flyable` for a Bird and an Airplane).</p>
-    <span class="code-label">Java</span>
-    <pre>
-public interface PaymentProcessor {
+    <div class="code-tabs">
+      <div class="code-tabs-header">
+        <button class="code-tab-btn active" data-tab="java">☕ Java</button>
+        <button class="code-tab-btn" data-tab="csharp">🔷 C#</button>
+      </div>
+      <div class="code-tab-content active" data-tab-content="java">
+        <pre><code class="language-java">public interface PaymentProcessor {
     boolean processPayment(double amount);
-}
-    </pre>
+}</code></pre>
+      </div>
+      <div class="code-tab-content" data-tab-content="csharp">
+        <pre><code class="language-csharp">public interface IPaymentProcessor {
+    bool ProcessPayment(decimal amount);
+}</code></pre>
+      </div>
+    </div>
 
     <h3>final class</h3>
     <p>A class that cannot be subclassed. The `String` class in Java is final.</p>
     <p><strong>When to use:</strong> When you want to guarantee immutability or prevent modification of core behavior for security.</p>
-    <span class="code-label">Java</span>
-    <pre>
-public final class Configuration {
+    <div class="code-tabs">
+      <div class="code-tabs-header">
+        <button class="code-tab-btn active" data-tab="java">☕ Java</button>
+        <button class="code-tab-btn" data-tab="csharp">🔷 C#</button>
+      </div>
+      <div class="code-tab-content active" data-tab-content="java">
+        <pre><code class="language-java">public final class Configuration {
     private final String url = "https://api.example.com";
-}
-    </pre>
+}</code></pre>
+      </div>
+      <div class="code-tab-content" data-tab-content="csharp">
+        <pre><code class="language-csharp">// 'sealed' in C# prevents inheritance (equivalent to Java final)
+public sealed class Configuration {
+    private readonly string _url = "https://api.example.com";
+}</code></pre>
+      </div>
+    </div>
 
     <h3>sealed class (Java 17+)</h3>
     <p>Restricts which classes may extend or implement it. It provides a middle ground between completely open (regular class) and completely closed (final class).</p>
     <p><strong>When to use:</strong> When you have a known, fixed set of subclasses, enabling exhaustive pattern matching in `switch` statements.</p>
-    <span class="code-label">Java</span>
-    <pre>
-public sealed class Shape permits Circle, Square {}
+    <div class="code-tabs">
+      <div class="code-tabs-header">
+        <button class="code-tab-btn active" data-tab="java">☕ Java</button>
+        <button class="code-tab-btn" data-tab="csharp">🔷 C#</button>
+      </div>
+      <div class="code-tab-content active" data-tab-content="java">
+        <pre><code class="language-java">public sealed class Shape permits Circle, Square {}
 
 final class Circle extends Shape {}
-final class Square extends Shape {}
-    </pre>
+final class Square extends Shape {}</code></pre>
+      </div>
+      <div class="code-tab-content" data-tab-content="csharp">
+        <pre><code class="language-csharp">// In C#, closed type hierarchies use abstract records/classes with sealed variants
+public abstract record Shape
+{
+    public sealed record Circle(double Radius) : Shape;
+    public sealed record Square(double Side) : Shape;
+}</code></pre>
+      </div>
+    </div>
 
     <h3>record (Java 16+)</h3>
     <p>A special kind of class designed to be a transparent carrier for immutable data. It automatically generates constructors, getters, `equals()`, `hashCode()`, and `toString()`.</p>
     <p><strong>When to use:</strong> For Data Transfer Objects (DTOs) or anytime you just need to hold data.</p>
-    <span class="code-label">Java</span>
-    <pre>
-public record User(String id, String email) {}
-    </pre>
+    <div class="code-tabs">
+      <div class="code-tabs-header">
+        <button class="code-tab-btn active" data-tab="java">☕ Java</button>
+        <button class="code-tab-btn" data-tab="csharp">🔷 C#</button>
+      </div>
+      <div class="code-tab-content active" data-tab-content="java">
+        <pre><code class="language-java">public record User(String id, String email) {}</code></pre>
+      </div>
+      <div class="code-tab-content" data-tab-content="csharp">
+        <pre><code class="language-csharp">// C# positional record: immutable value equality + non-destructive 'with'
+public record User(string Id, string Email);</code></pre>
+      </div>
+    </div>
 
     <h3>enum</h3>
     <p>A special type used to define a collection of constants. In Java, enums can have fields and methods.</p>
-    <span class="code-label">Java</span>
-    <pre>
-public enum OrderStatus {
+    <div class="code-tabs">
+      <div class="code-tabs-header">
+        <button class="code-tab-btn active" data-tab="java">☕ Java</button>
+        <button class="code-tab-btn" data-tab="csharp">🔷 C#</button>
+      </div>
+      <div class="code-tab-content active" data-tab-content="java">
+        <pre><code class="language-java">public enum OrderStatus {
     PENDING(1), SHIPPED(2), DELIVERED(3);
     
     private final int code;
     OrderStatus(int code) { this.code = code; }
     public int getCode() { return code; }
-}
-    </pre>
+}</code></pre>
+      </div>
+      <div class="code-tab-content" data-tab-content="csharp">
+        <pre><code class="language-csharp">// C# enum with explicit underlying integral values
+public enum OrderStatus {
+    Pending = 1,
+    Shipped = 2,
+    Delivered = 3
+}</code></pre>
+      </div>
+    </div>
 
     <h3>Generics</h3>
     <p>Allows classes and methods to operate on objects of various types while providing compile-time type safety.</p>
-    <span class="code-label">Java</span>
-    <pre>
-public class Box&lt;T&gt; {
+    <div class="code-tabs">
+      <div class="code-tabs-header">
+        <button class="code-tab-btn active" data-tab="java">☕ Java</button>
+        <button class="code-tab-btn" data-tab="csharp">🔷 C#</button>
+      </div>
+      <div class="code-tab-content active" data-tab-content="java">
+        <pre><code class="language-java">public class Box&lt;T&gt; {
     private T item;
     public void set(T item) { this.item = item; }
     public T get() { return item; }
-}
-    </pre>
+}</code></pre>
+      </div>
+      <div class="code-tab-content" data-tab-content="csharp">
+        <pre><code class="language-csharp">public class Box&lt;T&gt; {
+    public T? Item { get; set; }
+}</code></pre>
+      </div>
+    </div>
 
     <h2>Comparison Table</h2>
     <div class="table-responsive">

@@ -129,110 +129,107 @@
     <p>In microservices, the rule is <strong>Database Per Service</strong>. Services should never share a database, otherwise they become tightly coupled. But how do you handle a transaction that spans multiple services (like placing an order, deducting inventory, and charging a card)?</p>
     <div class="jargon">📖 <strong>Saga Pattern</strong>: A sequence of local transactions. If one step fails, the system runs <em>compensating transactions</em> to undo the previous steps (e.g., if charging the card fails, run a transaction to add the inventory back).</div>
 
-    <h2>Java 21 Code Example: Refactoring</h2>
-    <p>Let's look at how code changes from a Monolith to Microservices using Java 21's <code>sealed interfaces</code> and records.</p>
+    <h2>Code Example: Monolith vs Orchestrated Microservices</h2>
+    <p>Let's examine how code changes from tightly-coupled in-memory calls to boundary-separated RPC contracts in Java and C#.</p>
     
-    <span class="code-label">Java</span>
-    <pre>
-// ==========================================
-// 1. THE MONOLITH APPROACH
-// Everything in one place, calling methods directly.
-// ==========================================
-class MonolithEcommerceApp {
-    
-    public void checkout(String userId, String itemId) {
-        // Direct, tight coupling
-        boolean inStock = checkInventory(itemId);
-        if (inStock) {
-            boolean paid = chargeUser(userId, 50.0);
-            if (paid) {
-                createOrder(userId, itemId);
-                System.out.println("Monolith: Order placed successfully.");
-            }
-        }
-    }
-    
-    private boolean checkInventory(String itemId) { return true; }
-    private boolean chargeUser(String userId, double amount) { return true; }
-    private void createOrder(String userId, String itemId) {}
-}
-
-// ==========================================
-// 2. THE MICROSERVICES APPROACH
-// Services are isolated and communicate via explicit boundaries.
-// ==========================================
-
-// Domain Models using Records
-record Item(String id, double price) {}
-record User(String id) {}
+    <div class="code-tabs">
+      <div class="code-tabs-header">
+        <button class="code-tab-btn active" data-tab="java">☕ Java 21</button>
+        <button class="code-tab-btn" data-tab="csharp">🔷 C# 12</button>
+      </div>
+      <div class="code-tab-content active" data-tab-content="java">
+        <pre><code class="language-java">// --- Domain Models & Result Types ---
 record Order(String orderId, String userId, String itemId) {}
 
-// A sealed interface represents network communication results
 sealed interface NetworkResponse&lt;T&gt; permits Success, Failure {}
 record Success&lt;T&gt;(T data) implements NetworkResponse&lt;T&gt; {}
 record Failure&lt;T&gt;(String error) implements NetworkResponse&lt;T&gt; {}
 
-// Service 1: Inventory
 class InventoryMicroservice {
     public NetworkResponse&lt;Boolean&gt; reserveItem(String itemId) {
-        // Simulating checking database
         return new Success&lt;&gt;(true);
     }
 }
 
-// Service 2: Payment
 class PaymentMicroservice {
     public NetworkResponse&lt;Boolean&gt; processPayment(String userId, double amount) {
         return new Success&lt;&gt;(true);
     }
 }
 
-// Service 3: Order (The Orchestrator)
 class OrderMicroservice {
     private final InventoryMicroservice inventoryService;
     private final PaymentMicroservice paymentService;
 
-    // In reality, these would be HTTP or gRPC clients, not direct references
     public OrderMicroservice(InventoryMicroservice inv, PaymentMicroservice pay) {
         this.inventoryService = inv;
         this.paymentService = pay;
     }
 
     public void placeOrder(String userId, String itemId) {
-        // Java 21 Pattern Matching with switch
         var inventoryStatus = inventoryService.reserveItem(itemId);
-        
         switch (inventoryStatus) {
-            case Success&lt;Boolean&gt; s when s.data() == true -&gt; {
-                
+            case Success&lt;Boolean&gt; s when s.data() -&gt; {
                 var paymentStatus = paymentService.processPayment(userId, 50.0);
-                
                 switch (paymentStatus) {
-                    case Success&lt;Boolean&gt; p when p.data() == true -&gt; {
-                        System.out.println("Microservices: Order placed successfully.");
-                        // Save to local order DB
-                    }
+                    case Success&lt;Boolean&gt; p when p.data() -&gt; System.out.println("Order placed successfully.");
                     case Success&lt;Boolean&gt; p -&gt; System.out.println("Payment declined.");
-                    case Failure&lt;Boolean&gt; f -&gt; System.out.println("Payment service down: " + f.error());
+                    case Failure&lt;Boolean&gt; f -&gt; System.out.println("Payment failed: " + f.error());
                 }
             }
             case Success&lt;Boolean&gt; s -&gt; System.out.println("Item out of stock.");
-            case Failure&lt;Boolean&gt; f -&gt; System.out.println("Inventory service down: " + f.error());
+            case Failure&lt;Boolean&gt; f -&gt; System.out.println("Inventory failed: " + f.error());
         }
     }
+}</code></pre>
+      </div>
+      <div class="code-tab-content" data-tab-content="csharp">
+        <pre><code class="language-csharp">public record Order(string OrderId, string UserId, string ItemId);
+
+public abstract record Result&lt;T&gt;
+{
+    public sealed record Success(T Data) : Result&lt;T&gt;;
+    public sealed record Failure(string Error) : Result&lt;T&gt;;
 }
 
-public class MicroserviceDemo {
-    public static void main(String[] args) {
-        new MonolithEcommerceApp().checkout("user123", "item456");
-        
-        var inventory = new InventoryMicroservice();
-        var payment = new PaymentMicroservice();
-        var order = new OrderMicroservice(inventory, payment);
-        order.placeOrder("user123", "item456");
-    }
+public class InventoryClient
+{
+    public Task&lt;Result&lt;bool&gt;&gt; ReserveItemAsync(string itemId, CancellationToken ct = default) =&gt;
+        Task.FromResult&lt;Result&lt;bool&gt;&gt;(new Result&lt;bool&gt;.Success(true));
 }
-    </pre>
+
+public class PaymentClient
+{
+    public Task&lt;Result&lt;bool&gt;&gt; ProcessPaymentAsync(string userId, decimal amount, CancellationToken ct = default) =&gt;
+        Task.FromResult&lt;Result&lt;bool&gt;&gt;(new Result&lt;bool&gt;.Success(true));
+}
+
+public class OrderOrchestrator(InventoryClient inventory, PaymentClient payment)
+{
+    public async Task PlaceOrderAsync(string userId, string itemId, CancellationToken ct = default)
+    {
+        var inventoryResult = await inventory.ReserveItemAsync(itemId, ct);
+
+        if (inventoryResult is not Result&lt;bool&gt;.Success { Data: true })
+        {
+            Console.WriteLine("Inventory reservation rejected or failed.");
+            return;
+        }
+
+        var paymentResult = await payment.ProcessPaymentAsync(userId, 50.0m, ct);
+        var message = paymentResult switch
+        {
+            Result&lt;bool&gt;.Success { Data: true } =&gt; "Microservices: Order completed successfully (.NET 8).",
+            Result&lt;bool&gt;.Success                =&gt; "Payment declined.",
+            Result&lt;bool&gt;.Failure f              =&gt; $"Payment service failed: {f.Error}",
+            _                                   =&gt; "Unknown error"
+        };
+
+        Console.WriteLine(message);
+    }
+}</code></pre>
+      </div>
+    </div>
 
     <h2>Challenges of Microservices</h2>
     <ul>

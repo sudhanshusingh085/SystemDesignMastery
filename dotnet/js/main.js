@@ -2,6 +2,23 @@
 // .NET 8 & C# 12 Mastery — Navigation & Sidebar Utilities
 // ============================================================
 
+// --- Immediate Theme Initialization (prevents FOUC) ---
+(function initThemeImmediately() {
+  try {
+    const saved = localStorage.getItem('sdm-theme');
+    const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+    const theme = saved || (prefersDark ? 'dark' : 'light');
+    document.documentElement.setAttribute('data-theme', theme);
+    if (theme === 'dark') {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+  } catch (e) {
+    console.warn('Theme init error:', e);
+  }
+})();
+
 const DOTNET_NAV_SECTIONS = [
   {
     title: 'Core Interview Curriculum',
@@ -112,9 +129,10 @@ function setupScrollTop() {
 
 function initMermaid() {
   if (typeof mermaid !== 'undefined') {
+    const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
     mermaid.initialize({
       startOnLoad: false,
-      theme: 'default',
+      theme: isDark ? 'dark' : 'default',
       securityLevel: 'loose',
       fontFamily: 'Segoe UI, system-ui, sans-serif'
     });
@@ -122,9 +140,46 @@ function initMermaid() {
   }
 }
 
+// --- Theme Toggle Floating Button ---
+function setupThemeToggle() {
+  let toggle = document.getElementById('theme-toggle');
+  if (!toggle) {
+    toggle = document.createElement('button');
+    toggle.id = 'theme-toggle';
+    toggle.className = 'theme-toggle';
+    toggle.setAttribute('aria-label', 'Toggle dark or light theme');
+    document.body.appendChild(toggle);
+  }
+
+  function updateToggleIcon() {
+    const isDark = document.documentElement.getAttribute('data-theme') === 'dark' || document.documentElement.classList.contains('dark');
+    toggle.innerHTML = isDark ? '☀️' : '🌙';
+    toggle.setAttribute('title', isDark ? 'Switch to Light Mode' : 'Switch to Dark Mode');
+  }
+
+  toggle.addEventListener('click', (e) => {
+    e.preventDefault();
+    const isDark = document.documentElement.getAttribute('data-theme') === 'dark' || document.documentElement.classList.contains('dark');
+    const nextTheme = isDark ? 'light' : 'dark';
+    document.documentElement.setAttribute('data-theme', nextTheme);
+    if (nextTheme === 'dark') {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+    try {
+      localStorage.setItem('sdm-theme', nextTheme);
+    } catch (e) {}
+    updateToggleIcon();
+  });
+
+  updateToggleIcon();
+}
+
 document.addEventListener('DOMContentLoaded', () => {
   buildSidebar();
   setupMenuToggle();
   setupScrollTop();
   initMermaid();
+  setupThemeToggle();
 });

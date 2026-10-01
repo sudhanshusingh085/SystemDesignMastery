@@ -56,9 +56,13 @@
         <p class="caption">Figure 1: The CAP Theorem Triangle</p>
       </div>
 
-      <span class="code-label">Java 21</span>
-      <pre>
-public class CAPSimulation {
+      <div class="code-tabs">
+        <div class="code-tabs-header">
+          <button class="code-tab-btn active" data-tab="java">☕ Java 21</button>
+          <button class="code-tab-btn" data-tab="csharp">🔷 C# 12</button>
+        </div>
+        <div class="code-tab-content active" data-tab-content="java">
+          <pre><code class="language-java">public class CAPSimulation {
     // Simulates a network partition between two nodes
     static boolean networkPartition = true;
     static String node1Data = "V1";
@@ -82,8 +86,41 @@ public class CAPSimulation {
             System.err.println("CP Read Node 2: ERROR - Node isolated, rejecting read to maintain consistency");
         }
     }
-}
-      </pre>
+}</code></pre>
+        </div>
+        <div class="code-tab-content" data-tab-content="csharp">
+          <pre><code class="language-csharp">public class CapSimulation
+{
+    // Simulates a network partition between two nodes
+    private static bool _networkPartition = true;
+    private static string _node1Data = "V1";
+    private static string _node2Data = "V1";
+
+    public static void WriteData(string newData)
+    {
+        _node1Data = newData;
+        if (!_networkPartition)
+        {
+            _node2Data = newData; // Replicate if healthy network
+        }
+    }
+
+    public static void Main()
+    {
+        WriteData("V2"); // Write committed on Node 1
+
+        // AP Mode: Available, stale read tolerated
+        Console.WriteLine($"AP Read Node 2: {_node2Data}"); // "V1"
+
+        // CP Mode: Preserves consistency by failing read during network split
+        if (_networkPartition)
+        {
+            Console.Error.WriteLine("CP Read Node 2: ERROR - Node isolated, rejecting read to maintain consistency");
+        }
+    }
+}</code></pre>
+        </div>
+      </div>
     </section>
 
     <section>
@@ -105,9 +142,13 @@ public class CAPSimulation {
       <h2>5. Consistent Hashing</h2>
       <p>Traditional hashing (hash(key) % N) breaks down when a server is added or removed (N changes), causing almost all keys to be remapped. <div class="jargon">📖 <strong>Consistent Hashing</strong>: Distributes data across a ring such that adding or removing a node only affects a minimal number of keys.</div></p>
       
-      <span class="code-label">Java 21</span>
-      <pre>
-import java.util.SortedMap;
+      <div class="code-tabs">
+        <div class="code-tabs-header">
+          <button class="code-tab-btn active" data-tab="java">☕ Java 21</button>
+          <button class="code-tab-btn" data-tab="csharp">🔷 C# 12</button>
+        </div>
+        <div class="code-tab-content active" data-tab-content="java">
+          <pre><code class="language-java">import java.util.SortedMap;
 import java.util.TreeMap;
 
 public class ConsistentHashRing {
@@ -115,7 +156,7 @@ public class ConsistentHashRing {
     private final int numberOfVirtualNodes = 3;
 
     public void addNode(String nodeName) {
-        for (int i = 0; i < numberOfVirtualNodes; i++) {
+        for (int i = 0; i &lt; numberOfVirtualNodes; i++) {
             int hash = (nodeName + i).hashCode();
             ring.put(hash, nodeName);
         }
@@ -128,8 +169,40 @@ public class ConsistentHashRing {
         int nodeHash = tailMap.isEmpty() ? ring.firstKey() : tailMap.firstKey();
         return ring.get(nodeHash);
     }
-}
-      </pre>
+}</code></pre>
+        </div>
+        <div class="code-tab-content" data-tab-content="csharp">
+          <pre><code class="language-csharp">public class ConsistentHashRing
+{
+    private readonly SortedDictionary&lt;int, string&gt; _ring = new();
+    private const int VirtualNodes = 3;
+
+    public void AddNode(string nodeName)
+    {
+        for (int i = 0; i &lt; VirtualNodes; i++)
+        {
+            int hash = HashCode.Combine(nodeName, i);
+            _ring[hash] = nodeName;
+        }
+    }
+
+    public string? GetNode(string key)
+    {
+        if (_ring.Count == 0) return null;
+        int hash = key.GetHashCode();
+
+        // Binary search seek on sorted keys
+        foreach (var kvp in _ring)
+        {
+            if (kvp.Key &gt;= hash) return kvp.Value;
+        }
+
+        // Wrap around ring
+        return _ring.First().Value;
+    }
+}</code></pre>
+        </div>
+      </div>
     </section>
 
     <section>
@@ -145,9 +218,13 @@ public class ConsistentHashRing {
       <h2>7. Distributed Locks</h2>
       <p>In a single machine, you use `synchronized` or `ReentrantLock`. In a distributed system, you need an external store like Redis or ZooKeeper.</p>
       
-      <span class="code-label">Java 21</span>
-      <pre>
-public interface DistributedLock {
+      <div class="code-tabs">
+        <div class="code-tabs-header">
+          <button class="code-tab-btn active" data-tab="java">☕ Java 21</button>
+          <button class="code-tab-btn" data-tab="csharp">🔷 C# 12</button>
+        </div>
+        <div class="code-tab-content active" data-tab-content="java">
+          <pre><code class="language-java">public interface DistributedLock {
     boolean acquire(String key, long timeoutMs);
     void release(String key);
 }
@@ -162,12 +239,37 @@ public class RedisLock implements DistributedLock {
     public void release(String key) {
         System.out.println("Releasing lock for " + key);
     }
+}</code></pre>
+        </div>
+        <div class="code-tab-content" data-tab-content="csharp">
+          <pre><code class="language-csharp">public interface IDistributedLock
+{
+    ValueTask&lt;bool&gt; AcquireAsync(string key, TimeSpan timeout, CancellationToken ct = default);
+    ValueTask ReleaseAsync(string key, CancellationToken ct = default);
 }
-      </pre>
+
+public class RedisLock : IDistributedLock
+{
+    public ValueTask&lt;bool&gt; AcquireAsync(string key, TimeSpan timeout, CancellationToken ct = default)
+    {
+        // Typically utilizes StackExchange.Redis LockTakeAsync:
+        // await db.LockTakeAsync(key, token, timeout);
+        Console.WriteLine($"Acquired distributed lock for key: {key}");
+        return ValueTask.FromResult(true);
+    }
+
+    public ValueTask ReleaseAsync(string key, CancellationToken ct = default)
+    {
+        Console.WriteLine($"Released distributed lock for key: {key}");
+        return ValueTask.CompletedTask;
+    }
+}</code></pre>
+        </div>
+      </div>
     </section>
 
     <section>
-      <h2>8. Leader Election & 9. Consensus</h2>
+      <h2>8. Leader Election &amp; 9. Consensus</h2>
       <p>Consensus algorithms (like Raft or Paxos) allow a cluster of machines to agree on values, even if some nodes fail. They often start with <strong>Leader Election</strong> to pick a single coordinator to handle writes.</p>
     </section>
 
@@ -178,9 +280,9 @@ public class RedisLock implements DistributedLock {
       <div class="diagram-container">
         <div class="mermaid">
           graph LR
-            Client -->|Command| WriteDB[(Write DB)]
-            WriteDB -.->|Events| ReadDB[(Read DB)]
-            Client -->|Query| ReadDB
+            Client --&gt;|Command| WriteDB[(Write DB)]
+            WriteDB -.-&gt;|Events| ReadDB[(Read DB)]
+            Client --&gt;|Query| ReadDB
         </div>
       </div>
     </section>
@@ -189,9 +291,13 @@ public class RedisLock implements DistributedLock {
       <h2>11. Event Sourcing</h2>
       <p>Instead of storing the current state, store the sequence of events that led to it. Analogy: Your bank balance (current state) is just the sum of all your deposits and withdrawals (events).</p>
       
-      <span class="code-label">Java 21</span>
-      <pre>
-public sealed interface Event permits AccountCreated, MoneyDeposited {}
+      <div class="code-tabs">
+        <div class="code-tabs-header">
+          <button class="code-tab-btn active" data-tab="java">☕ Java 21</button>
+          <button class="code-tab-btn" data-tab="csharp">🔷 C# 12</button>
+        </div>
+        <div class="code-tab-content active" data-tab-content="java">
+          <pre><code class="language-java">public sealed interface Event permits AccountCreated, MoneyDeposited {}
 record AccountCreated(String id, double initialBalance) implements Event {}
 record MoneyDeposited(String id, double amount) implements Event {}
 
@@ -202,13 +308,38 @@ public class BankAccount {
     public void apply(List&lt;Event&gt; events) {
         for (Event e : events) {
             switch (e) {
-                case AccountCreated ac -> this.balance = ac.initialBalance();
-                case MoneyDeposited md -> this.balance += md.amount();
+                case AccountCreated ac -&gt; this.balance = ac.initialBalance();
+                case MoneyDeposited md -&gt; this.balance += md.amount();
             }
         }
     }
-}
-      </pre>
+}</code></pre>
+        </div>
+        <div class="code-tab-content" data-tab-content="csharp">
+          <pre><code class="language-csharp">public abstract record Event;
+public sealed record AccountCreated(string Id, decimal InitialBalance) : Event;
+public sealed record MoneyDeposited(string Id, decimal Amount) : Event;
+
+public class BankAccount
+{
+    public decimal Balance { get; private set; }
+
+    // Replay event stream to reconstruct state (C# 12 pattern matching)
+    public void Apply(IEnumerable&lt;Event&gt; events)
+    {
+        foreach (var e in events)
+        {
+            Balance = e switch
+            {
+                AccountCreated ac =&gt; ac.InitialBalance,
+                MoneyDeposited md =&gt; Balance + md.Amount,
+                _                 =&gt; Balance
+            };
+        }
+    }
+}</code></pre>
+        </div>
+      </div>
     </section>
 
     <section>
@@ -220,10 +351,24 @@ public class BankAccount {
       <h2>13. Outbox Pattern</h2>
       <p>Ensures a message is reliably sent to a queue when a database transaction commits. You save the business entity AND an `OutboxMessage` in the same database transaction. A background worker then publishes the outbox messages to Kafka/RabbitMQ.</p>
       
-      <span class="code-label">Java 21</span>
-      <pre>
-public record OutboxMessage(UUID id, String topic, String payload, boolean processed) {}
-      </pre>
+      <div class="code-tabs">
+        <div class="code-tabs-header">
+          <button class="code-tab-btn active" data-tab="java">☕ Java 21</button>
+          <button class="code-tab-btn" data-tab="csharp">🔷 C# 12</button>
+        </div>
+        <div class="code-tab-content active" data-tab-content="java">
+          <pre><code class="language-java">public record OutboxMessage(UUID id, String topic, String payload, boolean processed) {}</code></pre>
+        </div>
+        <div class="code-tab-content" data-tab-content="csharp">
+          <pre><code class="language-csharp">public record OutboxMessage(
+    Guid Id,
+    string Topic,
+    string Payload,
+    DateTime CreatedAtUtc,
+    bool Processed = false
+);</code></pre>
+        </div>
+      </div>
     </section>
 
     <section>

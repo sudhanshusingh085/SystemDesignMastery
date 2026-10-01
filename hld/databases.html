@@ -130,14 +130,16 @@
       <h2>Java 21 Code: Shard Routing</h2>
       <p>Here is a basic abstraction of how application code might route a request to a specific database shard using modern Java.</p>
       
-      <span class="code-label">Java</span>
-      <pre>
-import java.util.List;
+      <div class="code-tabs">
+        <div class="code-tabs-header">
+          <button class="code-tab-btn active" data-tab="java">☕ Java 21</button>
+          <button class="code-tab-btn" data-tab="csharp">🔷 C# 12</button>
+        </div>
+        <div class="code-tab-content active" data-tab-content="java">
+          <pre><code class="language-java">import java.util.List;
 
-// Abstract representation of a database connection
 record DatabaseShard(String dbUrl, String name) {}
 
-// Strategy for picking a shard
 sealed interface ShardingStrategy permits HashSharding, RangeSharding {
     DatabaseShard getShard(String shardKey);
 }
@@ -151,10 +153,8 @@ final class HashSharding implements ShardingStrategy {
 
     @Override
     public DatabaseShard getShard(String shardKey) {
-        // Simple modulo hash to distribute keys evenly
         int hash = Math.abs(shardKey.hashCode());
-        int shardIndex = hash % shards.size();
-        return shards.get(shardIndex);
+        return shards.get(hash % shards.size());
     }
 }
 
@@ -169,12 +169,10 @@ final class RangeSharding implements ShardingStrategy {
 
     @Override
     public DatabaseShard getShard(String shardKey) {
-        // e.g., ShardKey is a User ID string
         char firstChar = shardKey.toUpperCase().charAt(0);
-        // A to M goes to Shard A, N to Z goes to Shard B
         return switch (firstChar) {
-            case 'A','B','C','D','E','F','G','H','I','J','K','L','M' -> shardA;
-            default -> shardB;
+            case 'A','B','C','D','E','F','G','H','I','J','K','L','M' -&gt; shardA;
+            default -&gt; shardB;
         };
     }
 }
@@ -186,15 +184,58 @@ public class ShardRouterDemo {
             new DatabaseShard("jdbc:mysql://db2", "Shard-1"),
             new DatabaseShard("jdbc:mysql://db3", "Shard-2")
         );
-        
         ShardingStrategy router = new HashSharding(shards);
-        
         System.out.println("User_999 goes to: " + router.getShard("User_999").name());
-        System.out.println("User_42  goes to: " + router.getShard("User_42").name());
-        System.out.println("User_7   goes to: " + router.getShard("User_7").name());
+    }
+}</code></pre>
+        </div>
+        <div class="code-tab-content" data-tab-content="csharp">
+          <pre><code class="language-csharp">public record DatabaseShard(string DbUrl, string Name);
+
+public interface IShardingStrategy
+{
+    DatabaseShard GetShard(string shardKey);
+}
+
+public sealed class HashSharding(IReadOnlyList&lt;DatabaseShard&gt; shards) : IShardingStrategy
+{
+    public DatabaseShard GetShard(string shardKey)
+    {
+        uint hash = unchecked((uint)shardKey.GetHashCode());
+        return shards[(int)(hash % shards.Count)];
     }
 }
-      </pre>
+
+public sealed class RangeSharding(DatabaseShard shardA, DatabaseShard shardB) : IShardingStrategy
+{
+    public DatabaseShard GetShard(string shardKey)
+    {
+        char firstChar = char.ToUpperInvariant(shardKey[0]);
+        return firstChar switch
+        {
+            &gt;= 'A' and &lt;= 'M' =&gt; shardA,
+            _                 =&gt; shardB
+        };
+    }
+}
+
+public static class Program
+{
+    public static void Main()
+    {
+        var shards = new DatabaseShard[]
+        {
+            new("Server=db1;Database=Shard0", "Shard-0"),
+            new("Server=db2;Database=Shard1", "Shard-1"),
+            new("Server=db3;Database=Shard2", "Shard-2")
+        };
+
+        IShardingStrategy router = new HashSharding(shards);
+        Console.WriteLine($"User_999 routed to: {router.GetShard("User_999").Name}");
+    }
+}</code></pre>
+        </div>
+      </div>
     </section>
 
     <section>

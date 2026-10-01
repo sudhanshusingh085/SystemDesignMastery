@@ -77,9 +77,13 @@
       <h2>4. Indexing Deep Dive</h2>
       <p>An <div class="jargon">📖 <strong>Index</strong>: A data structure (usually a B-Tree) that improves the speed of data retrieval operations.</div> is like the index at the back of a book. Instead of reading every page (a full table scan), you look up the word and jump straight to the page.</p>
       
-      <span class="code-label">Java 21</span>
-      <pre>
-import java.util.*;
+      <div class="code-tabs">
+        <div class="code-tabs-header">
+          <button class="code-tab-btn active" data-tab="java">☕ Java 21</button>
+          <button class="code-tab-btn" data-tab="csharp">🔷 C# 12</button>
+        </div>
+        <div class="code-tab-content active" data-tab-content="java">
+          <pre><code class="language-java">import java.util.*;
 
 public class IndexSimulation {
     record User(int id, String email) {}
@@ -88,7 +92,7 @@ public class IndexSimulation {
         List&lt;User&gt; table = new ArrayList&lt;&gt;();
         Map&lt;String, User&gt; index = new HashMap&lt;&gt;(); // Simulating an index
         
-        for (int i = 0; i < 1_000_000; i++) {
+        for (int i = 0; i &lt; 1_000_000; i++) {
             User u = new User(i, "user" + i + "@test.com");
             table.add(u);
             index.put(u.email(), u);
@@ -96,18 +100,54 @@ public class IndexSimulation {
         
         String target = "user999999@test.com";
         
-        // Full Table Scan
+        // Full Table Scan - O(N)
         long startScan = System.nanoTime();
-        User foundScan = table.stream().filter(u -> u.email().equals(target)).findFirst().orElse(null);
+        User foundScan = table.stream().filter(u -&gt; u.email().equals(target)).findFirst().orElse(null);
         System.out.println("Scan took: " + (System.nanoTime() - startScan) + " ns");
         
-        // Index Lookup
+        // Index Lookup - O(1)
         long startIndex = System.nanoTime();
         User foundIndex = index.get(target);
         System.out.println("Index took: " + (System.nanoTime() - startIndex) + " ns");
     }
-}
-      </pre>
+}</code></pre>
+        </div>
+        <div class="code-tab-content" data-tab-content="csharp">
+          <pre><code class="language-csharp">using System.Diagnostics;
+
+public class IndexSimulation
+{
+    public record User(int Id, string Email);
+
+    public static void Main()
+    {
+        var table = new List&lt;User&gt;(1_000_000);
+        var index = new Dictionary&lt;string, User&gt;(1_000_000); // Hash index simulation
+
+        for (int i = 0; i &lt; 1_000_000; i++)
+        {
+            var u = new User(i, $"user{i}@test.com");
+            table.Add(u);
+            index[u.Email] = u;
+        }
+
+        string target = "user999999@test.com";
+
+        // Full Table Scan - O(N) linear iteration
+        var sw = Stopwatch.StartNew();
+        var foundScan = table.FirstOrDefault(u =&gt; u.Email == target);
+        sw.Stop();
+        Console.WriteLine($"Full Table Scan: {sw.ElapsedTicks * 100} ns");
+
+        // Index Lookup - O(1) dictionary seek
+        sw.Restart();
+        index.TryGetValue(target, out var foundIndex);
+        sw.Stop();
+        Console.WriteLine($"Index Lookup: {sw.ElapsedTicks * 100} ns");
+    }
+}</code></pre>
+        </div>
+      </div>
     </section>
 
     <section>
@@ -143,9 +183,13 @@ public class IndexSimulation {
       <p>Opening a database connection is expensive (network handshake, authentication). A <div class="jargon">📖 <strong>Connection Pool</strong>: A cache of database connections maintained so that connections can be reused.</div> keeps connections open.</p>
       <p>Analogy: It's like a taxi stand. Instead of calling a company and waiting for a new taxi to arrive for every trip, taxis are already waiting at the stand ready to go.</p>
       
-      <span class="code-label">Java 21</span>
-      <pre>
-// Simplified Simulation
+      <div class="code-tabs">
+        <div class="code-tabs-header">
+          <button class="code-tab-btn active" data-tab="java">☕ Java 21</button>
+          <button class="code-tab-btn" data-tab="csharp">🔷 C# 12</button>
+        </div>
+        <div class="code-tab-content active" data-tab-content="java">
+          <pre><code class="language-java">// Simplified Simulation
 import java.util.concurrent.*;
 
 public class ConnectionPoolSimulation {
@@ -153,7 +197,7 @@ public class ConnectionPoolSimulation {
 
     public ConnectionPoolSimulation(int poolSize) {
         pool = new ArrayBlockingQueue&lt;&gt;(poolSize);
-        for (int i = 0; i < poolSize; i++) {
+        for (int i = 0; i &lt; poolSize; i++) {
             pool.offer("Connection-" + i);
         }
     }
@@ -165,12 +209,46 @@ public class ConnectionPoolSimulation {
     public void releaseConnection(String connection) {
         pool.offer(connection);
     }
-}
-      </pre>
+}</code></pre>
+        </div>
+        <div class="code-tab-content" data-tab-content="csharp">
+          <pre><code class="language-csharp">using System.Threading.Channels;
+
+public class ConnectionPoolSimulation
+{
+    private readonly Channel&lt;string&gt; _pool;
+
+    public ConnectionPoolSimulation(int poolSize)
+    {
+        var options = new BoundedChannelOptions(poolSize)
+        {
+            FullMode = BoundedChannelFullMode.Wait
+        };
+        _pool = Channel.CreateBounded&lt;string&gt;(options);
+
+        for (int i = 0; i &lt; poolSize; i++)
+        {
+            _pool.Writer.TryWrite($"Connection-{i}");
+        }
+    }
+
+    public async ValueTask&lt;string&gt; GetConnectionAsync(CancellationToken ct = default)
+    {
+        // Non-blocking async wait when pool is depleted
+        return await _pool.Reader.ReadAsync(ct);
+    }
+
+    public async ValueTask ReleaseConnectionAsync(string connection)
+    {
+        await _pool.Writer.WriteAsync(connection);
+    }
+}</code></pre>
+        </div>
+      </div>
     </section>
 
     <section>
-      <h2>8. Transactions & Isolation Levels</h2>
+      <h2>8. Transactions &amp; Isolation Levels</h2>
       <p>A transaction is a unit of work that is fully completed or fully rolled back (ACID properties).</p>
       <table>
         <tr><th>Isolation Level</th><th>Dirty Read</th><th>Non-Repeatable Read</th><th>Phantom Read</th></tr>
@@ -188,9 +266,13 @@ public class ConnectionPoolSimulation {
 
     <section>
       <h2>10. Repository Pattern Example</h2>
-      <span class="code-label">Java 21</span>
-      <pre>
-public record User(int id, String name) {}
+      <div class="code-tabs">
+        <div class="code-tabs-header">
+          <button class="code-tab-btn active" data-tab="java">☕ Java 21</button>
+          <button class="code-tab-btn" data-tab="csharp">🔷 C# 12</button>
+        </div>
+        <div class="code-tab-content active" data-tab-content="java">
+          <pre><code class="language-java">public record User(int id, String name) {}
 
 public interface UserRepository {
     Optional&lt;User&gt; findById(int id);
@@ -210,8 +292,38 @@ public class InMemoryUserRepository implements UserRepository {
     public void save(User user) {
         store.put(user.id(), user);
     }
+}</code></pre>
+        </div>
+        <div class="code-tab-content" data-tab-content="csharp">
+          <pre><code class="language-csharp">using System.Collections.Concurrent;
+
+public record User(int Id, string Name);
+
+public interface IUserRepository
+{
+    ValueTask&lt;User?&gt; FindByIdAsync(int id, CancellationToken ct = default);
+    ValueTask SaveAsync(User user, CancellationToken ct = default);
 }
-      </pre>
+
+// In-Memory concurrent thread-safe implementation
+public class InMemoryUserRepository : IUserRepository
+{
+    private readonly ConcurrentDictionary&lt;int, User&gt; _store = new();
+
+    public ValueTask&lt;User?&gt; FindByIdAsync(int id, CancellationToken ct = default)
+    {
+        _store.TryGetValue(id, out var user);
+        return ValueTask.FromResult(user);
+    }
+
+    public ValueTask SaveAsync(User user, CancellationToken ct = default)
+    {
+        _store[user.Id] = user;
+        return ValueTask.CompletedTask;
+    }
+}</code></pre>
+        </div>
+      </div>
     </section>
 
     <div class="page-nav">

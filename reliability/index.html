@@ -27,16 +27,19 @@ stateDiagram-v2
 <p class="caption">Figure 1: Circuit Breaker States</p>
 </div>
 
-<span class="code-label">Java 21</span>
-<pre>
-public class CircuitBreakerDemo {
-    // Java 21 sealed interface for states
+<div class="code-tabs">
+  <div class="code-tabs-header">
+    <button class="code-tab-btn active" data-tab="java">☕ Java 21</button>
+    <button class="code-tab-btn" data-tab="csharp">🔷 C# 12</button>
+  </div>
+  <div class="code-tab-content active" data-tab-content="java">
+    <pre><code class="language-java">public class CircuitBreakerDemo {
     sealed interface State permits Closed, Open, HalfOpen {}
     record Closed() implements State {}
     record Open(long openedAt) implements State {}
     record HalfOpen() implements State {}
 
-    public class CircuitBreaker {
+    public static class CircuitBreaker {
         private State state = new Closed();
         private int failureCount = 0;
         private final int threshold = 3;
@@ -67,15 +70,68 @@ public class CircuitBreakerDemo {
             };
         }
     }
+}</code></pre>
+  </div>
+  <div class="code-tab-content" data-tab-content="csharp">
+    <pre><code class="language-csharp">public abstract record CircuitState
+{
+    public sealed record Closed : CircuitState;
+    public sealed record Open(DateTime OpenedAtUtc) : CircuitState;
+    public sealed record HalfOpen : CircuitState;
 }
-</pre>
+
+public class CircuitBreaker(int threshold = 3, TimeSpan timeout = default)
+{
+    private CircuitState _state = new CircuitState.Closed();
+    private int _failureCount;
+    private readonly TimeSpan _timeout = timeout == default ? TimeSpan.FromSeconds(5) : timeout;
+    private readonly object _lock = new();
+
+    public void RecordFailure()
+    {
+        lock (_lock)
+        {
+            if (_state is CircuitState.Closed)
+            {
+                if (++_failureCount >= threshold)
+                    _state = new CircuitState.Open(DateTime.UtcNow);
+            }
+            else if (_state is CircuitState.HalfOpen)
+            {
+                _state = new CircuitState.Open(DateTime.UtcNow);
+            }
+        }
+    }
+
+    public bool AllowRequest()
+    {
+        lock (_lock)
+        {
+            return _state switch
+            {
+                CircuitState.Closed =&gt; true,
+                CircuitState.Open o when DateTime.UtcNow - o.OpenedAtUtc &gt; _timeout =&gt;
+                    (_state = new CircuitState.HalfOpen()) is not null,
+                CircuitState.Open =&gt; false,
+                CircuitState.HalfOpen =&gt; true,
+                _ =&gt; false
+            };
+        }
+    }
+}</code></pre>
+  </div>
+</div>
 
 <h2>3. Retry with Exponential Backoff</h2>
 <p>If a request fails temporarily, try again. But instead of hammering the system, wait longer between each retry (exponential backoff) and add randomness (jitter) to prevent thundering herd problems.</p>
 
-<span class="code-label">Java 21</span>
-<pre>
-import java.util.concurrent.ThreadLocalRandom;
+<div class="code-tabs">
+  <div class="code-tabs-header">
+    <button class="code-tab-btn active" data-tab="java">☕ Java 21</button>
+    <button class="code-tab-btn" data-tab="csharp">🔷 C# 12</button>
+  </div>
+  <div class="code-tab-content active" data-tab-content="java">
+    <pre><code class="language-java">import java.util.concurrent.ThreadLocalRandom;
 
 public class RetryHandler {
     private final int maxRetries = 3;
@@ -86,61 +142,108 @@ public class RetryHandler {
         int attempt = 0;
         long delay = initialDelayMs;
         
-        while (attempt < maxRetries) {
+        while (attempt &lt; maxRetries) {
             try {
                 action.run();
-                return; // Success
+                return;
             } catch (Exception e) {
                 attempt++;
                 if (attempt == maxRetries) throw e;
-                
-                // Add jitter (randomness) to avoid thundering herd
                 long jitter = ThreadLocalRandom.current().nextLong(delay / 2);
-                sleep(delay + jitter);
+                try { Thread.sleep(delay + jitter); } catch (InterruptedException ie) { Thread.currentThread().interrupt(); }
                 delay *= multiplier;
             }
         }
     }
-    
-    private void sleep(long millis) {
-        try { Thread.sleep(millis); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+}</code></pre>
+  </div>
+  <div class="code-tab-content" data-tab-content="csharp">
+    <pre><code class="language-csharp">public class RetryHandler(int maxRetries = 3, int initialDelayMs = 100, double multiplier = 2.0)
+{
+    public async Task ExecuteWithRetryAsync(Func&lt;Task&gt; action, CancellationToken ct = default)
+    {
+        int attempt = 0;
+        double delayMs = initialDelayMs;
+
+        while (attempt &lt; maxRetries)
+        {
+            try
+            {
+                await action();
+                return; // Success
+            }
+            catch (Exception) when (++attempt &lt; maxRetries)
+            {
+                // Full jitter pattern to avoid thundering herds
+                int jitterMs = Random.Shared.Next(0, (int)(delayMs / 2));
+                await Task.Delay(TimeSpan.FromMilliseconds(delayMs + jitterMs), ct);
+                delayMs *= multiplier;
+            }
+        }
     }
-}
-</pre>
+}</code></pre>
+  </div>
+</div>
 
 <h2>4. Timeout</h2>
 <p>Never wait forever for a response. If a service is hanging, it can lock up your threads.</p>
 <p><strong>Real-World Analogy:</strong> A restaurant customer leaves if they've been waiting for their food for over an hour.</p>
 
-<span class="code-label">Java 21</span>
-<pre>
-import java.util.concurrent.CompletableFuture;
+<div class="code-tabs">
+  <div class="code-tabs-header">
+    <button class="code-tab-btn active" data-tab="java">☕ Java 21</button>
+    <button class="code-tab-btn" data-tab="csharp">🔷 C# 12</button>
+  </div>
+  <div class="code-tab-content active" data-tab-content="java">
+    <pre><code class="language-java">import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 
 public class TimeoutWrapper {
     public void executeWithTimeout() {
-        CompletableFuture&lt;String&gt; future = CompletableFuture.supplyAsync(() -> {
-            // Long running network call
+        CompletableFuture&lt;String&gt; future = CompletableFuture.supplyAsync(() -&gt; {
             return "Result";
         });
         
-        // Java 21 CompletableFuture timeout support
         future.orTimeout(2, TimeUnit.SECONDS)
-              .exceptionally(ex -> {
+              .exceptionally(ex -&gt; {
                   System.out.println("Operation timed out!");
                   return "Fallback Response";
               });
     }
-}
-</pre>
+}</code></pre>
+  </div>
+  <div class="code-tab-content" data-tab-content="csharp">
+    <pre><code class="language-csharp">public class TimeoutWrapper
+{
+    public static async Task&lt;string&gt; ExecuteWithTimeoutAsync(Func&lt;CancellationToken, Task&lt;string&gt;&gt; operation)
+    {
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
+        try
+        {
+            // .NET 8 Task.WaitAsync with timeout cancellation token
+            return await operation(cts.Token).WaitAsync(TimeSpan.FromSeconds(2), cts.Token);
+        }
+        catch (TimeoutException)
+        {
+            Console.WriteLine("Operation timed out! Falling back to cache/default.");
+            return "Fallback Response (.NET 8)";
+        }
+    }
+}</code></pre>
+  </div>
+</div>
 
 <h2>5. Bulkhead Pattern</h2>
 <p>Isolate different parts of your application so a failure in one area doesn't cascade and take down the entire system.</p>
 <p><strong>Real-World Analogy:</strong> Ship compartments. If the hull is breached in one compartment, water doesn't flood the whole ship.</p>
 
-<span class="code-label">Java 21</span>
-<pre>
-import java.util.concurrent.Semaphore;
+<div class="code-tabs">
+  <div class="code-tabs-header">
+    <button class="code-tab-btn active" data-tab="java">☕ Java 21</button>
+    <button class="code-tab-btn" data-tab="csharp">🔷 C# 12</button>
+  </div>
+  <div class="code-tab-content active" data-tab-content="java">
+    <pre><code class="language-java">import java.util.concurrent.Semaphore;
 
 public class BulkheadExecutor {
     // Only allow 5 concurrent requests to Payment Service
@@ -157,18 +260,45 @@ public class BulkheadExecutor {
             throw new RuntimeException("Payment service is too busy!");
         }
     }
-}
-</pre>
+}</code></pre>
+  </div>
+  <div class="code-tab-content" data-tab-content="csharp">
+    <pre><code class="language-csharp">public class BulkheadExecutor(int maxConcurrency = 5)
+{
+    private readonly SemaphoreSlim _semaphore = new(maxConcurrency, maxConcurrency);
+
+    public async Task ProcessPaymentAsync(Func&lt;Task&gt; task)
+    {
+        // Non-blocking async check: reject immediately if capacity saturated
+        if (await _semaphore.WaitAsync(TimeSpan.Zero))
+        {
+            try
+            {
+                await task();
+            }
+            finally
+            {
+                _semaphore.Release();
+            }
+        }
+        else
+        {
+            throw new InvalidOperationException("Payment bulkhead limit reached! Fast failure applied.");
+        }
+    }
+}</code></pre>
+  </div>
+</div>
 
 <h2>6. Failover</h2>
 <p>Automatically switching to a redundant or standby system upon failure.</p>
 <div class="diagram-container">
 <div class="mermaid">
 flowchart LR
-    A["Client"] -->|Traffic| B["Load Balancer"]
-    B -->|"Primary (Active)"| C["Server 1"]
-    B -.->|"Failover (Passive)"| D["Server 2"]
-    C -.->|"Heartbeat fails"| B
+    A["Client"] --&gt;|Traffic| B["Load Balancer"]
+    B --&gt;|"Primary (Active)"| C["Server 1"]
+    B -.-&gt;|"Failover (Passive)"| D["Server 2"]
+    C -.-&gt;|"Heartbeat fails"| B
 </div>
 <p class="caption">Figure 2: Active-Passive Failover</p>
 </div>
@@ -178,9 +308,14 @@ flowchart LR
 
 <h2>8. Health Checks</h2>
 <p>Load balancers need to know if a server is alive before sending it traffic.</p>
-<span class="code-label">Java 21</span>
-<pre>
-import java.util.List;
+
+<div class="code-tabs">
+  <div class="code-tabs-header">
+    <button class="code-tab-btn active" data-tab="java">☕ Java 21</button>
+    <button class="code-tab-btn" data-tab="csharp">🔷 C# 12</button>
+  </div>
+  <div class="code-tab-content active" data-tab-content="java">
+    <pre><code class="language-java">import java.util.List;
 
 public class HealthCheckDemo {
     interface HealthCheck {
@@ -193,12 +328,33 @@ public class HealthCheckDemo {
     
     record CompositeHealthCheck(List&lt;HealthCheck&gt; checks) implements HealthCheck {
         public boolean isHealthy() {
-            // Pattern matching / lambda combo
             return checks.stream().allMatch(HealthCheck::isHealthy);
         }
     }
+}</code></pre>
+  </div>
+  <div class="code-tab-content" data-tab-content="csharp">
+    <pre><code class="language-csharp">public interface IHealthCheck
+{
+    ValueTask&lt;bool&gt; CheckHealthAsync(CancellationToken ct = default);
 }
-</pre>
+
+public sealed record DatabaseHealthCheck : IHealthCheck
+{
+    public ValueTask&lt;bool&gt; CheckHealthAsync(CancellationToken ct = default) =&gt;
+        ValueTask.FromResult(true); // Pings database connection
+}
+
+public sealed class CompositeHealthCheck(IEnumerable&lt;IHealthCheck&gt; checks) : IHealthCheck
+{
+    public async ValueTask&lt;bool&gt; CheckHealthAsync(CancellationToken ct = default)
+    {
+        var results = await Task.WhenAll(checks.Select(c =&gt; c.CheckHealthAsync(ct).AsTask()));
+        return results.All(r =&gt; r);
+    }
+}</code></pre>
+  </div>
+</div>
 
 <h2>9. Graceful Degradation</h2>
 <p>If a non-critical feature fails, return a partial result instead of crashing the whole page.</p>

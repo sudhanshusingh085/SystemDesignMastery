@@ -40,6 +40,37 @@
   --sidebar-width: 290px;
 }
 
+/* --- Dark Theme Variables --- */
+[data-theme="dark"], html.dark {
+  --bg: #0b0f19;
+  --bg-card: #151e2e;
+  --bg-code: #070a12;
+  --text: #f1f5f9;
+  --text-muted: #94a3b8;
+  --text-light: #64748b;
+  --border: #243046;
+
+  --primary: #818cf8;
+  --primary-dark: #a5b4fc;
+  --primary-light: rgba(129, 140, 248, 0.15);
+
+  --accent: #38bdf8;
+  --accent-light: rgba(56, 189, 248, 0.15);
+
+  --success: #34d399;
+  --success-light: rgba(52, 211, 153, 0.15);
+
+  --danger: #f87171;
+  --danger-light: rgba(248, 113, 113, 0.15);
+
+  --warning: #fbbf24;
+  --warning-light: rgba(251, 191, 36, 0.15);
+
+  --shadow: 0 1px 3px rgba(0,0,0,0.5), 0 1px 2px rgba(0,0,0,0.4);
+  --shadow-md: 0 4px 6px rgba(0,0,0,0.5), 0 2px 4px rgba(0,0,0,0.4);
+  --shadow-lg: 0 10px 15px rgba(0,0,0,0.6), 0 4px 6px rgba(0,0,0,0.4);
+}
+
 html { scroll-behavior: smooth; font-size: 16px; }
 
 body {
@@ -58,7 +89,7 @@ body {
 
 .sidebar {
   width: var(--sidebar-width);
-  background: #ffffff;
+  background: var(--bg-card);
   border-right: 1px solid var(--border);
   padding: 1.5rem 1rem;
   position: fixed;
@@ -147,10 +178,10 @@ body {
 .breadcrumb a:hover, .breadcrumbs a:hover { text-decoration: underline; }
 
 /* --- Typography --- */
-h1 { font-size: 2.2rem; margin-bottom: 0.75rem; color: #0f172a; line-height: 1.2; }
-h2 { font-size: 1.6rem; margin-top: 2.5rem; margin-bottom: 1rem; color: #1e1b4b; border-bottom: 2px solid var(--border); padding-bottom: 0.4rem; }
-h3 { font-size: 1.25rem; margin-top: 1.8rem; margin-bottom: 0.6rem; color: var(--primary-dark); }
-h4 { font-size: 1.05rem; margin-top: 1.2rem; margin-bottom: 0.4rem; color: #334155; }
+h1 { font-size: 2.2rem; margin-bottom: 0.75rem; color: var(--text); line-height: 1.2; }
+h2 { font-size: 1.6rem; margin-top: 2.5rem; margin-bottom: 1rem; color: var(--text); border-bottom: 2px solid var(--border); padding-bottom: 0.4rem; }
+h3 { font-size: 1.25rem; margin-top: 1.8rem; margin-bottom: 0.6rem; color: var(--primary); }
+h4 { font-size: 1.05rem; margin-top: 1.2rem; margin-bottom: 0.4rem; color: var(--text-muted); }
 p { margin-bottom: 1.2rem; }
 ul, ol { margin-bottom: 1.2rem; padding-left: 1.5rem; }
 li { margin-bottom: 0.4rem; }
@@ -194,7 +225,7 @@ li { margin-bottom: 0.4rem; }
   border-radius: var(--radius-sm);
   margin: 1.5rem 0;
   border-left: 5px solid var(--primary);
-  background: #fdfdfd;
+  background: var(--bg-card);
   box-shadow: var(--shadow);
 }
 .callout-title { font-weight: 700; margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.5rem; }
@@ -267,11 +298,11 @@ th {
   font-weight: 700;
   color: #334155;
 }
-tr:hover td { background: #f8fafc; }
+tr:hover td { background: rgba(0, 0, 0, 0.02); }
 
 /* --- Mermaid Containers --- */
 .mermaid {
-  background: #ffffff;
+  background: var(--bg-card);
   padding: 1.5rem;
   border-radius: var(--radius-sm);
   border: 1px solid var(--border);
@@ -302,3 +333,83 @@ tr:hover td { background: #f8fafc; }
   z-index: 99;
 }
 .scroll-top:hover { opacity: 1; }
+
+/* --- Dark Mode Specific Component Adjustments --- */
+[data-theme="dark"] code,
+html.dark code {
+  background: rgba(255, 255, 255, 0.08);
+  color: #38bdf8;
+  border: 1px solid var(--border);
+}
+
+[data-theme="dark"] pre code,
+html.dark pre code {
+  background: transparent;
+  border: none;
+}
+
+[data-theme="dark"] th,
+html.dark th {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text);
+}
+
+[data-theme="dark"] tr:hover td,
+html.dark tr:hover td {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+[data-theme="dark"] .interview-box,
+[data-theme="dark"] .interview-script,
+html.dark .interview-box,
+html.dark .interview-script {
+  background: rgba(81, 43, 212, 0.15);
+  border-color: rgba(129, 140, 248, 0.3);
+}
+
+[data-theme="dark"] .callout-info .callout-title,
+html.dark .callout-info .callout-title {
+  color: #38bdf8;
+}
+
+[data-theme="dark"] .callout-warning .callout-title,
+html.dark .callout-warning .callout-title {
+  color: #fbbf24;
+}
+
+[data-theme="dark"] .callout-danger .callout-title,
+html.dark .callout-danger .callout-title {
+  color: #f87171;
+}
+
+[data-theme="dark"] .callout-success .callout-title,
+html.dark .callout-success .callout-title {
+  color: #34d399;
+}
+
+/* Floating Theme Toggle Button */
+.theme-toggle {
+  position: fixed;
+  bottom: 1.5rem;
+  right: 5rem;
+  background: var(--bg-card);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  width: 44px;
+  height: 44px;
+  font-size: 1.2rem;
+  cursor: pointer;
+  box-shadow: var(--shadow-md);
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.2s, background 0.2s, border-color 0.2s;
+  user-select: none;
+}
+
+.theme-toggle:hover {
+  transform: scale(1.1);
+  border-color: var(--primary);
+}

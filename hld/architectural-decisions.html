@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Architectural Decision Matrix: Why This, Why Not That? — System Design Mastery</title>
+  <link rel="stylesheet" href="../css/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.0/dist/mermaid.min.js"></script>
+  <script src="../js/main.js" defer></script>
+</head>
+<body>
+<button class="menu-toggle" aria-label="Toggle menu">☰</button>
+
+<div class="page-wrapper">
+  <aside class="sidebar" id="sidebar"></aside>
+
+  <main class="main-content">
+    <div class="platform-switcher">
+      <span>Mastery Portals:</span>
+      <a href="../index.html" class="active">🏛️ System Design</a>
+      <a href="../corejava/index.html">☕ Core Java 21</a>
+      <a href="../sqlserver/index.html">🗄️ MS SQL Server</a>
+      <a href="../dotnet/index.html">🔷 .NET 8 / C# 12</a>
+    </div>
+
+    <nav class="breadcrumb">
+      <a href="../index.html">Home</a> &gt; <a href="index.html">HLD</a> &gt; <span>Architectural Decisions: Why This, Why Not That?</span>
+    </nav>
+
+    <header>
+      <h1>⚖️ Architectural Decision Matrix: Why This, Why Not That?</h1>
+      <p class="subtitle">
+        The ultimate Senior &amp; Principal interview differentiator. In real-world system design interviews, you are not evaluated on drawing boxes; you are evaluated on <strong>justifying why you chose technology X over technology Y</strong>, defending against trade-offs, and recognizing when an alternative is superior.
+      </p>
+    </header>
+
+    <div class="callout callout-info">
+      <div class="callout-title">🎯 The Senior Interview Golden Rule</div>
+      <p><em>"There are no solutions in distributed systems, only trade-offs."</em> When an interviewer asks, <em>"Why did you use Kafka instead of RabbitMQ?"</em> or <em>"Why MongoDB instead of Postgres?"</em>, answering <em>"Because Kafka is fast"</em> is an instant failure. You must articulate the exact operational mechanics, read/write patterns, and trade-offs.</p>
+    </div>
+
+    <!-- 1. DATABASE DECISION MATRIX -->
+    <section id="databases">
+      <h2>1. Database Selection: SQL vs NoSQL vs NewSQL</h2>
+
+      <div class="mermaid">
+flowchart TD
+    Data{"What is the Primary Data Shape &amp; Transaction Requirement?"}
+    Data -->|Strict ACID, Relational Schema, Financial Ledger| RDBMS["Relational SQL (PostgreSQL, MySQL, SQL Server)"]
+    Data -->|Key-Value Lookup, Extreme Sub-ms Latency| KV["Key-Value Store (Redis, DynamoDB)"]
+    Data -->|Massive Write Volume, Time-Series, Wide Columns| Wide["Wide-Column Store (Cassandra, ScyllaDB)"]
+    Data -->|Unstructured JSON, Dynamic Attributes| Doc["Document Store (MongoDB, Couchbase)"]
+    Data -->|Globally Distributed ACID Transactions| NewSQL["NewSQL (Google Spanner, CockroachDB)"]
+      </div>
+
+      <table class="comparison-table">
+        <thead>
+          <tr>
+            <th>Technology Chosen</th>
+            <th>The Alternative Considered</th>
+            <th>WHY THIS? (Winning Strengths)</th>
+            <th>WHY NOT THE OTHER? (Disqualifying Trade-offs)</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Relational SQL</strong><br/>(PostgreSQL / MySQL)</td>
+            <td><strong>Document NoSQL</strong><br/>(MongoDB)</td>
+            <td>
+              • Strict <strong>ACID transactions</strong> across multiple tables.<br/>
+              • Enforces foreign-key referential integrity at the engine level.<br/>
+              • Complex multi-table joins, window functions, and analytics.
+            </td>
+            <td>
+              • MongoDB embeds or references documents without atomic cross-collection constraints.<br/>
+              • Relational joins in MongoDB (<code>$lookup</code>) are slow and not optimized.<br/>
+              • Schema drift and silent data inconsistencies under concurrent writes.
+            </td>
+          </tr>
+          <tr>
+            <td><strong>Wide-Column NoSQL</strong><br/>(Cassandra / ScyllaDB)</td>
+            <td><strong>Relational SQL</strong><br/>(PostgreSQL)</td>
+            <td>
+              • <strong>Masterless architecture</strong>: Zero Single Point of Failure (SPOF).<br/>
+              • Append-only LSM-Tree storage yields millions of writes/sec.<br/>
+              • Linear horizontal scaling by simply adding nodes.
+            </td>
+            <td>
+              • PostgreSQL write scaling requires complex sharding (Citus) or single-master bottlenecks.<br/>
+              • Cassandra forbids arbitrary <code>WHERE</code> clauses and joins; all queries must match the partition key.
+            </td>
+          </tr>
+          <tr>
+            <td><strong>NewSQL</strong><br/>(CockroachDB / Spanner)</td>
+            <td><strong>Sharded RDBMS</strong><br/>(MySQL + Vitess)</td>
+            <td>
+              • True distributed ACID across global geographic regions.<br/>
+              • Automated consensus via Raft/Paxos with atomic clocks (TrueTime).<br/>
+              • Elastic auto-rebalancing without manual shard migration.
+            </td>
+            <td>
+              • Vitess/Sharded MySQL requires manual shard key routing and complex cross-shard transaction managers (2PC).<br/>
+              • Higher commit latency due to multi-datacenter consensus rounds.
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <!-- 2. MESSAGING MATRIX -->
+    <section id="messaging">
+      <h2>2. Message Brokers: Kafka vs RabbitMQ vs SQS vs Redis Streams</h2>
+
+      <div class="mermaid">
+flowchart LR
+    Workload{"Workload Characterization"}
+    Workload -->|High Throughput, Replayable Log, Stream Processing| K["Apache Kafka"]
+    Workload -->|Complex Routing, Immediate Task Queues, Ack/Nack| R["RabbitMQ (AMQP)"]
+    Workload -->|Serverless, Zero Maintenance, Cloud-Native| SQS["AWS SQS / EventBridge"]
+    Workload -->|Lightweight, In-Memory Ephemeral Pub/Sub| RED["Redis Pub/Sub &amp; Streams"]
+      </div>
+
+      <table class="comparison-table">
+        <thead>
+          <tr>
+            <th>Technology Chosen</th>
+            <th>The Alternative Considered</th>
+            <th>WHY THIS? (Winning Strengths)</th>
+            <th>WHY NOT THE OTHER? (Disqualifying Trade-offs)</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Apache Kafka</strong></td>
+            <td><strong>RabbitMQ</strong></td>
+            <td>
+              • <strong>Append-Only Distributed Commit Log</strong>: Messages are retained on disk for days/weeks.<br/>
+              • <strong>Replayability</strong>: Consumers can rewind offsets to re-process historical events.<br/>
+              • Massive throughput (millions of msgs/sec via sequential disk I/O and zero-copy OS <code>sendfile</code>).<br/>
+              • Multiple consumer groups read the exact same event stream independently.
+            </td>
+            <td>
+              • RabbitMQ deletes messages immediately upon consumer ACK (no replayability).<br/>
+              • RabbitMQ degrades severely when millions of unacknowledged messages back up in RAM.<br/>
+              • RabbitMQ is push-based, which can overwhelm slow consumers unless strict prefetch limits are set.
+            </td>
+          </tr>
+          <tr>
+            <td><strong>RabbitMQ</strong></td>
+            <td><strong>Apache Kafka</strong></td>
+            <td>
+              • <strong>Complex Routing</strong>: Supports AMQP Direct, Topic, Fanout, and Header exchanges.<br/>
+              • Granular per-message acknowledgments (<code>basic.ack</code>, <code>basic.nack</code>, <code>reject</code>).<br/>
+              • Native <strong>Priority Queues</strong> and Dead Letter Exchanges (DLX).<br/>
+              • Extremely low sub-millisecond end-to-end latency for individual tasks.
+            </td>
+            <td>
+              • Kafka partition ordering is strictly FIFO per partition; individual message re-routing or selective acknowledgment is not supported.<br/>
+              • Setting up Kafka (ZooKeeper/KRaft) is operational overkill for simple background job workers.
+            </td>
+          </tr>
+          <tr>
+            <td><strong>Redis Streams / PubSub</strong></td>
+            <td><strong>Apache Kafka</strong></td>
+            <td>
+              • Ultra-low sub-millisecond in-memory delivery.<br/>
+              • Zero extra infrastructure if Redis is already running in your cluster.<br/>
+              • Simple consumer groups and stream capping (<code>XADD ... MAXLEN ~ 10000</code>).
+            </td>
+            <td>
+              • Redis is memory-constrained (RAM is 10x more expensive than disk).<br/>
+              • Risk of message loss upon master crash if asynchronous replication has not completed.
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <!-- 3. REAL-TIME COMMUNICATION -->
+    <section id="communication-protocols">
+      <h2>3. Real-Time Communication: WebSockets vs SSE vs Long Polling vs gRPC</h2>
+
+      <table class="comparison-table">
+        <thead>
+          <tr>
+            <th>Protocol</th>
+            <th>Directionality</th>
+            <th>Transport Layer</th>
+            <th>WHY USE THIS?</th>
+            <th>WHY NOT USE THIS?</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>WebSockets</strong></td>
+            <td><strong>Full-Duplex</strong><br/>(Client &harr; Server)</td>
+            <td>TCP (Upgraded from HTTP/1.1)</td>
+            <td>Interactive, bi-directional collaboration: Multi-player games, live chat apps, financial trading desks where both client and server emit events continuously.</td>
+            <td>Stateful connection pins clients to servers, making load balancing complex (requires sticky sessions or Redis pub/sub bridges); not HTTP/2 multiplexed; no automatic reconnect.</td>
+          </tr>
+          <tr>
+            <td><strong>Server-Sent Events (SSE)</strong></td>
+            <td><strong>Uni-directional</strong><br/>(Server &rarr; Client only)</td>
+            <td>Standard HTTP/1.1 or HTTP/2</td>
+            <td>Ticker feeds, stock price updates, ChatGPT streaming responses, and notifications where data only flows from server to browser. Built-in automatic reconnect and event IDs!</td>
+            <td>Cannot send data from client over the same connection (client must make separate HTTP POST requests). Limited to 6 concurrent connections on HTTP/1.1.</td>
+          </tr>
+          <tr>
+            <td><strong>HTTP Long Polling</strong></td>
+            <td>Request / Delayed Response</td>
+            <td>Standard HTTP</td>
+            <td>Legacy environments where firewalls or corporate proxies strictly block non-standard WebSockets ports.</td>
+            <td>High overhead: Every new message requires tearing down and establishing a new HTTP handshake with full header payload. Wasteful server thread consumption.</td>
+          </tr>
+          <tr>
+            <td><strong>gRPC (HTTP/2)</strong></td>
+            <td>Bi-directional streaming &amp; RPC</td>
+            <td>HTTP/2 + Protocol Buffers</td>
+            <td>Internal service-to-service microservice RPCs: Binary serialization (Protobuf) is 5x faster and 70% smaller than JSON; strict compile-time typing; multiplexed streams over 1 TCP connection.</td>
+            <td>Poor browser support without gRPC-Web proxy; binary payloads cannot be easily inspected or debugged in standard curl/browser DevTools.</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <!-- 4. CACHING STRATEGIES -->
+    <section id="caching-strategies">
+      <h2>4. Caching Strategies: Cache-Aside vs Write-Through vs Write-Back</h2>
+
+      <table class="comparison-table">
+        <thead>
+          <tr>
+            <th>Caching Pattern</th>
+            <th>Write Flow</th>
+            <th>Read Flow</th>
+            <th>WHY CHOOSE THIS?</th>
+            <th>THE CRITICAL DANGER</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Cache-Aside (Lazy)</strong></td>
+            <td>App writes to DB directly, then invalidates cache key.</td>
+            <td>App reads cache &rarr; on miss, reads DB and populates cache.</td>
+            <td><strong>Most common pattern (90% of systems)</strong>. Resilient: If cache fails, app still functions by reading database. Only requested data is cached.</td>
+            <td>First request on a missing key incurs cache-miss latency spike (Cache Cold Start). Risk of reading stale data during race conditions.</td>
+          </tr>
+          <tr>
+            <td><strong>Write-Through</strong></td>
+            <td>App writes to Cache; Cache component writes to DB synchronously.</td>
+            <td>App reads exclusively from Cache.</td>
+            <td>Cache is never stale; data is immediately available for reads. Read-heavy workloads with zero tolerance for cache misses.</td>
+            <td>Higher write latency (must write to both cache and DB before returning success). Caches data that may never be read again, wasting expensive RAM.</td>
+          </tr>
+          <tr>
+            <td><strong>Write-Back (Write-Behind)</strong></td>
+            <td>App writes to Cache and returns immediately. Cache flushes to DB asynchronously.</td>
+            <td>App reads exclusively from Cache.</td>
+            <td><strong>Ultra-fast write throughput</strong>. Absorbs massive write spikes (e.g. video game player positions, IoT sensor telemetry). Batches DB writes to reduce load.</td>
+            <td><strong>Catastrophic risk of data loss</strong>: If the cache crashes or loses power before asynchronous flush completes, uncommitted writes are permanently lost!</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <!-- 5. SOCIAL MEDIA FAN-OUT -->
+    <section id="fan-out">
+      <h2>5. Social Feeds: Fan-Out on Write (Push) vs Fan-Out on Read (Pull)</h2>
+
+      <div class="callout callout-warning">
+        <div class="callout-title">🚨 The Classic Twitter / Instagram Architecture Interview Question</div>
+        <p><em>"How do you design a user timeline and newsfeed? Do you push posts to all followers when written, or pull posts from followees when read?"</em></p>
+      </div>
+
+      <table class="comparison-table">
+        <thead>
+          <tr>
+            <th>Strategy</th>
+            <th>Mechanism</th>
+            <th>Pros</th>
+            <th>Cons &amp; The "Celebrity Problem"</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Fan-Out on Write (Push)</strong></td>
+            <td>When user posts, background workers clone the post into the home timeline cache of <strong>every single follower</strong>.</td>
+            <td><strong>Ultra-fast reads</strong>: Reading timeline is a single O(1) fetch from Redis list/sorted set (<code>LRANGE</code>).</td>
+            <td><strong>The Celebrity Catastrophe</strong>: When a celebrity with 100 million followers tweets, the system must write 100,000,000 entries into 100 million Redis mailboxes! Wastes CPU, generates huge queue backpressure, and exhausts RAM.</td>
+          </tr>
+          <tr>
+            <td><strong>Fan-Out on Read (Pull)</strong></td>
+            <td>Posts are saved only once to the author's timeline. When a user opens their feed, the system fetches recent posts from all people they follow and merges/sorts them in memory.</td>
+            <td>Zero write penalty for celebrities; posts are immediately saved in 1 database row.</td>
+            <td><strong>Terrible read latency</strong>: If a user follows 2,000 accounts, opening the feed requires 2,000 separate DB lookups and an expensive in-memory merge-sort.</td>
+          </tr>
+          <tr>
+            <td><strong>The Hybrid Architecture (The Winning Answer)</strong></td>
+            <td colspan="3">
+              <strong>Combine both!</strong><br/>
+              • <strong>Normal users (&lt; 20,000 followers):</strong> Use <strong>Fan-Out on Write (Push)</strong>. Cheap to replicate, gives 99.9% of users instant sub-10ms feed reads.<br/>
+              • <strong>Celebrities (&gt; 20,000 followers):</strong> Use <strong>Fan-Out on Read (Pull)</strong>. Celebrity posts are NEVER duplicated to followers' mailboxes. When a user opens their feed, the server fetches their pre-computed push timeline and merges the few latest posts from the celebrities they follow!
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <!-- 6. DISTRIBUTED ID GENERATION -->
+    <section id="id-generation">
+      <h2>6. Unique ID Generation: Snowflake vs UUIDv4 vs Auto-Increment</h2>
+
+      <table class="comparison-table">
+        <thead>
+          <tr>
+            <th>Generator Approach</th>
+            <th>Bit Size &amp; Format</th>
+            <th>Ordering Guarantee</th>
+            <th>WHY THIS?</th>
+            <th>WHY NOT THIS?</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Twitter Snowflake</strong></td>
+            <td><strong>64-bit integer</strong><br/>(Timestamp + Worker ID + Sequence)</td>
+            <td><strong>Roughly Time-Ordered (K-Ordered)</strong></td>
+            <td>Fits in a standard 64-bit BigInt/long; indexable with optimal B-Tree performance; zero coordination across nodes (100% decentralized); supports 4,096 IDs per millisecond per node.</td>
+            <td>Vulnerable to server clock NTP drift (requires clock rollback safeguards); requires managing unique worker machine IDs.</td>
+          </tr>
+          <tr>
+            <td><strong>UUIDv4 (Random)</strong></td>
+            <td><strong>128-bit string</strong><br/>(36 chars e.g. <code>f47ac10b...</code>)</td>
+            <td>Completely Random (No ordering)</td>
+            <td>Zero coordination required; astronomically low collision probability without any central coordinator.</td>
+            <td><strong>Destroys database B-Tree index performance</strong>: Random inserts cause massive B-Tree page splits and fragmentation. Consumes 2x storage compared to 64-bit integers. Not URL-friendly.</td>
+          </tr>
+          <tr>
+            <td><strong>Database Auto-Increment</strong></td>
+            <td>32/64-bit integer (<code>1, 2, 3...</code>)</td>
+            <td>Strictly Monotonic</td>
+            <td>Extremely simple; optimal index clustering.</td>
+            <td><strong>Single Point of Failure (SPOF)</strong> and severe write bottleneck in distributed databases. Reveals total business transaction volume to competitors (security vulnerability).</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <!-- 7. LOAD BALANCING -->
+    <section id="load-balancing-matrix">
+      <h2>7. Load Balancing: Layer 4 (Transport) vs Layer 7 (Application)</h2>
+
+      <table class="comparison-table">
+        <thead>
+          <tr>
+            <th>Attribute</th>
+            <th>Layer 4 Load Balancing (L4)</th>
+            <th>Layer 7 Load Balancing (L7)</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>OSI Layer</strong></td>
+            <td>Transport Layer (TCP / UDP)</td>
+            <td>Application Layer (HTTP, HTTPS, WebSocket, gRPC)</td>
+          </tr>
+          <tr>
+            <td><strong>Inspection Depth</strong></td>
+            <td>Inspects only Source IP, Destination IP, and Port. Does NOT decrypt TLS or inspect HTTP payloads.</td>
+            <td>Terminates TLS, inspects HTTP Headers, Cookies, URL path, and request JSON bodies.</td>
+          </tr>
+          <tr>
+            <td><strong>Throughput &amp; Latency</strong></td>
+            <td><strong>Blazing fast (Millions of packets/sec)</strong>, near-zero CPU overhead. Packets routed via kernel NAT/IPVS.</td>
+            <td>Lower throughput, higher CPU usage (must decrypt TLS, parse HTTP stream, re-encrypt).</td>
+          </tr>
+          <tr>
+            <td><strong>Routing Capabilities</strong></td>
+            <td>Basic IP/Port hashing and round-robin. Cannot route by URL path or headers.</td>
+            <td><strong>Intelligent Smart Routing</strong>: Path-based (<code>/api/orders</code> &rarr; Order Pods, <code>/api/users</code> &rarr; User Pods), header-based A/B testing, cookie-based sticky sessions.</td>
+          </tr>
+          <tr>
+            <td><strong>Industry Exemplars</strong></td>
+            <td>AWS Network Load Balancer (NLB), HAProxy (TCP mode), Linux IPVS.</td>
+            <td>AWS Application Load Balancer (ALB), Nginx, Envoy Proxy, Traefik.</td>
+          </tr>
+          <tr>
+            <td><strong>Architecture Pattern</strong></td>
+            <td colspan="2"><strong>Tiered Setup:</strong> Place an ultra-fast L4 load balancer (NLB) at the edge to distribute traffic across a fleet of L7 proxies (Envoy/Nginx), which perform SSL termination, WAF inspection, and microservice path routing!</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+  </main>
+</div>
+
+<button class="scroll-top" aria-label="Scroll to top">↑</button>
+</body>
+</html>

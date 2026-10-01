@@ -83,123 +83,121 @@
     <h2>Dead Letter Queue (DLQ)</h2>
     <div class="jargon">📖 <strong>Dead Letter Queue</strong>: A special secondary queue where messages that fail to process multiple times are sent. Engineers can inspect the DLQ to debug why the messages are failing without blocking the main queue.</div>
 
-    <h2>Java 21 Code Example</h2>
-    <p>Let's build a simple in-memory representation of these concepts using Java 21's concurrency utilities and modern features.</p>
+    <h2>Code Example: Point-to-Point vs Publish-Subscribe</h2>
+    <p>Let's build a simple in-memory representation of queue workers and pub/sub topics in Java and C#.</p>
     
-    <span class="code-label">Java</span>
-    <pre>
-import java.util.List;
+    <div class="code-tabs">
+      <div class="code-tabs-header">
+        <button class="code-tab-btn active" data-tab="java">☕ Java 21</button>
+        <button class="code-tab-btn" data-tab="csharp">🔷 C# 12</button>
+      </div>
+      <div class="code-tab-content active" data-tab-content="java">
+        <pre><code class="language-java">import java.util.List;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.LinkedBlockingQueue;
 
 public class MessagingExamples {
 
-    // --- 1. Point-to-Point (Queue) Example ---
-    
-    // A modern record to represent our Message
+    // --- 1. Point-to-Point (Queue) ---
     public record TaskMessage(String id, String payload) {}
 
     public static class SimpleQueueDemo {
         public static void run() throws InterruptedException {
-            // A thread-safe queue holding up to 10 items
             BlockingQueue&lt;TaskMessage&gt; queue = new LinkedBlockingQueue&lt;&gt;(10);
 
-            // Producer Thread
             Thread producer = new Thread(() -&gt; {
                 try {
                     for (int i = 1; i &lt;= 3; i++) {
                         TaskMessage msg = new TaskMessage("ID-" + i, "Process image " + i);
-                        System.out.println("Producing: " + msg.payload());
-                        queue.put(msg); // Blocks if queue is full
-                        Thread.sleep(500);
+                        queue.put(msg);
                     }
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                }
+                } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
             });
 
-            // Consumer Thread
             Thread consumer = new Thread(() -&gt; {
                 try {
                     for (int i = 1; i &lt;= 3; i++) {
-                        // Blocks if queue is empty
                         TaskMessage msg = queue.take();
                         System.out.println("Consuming: " + msg.payload());
-                        Thread.sleep(1000);
                     }
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                }
+                } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
             });
 
-            producer.start();
-            consumer.start();
-            producer.join();
-            consumer.join();
+            producer.start(); consumer.start();
+            producer.join(); consumer.join();
         }
     }
 
-    // --- 2. Publish-Subscribe Example ---
-
+    // --- 2. Publish-Subscribe ---
     public record EventMessage(String eventType, String data) {}
-
-    public interface Subscriber {
-        void onMessage(EventMessage message);
-    }
+    public interface Subscriber { void onMessage(EventMessage message); }
 
     public static class Topic {
         private final String name;
-        // Thread-safe list of subscribers
         private final List&lt;Subscriber&gt; subscribers = new CopyOnWriteArrayList&lt;&gt;();
-
-        public Topic(String name) {
-            this.name = name;
-        }
-
-        public void subscribe(Subscriber sub) {
-            subscribers.add(sub);
-        }
-
+        public Topic(String name) { this.name = name; }
+        public void subscribe(Subscriber sub) { subscribers.add(sub); }
         public void publish(EventMessage message) {
-            System.out.println("\nPublishing to topic '" + name + "': " + message.data());
-            // Every subscriber gets the message
-            for (Subscriber sub : subscribers) {
-                sub.onMessage(message);
+            for (Subscriber sub : subscribers) sub.onMessage(message);
+        }
+    }
+}</code></pre>
+      </div>
+      <div class="code-tab-content" data-tab-content="csharp">
+        <pre><code class="language-csharp">using System.Threading.Channels;
+
+public record TaskMessage(string Id, string Payload);
+public record EventMessage(string EventType, string Data);
+
+// --- 1. Point-to-Point via System.Threading.Channels ---
+public class ChannelQueueDemo
+{
+    public static async Task RunAsync()
+    {
+        var channel = Channel.CreateBounded&lt;TaskMessage&gt;(10);
+
+        var producer = Task.Run(async () =&gt;
+        {
+            for (int i = 1; i &lt;= 3; i++)
+            {
+                await channel.Writer.WriteAsync(new TaskMessage($"ID-{i}", $"Process image {i}"));
             }
-        }
-    }
+            channel.Writer.Complete();
+        });
 
-    public static class EmailService implements Subscriber {
-        @Override
-        public void onMessage(EventMessage message) {
-            System.out.println("EmailService sending email for: " + message.data());
-        }
-    }
+        var consumer = Task.Run(async () =&gt;
+        {
+            await foreach (var msg in channel.Reader.ReadAllAsync())
+            {
+                Console.WriteLine($"Consuming: {msg.Payload}");
+            }
+        });
 
-    public static class AnalyticsService implements Subscriber {
-        @Override
-        public void onMessage(EventMessage message) {
-            System.out.println("AnalyticsService logging event: " + message.data());
-        }
-    }
-
-    public static void main(String[] args) throws InterruptedException {
-        System.out.println("--- Point to Point ---");
-        SimpleQueueDemo.run();
-
-        Thread.sleep(1000);
-
-        System.out.println("\n--- Publish/Subscribe ---");
-        Topic userSignupTopic = new Topic("UserSignups");
-        
-        userSignupTopic.subscribe(new EmailService());
-        userSignupTopic.subscribe(new AnalyticsService());
-
-        userSignupTopic.publish(new EventMessage("SIGNUP", "User Alice created an account"));
+        await Task.WhenAll(producer, consumer);
     }
 }
-    </pre>
+
+// --- 2. Publish-Subscribe via In-Memory Topic ---
+public class Topic(string name)
+{
+    private readonly List&lt;Func&lt;EventMessage, Task&gt;&gt; _subscribers = [];
+    private readonly object _lock = new();
+
+    public void Subscribe(Func&lt;EventMessage, Task&gt; handler)
+    {
+        lock (_lock) { _subscribers.Add(handler); }
+    }
+
+    public async Task PublishAsync(EventMessage message)
+    {
+        List&lt;Func&lt;EventMessage, Task&gt;&gt; targets;
+        lock (_lock) { targets = [.. _subscribers]; }
+        await Task.WhenAll(targets.Select(s =&gt; s(message)));
+    }
+}</code></pre>
+      </div>
+    </div>
 
     <h2>Popular Tools</h2>
     <ul>

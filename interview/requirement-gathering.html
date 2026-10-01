@@ -185,14 +185,18 @@
 
     <hr>
 
-    <h2>PILLAR 4: Production-Grade Java 21 Code</h2>
+    <h2>PILLAR 4: Production-Grade Code Modeling</h2>
     <p>
-      In a Low-Level Design (LLD) interview or when writing a design doc, you should model the captured requirements explicitly in code using modern Java 21 features. We use <strong>Sealed Interfaces</strong> and <strong>Records</strong> to create a robust, immutable configuration object.
+      In a Low-Level Design (LLD) interview or when writing a design doc, you should model captured requirements explicitly in code using modern language features. We use <strong>Sealed Hierarchies</strong> and <strong>Immutable Records</strong> to create robust, compile-time verified configuration contracts.
     </p>
 
-    <span class="code-label">Java 21</span>
-    <pre><code class="language-java">
-/**
+    <div class="code-tabs">
+      <div class="code-tabs-header">
+        <button class="code-tab-btn active" data-tab="java">☕ Java 21</button>
+        <button class="code-tab-btn" data-tab="csharp">🔷 C# 12 (.NET 8)</button>
+      </div>
+      <div class="code-tab-content active" data-tab-content="java">
+        <pre><code class="language-java">/**
  * PILLAR 4: Using Java 21 Sealed Interfaces and Records to model System Requirements.
  * 
  * Architectural Rationale:
@@ -254,10 +258,90 @@ public sealed interface SystemRequirements permits ReadHeavySpec, WriteHeavySpec
             return dailyActiveUsers * writeBatchSize * 100; // 100 bursts per user
         }
     }
+}</code></pre>
+      </div>
+      <div class="code-tab-content" data-tab-content="csharp">
+        <pre><code class="language-csharp">using System;
+
+/// <summary>
+/// PILLAR 4: Using C# 12 Records & Discriminated Inheritance to model System Requirements.
+/// 
+/// Architectural Rationale:
+/// - Positional records provide immutable, thread-safe value semantics.
+/// - Closed type hierarchies enable exhaustive pattern matching during topology sizing.
+/// </summary>
+public abstract record SystemRequirements(
+    long DailyActiveUsers,
+    double SlaTargetLatencyMs,
+    bool RequiresStrongConsistency
+);
+
+/// <summary>
+/// Models a Read-Heavy system (e.g., Twitter, Netflix).
+/// </summary>
+public sealed record ReadHeavySpec : SystemRequirements
+{
+    public int ReadToWriteRatio { get; init; }
+    public double CacheHitRatioTarget { get; init; }
+
+    public ReadHeavySpec(
+        long dailyActiveUsers,
+        double slaTargetLatencyMs,
+        bool requiresStrongConsistency,
+        int readToWriteRatio,
+        double cacheHitRatioTarget
+    ) : base(dailyActiveUsers, slaTargetLatencyMs, requiresStrongConsistency)
+    {
+        if (readToWriteRatio <= 1)
+            throw new ArgumentException("Read-heavy systems must have ratio > 1");
+        if (cacheHitRatioTarget is < 0.0 or > 1.0)
+            throw new ArgumentException("Invalid cache target");
+
+        ReadToWriteRatio = readToWriteRatio;
+        CacheHitRatioTarget = cacheHitRatioTarget;
+    }
+
+    // Helper to estimate Redis cluster sizing based on the 80/20 rule
+    public long EstimateDailyCachedReads()
+    {
+        long totalReads = DailyActiveUsers * 10 * ReadToWriteRatio;
+        return (long)(totalReads * CacheHitRatioTarget);
+    }
 }
-    </code></pre>
+
+/// <summary>
+/// Models a Write-Heavy system (e.g., IoT Telemetry, Log Aggregation).
+/// </summary>
+public sealed record WriteHeavySpec : SystemRequirements
+{
+    public int WriteBatchSize { get; init; }
+    public long RetentionPeriodDays { get; init; }
+
+    public WriteHeavySpec(
+        long dailyActiveUsers,
+        double slaTargetLatencyMs,
+        bool requiresStrongConsistency,
+        int writeBatchSize,
+        long retentionPeriodDays
+    ) : base(dailyActiveUsers, slaTargetLatencyMs, requiresStrongConsistency)
+    {
+        if (writeBatchSize < 1)
+            throw new ArgumentException("Batch size must be positive");
+
+        WriteBatchSize = writeBatchSize;
+        RetentionPeriodDays = retentionPeriodDays;
+    }
+
+    // Helper to estimate Kafka/Storage partitioning needs
+    public long EstimateDailyStorageRecords()
+    {
+        return DailyActiveUsers * WriteBatchSize * 100; // 100 bursts per user
+    }
+}</code></pre>
+      </div>
+    </div>
     <p>
-      <em>Interviewer deep-dive:</em> By using Java 21's <code>sealed</code> hierarchy, you demonstrate deep domain modeling. You ensure that a system cannot accidentally be instantiated as "ReadHeavy" while having a 1:10 ratio.
+      <em>Interviewer deep-dive:</em> By using strict type contracts, you demonstrate deep domain modeling. You ensure that a system cannot accidentally be instantiated as "ReadHeavy" while having a 1:10 ratio.
     </p>
 
     <hr>

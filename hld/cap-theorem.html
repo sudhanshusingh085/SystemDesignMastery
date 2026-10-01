@@ -89,9 +89,13 @@
       <h2>Java 21 Code: Simulating CAP</h2>
       <p>Let's model two database nodes. When the network partition happens, we dictate how the node responds based on its CAP configuration.</p>
       
-      <span class="code-label">Java</span>
-      <pre>
-import java.util.Optional;
+      <div class="code-tabs">
+        <div class="code-tabs-header">
+          <button class="code-tab-btn active" data-tab="java">☕ Java 21</button>
+          <button class="code-tab-btn" data-tab="csharp">🔷 C# 12</button>
+        </div>
+        <div class="code-tab-content active" data-tab-content="java">
+          <pre><code class="language-java">import java.util.Optional;
 
 // Enum representing the system's choice during a partition
 enum CAP_Mode {
@@ -118,13 +122,13 @@ class DBNode {
     public Optional&lt;String&gt; readData() {
         if (networkPartitionActive) {
             return switch (mode) {
-                // In CP mode, we refuse to serve stale data during a network split
-                case CP_CONSISTENT -> {
-                    System.out.println(name + " [CP Mode]: ERROR - Cannot guarantee consistency. Returning Null.");
+                // In CP mode, refuse to serve stale data during a split
+                case CP_CONSISTENT -&gt; {
+                    System.out.println(name + " [CP Mode]: ERROR - Cannot guarantee consistency. Returning Empty.");
                     yield Optional.empty(); 
                 }
-                // In AP mode, we return whatever data we have, even if it might be stale
-                case AP_AVAILABLE -> {
+                // In AP mode, return whatever data we have, even if stale
+                case AP_AVAILABLE -&gt; {
                     System.out.println(name + " [AP Mode]: SUCCESS - Returning stale data.");
                     yield Optional.of(data);
                 }
@@ -151,8 +155,57 @@ public class CAPDemo {
         bankNode.readData();   // Fails to maintain consistency
         socialNode.readData(); // Succeeds, but might be stale
     }
+}</code></pre>
+        </div>
+        <div class="code-tab-content" data-tab-content="csharp">
+          <pre><code class="language-csharp">public enum CapMode
+{
+    CpConsistent,
+    ApAvailable
 }
-      </pre>
+
+public class DbNode(string name, CapMode mode)
+{
+    private readonly string _name = name;
+    private readonly CapMode _mode = mode;
+    private string _data = "Initial State";
+    private bool _partitionActive;
+
+    public void SetPartitionActive(bool active) =&gt; _partitionActive = active;
+
+    public string? ReadData()
+    {
+        if (_partitionActive)
+        {
+            return _mode switch
+            {
+                CapMode.CpConsistent =&gt; null, // Rejects read to preserve linearizability
+                CapMode.ApAvailable  =&gt; _data, // Serves potentially stale read
+                _                    =&gt; throw new InvalidOperationException()
+            };
+        }
+
+        Console.WriteLine($"{_name}: SUCCESS - Network healthy.");
+        return _data;
+    }
+}
+
+public static class Program
+{
+    public static void Main()
+    {
+        var bankNode = new DbNode("Banking-DB", CapMode.CpConsistent);
+        var socialNode = new DbNode("SocialMedia-DB", CapMode.ApAvailable);
+
+        bankNode.SetPartitionActive(true);
+        socialNode.SetPartitionActive(true);
+
+        var bankRes = bankNode.ReadData();    // null (Consistency maintained)
+        var socialRes = socialNode.ReadData(); // "Initial State" (Available)
+    }
+}</code></pre>
+        </div>
+      </div>
     </section>
 
     <section>

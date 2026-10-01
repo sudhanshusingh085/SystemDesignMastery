@@ -104,18 +104,17 @@
     <h2>Java 21 Code Example: Simulating a CDN</h2>
     <p>Here is a simulation of how a CDN routes requests geographically and handles cache misses.</p>
     
-    <span class="code-label">Java</span>
-    <pre>
-import java.util.HashMap;
+    <div class="code-tabs">
+      <div class="code-tabs-header">
+        <button class="code-tab-btn active" data-tab="java">☕ Java 21</button>
+        <button class="code-tab-btn" data-tab="csharp">🔷 C# 12</button>
+      </div>
+      <div class="code-tab-content active" data-tab-content="java">
+        <pre><code class="language-java">import java.util.HashMap;
 import java.util.Map;
 
 public class CdnSimulation {
 
-    // --- Core Components ---
-
-    /**
-     * The Origin Server - Holds the absolute truth and all files.
-     */
     static class OriginServer {
         private final Map&lt;String, String&gt; database = new HashMap&lt;&gt;();
 
@@ -126,15 +125,11 @@ public class CdnSimulation {
 
         public String fetchFile(String path) {
             System.out.println("  [ORIGIN SERVER] Serving file from main database: " + path);
-            // Simulate network delay
-            try { Thread.sleep(500); } catch (InterruptedException e) {}
+            try { Thread.sleep(50); } catch (InterruptedException ignored) {}
             return database.getOrDefault(path, "404 Not Found");
         }
     }
 
-    /**
-     * A CDN Edge Node located in a specific region.
-     */
     static class CdnNode {
         private final String region;
         private final OriginServer origin;
@@ -147,26 +142,17 @@ public class CdnSimulation {
 
         public String requestFile(String path) {
             System.out.println("Request hitting " + region + " Edge Node for " + path);
-            
-            // Check cache
             if (cache.containsKey(path)) {
                 System.out.println("  ✓ [CACHE HIT] Serving quickly from edge.");
                 return cache.get(path);
             }
-            
-            // Cache Miss: Fetch from Origin
             System.out.println("  ✗ [CACHE MISS] Fetching from Origin...");
             String fileData = origin.fetchFile(path);
-            
-            // Save to cache for next time
             cache.put(path, fileData);
             return fileData;
         }
     }
 
-    /**
-     * Simulates DNS routing a user to the nearest Edge Node.
-     */
     static class DnsRouter {
         private final Map&lt;String, CdnNode&gt; nodes = new HashMap&lt;&gt;();
 
@@ -175,19 +161,15 @@ public class CdnSimulation {
         }
 
         public CdnNode routeToNearestNode(String userRegion) {
-            return nodes.getOrDefault(userRegion, nodes.get("USA")); // Default to USA
+            return nodes.getOrDefault(userRegion, nodes.get("USA"));
         }
     }
 
-    // --- Execution ---
-
     public static void main(String[] args) {
         OriginServer origin = new OriginServer();
-        
-        // Deploy Edge Nodes
         CdnNode asiaNode = new CdnNode("Asia", origin);
         CdnNode europeNode = new CdnNode("Europe", origin);
-        
+
         DnsRouter router = new DnsRouter();
         router.addNode("Asia", asiaNode);
         router.addNode("Europe", europeNode);
@@ -197,14 +179,61 @@ public class CdnSimulation {
         nodeForUser1.requestFile("/images/logo.png");
 
         System.out.println("\n--- ANOTHER User in Asia requests logo ---");
-        nodeForUser1.requestFile("/images/logo.png");
+        nodeForUser1.requestFile("/images/logo.png"); // Hit!
+    }
+}</code></pre>
+      </div>
+      <div class="code-tab-content" data-tab-content="csharp">
+        <pre><code class="language-csharp">using System.Collections.Concurrent;
 
-        System.out.println("\n--- User in Europe requests logo ---");
-        CdnNode nodeForUser2 = router.routeToNearestNode("Europe");
-        nodeForUser2.requestFile("/images/logo.png");
+public class OriginServer
+{
+    private readonly Dictionary&lt;string, string&gt; _database = new()
+    {
+        ["/images/logo.png"] = "[Binary data of logo]",
+        ["/css/style.css"] = "body { color: black; }"
+    };
+
+    public async Task&lt;string&gt; FetchFileAsync(string path)
+    {
+        Console.WriteLine($"  [ORIGIN SERVER] Serving file from master store: {path}");
+        await Task.Delay(50); // Simulate high WAN latency
+        return _database.GetValueOrDefault(path, "404 Not Found");
     }
 }
-    </pre>
+
+public class CdnNode(string region, OriginServer origin)
+{
+    private readonly ConcurrentDictionary&lt;string, string&gt; _edgeCache = new();
+
+    public async Task&lt;string&gt; RequestFileAsync(string path)
+    {
+        Console.WriteLine($"Request hitting {region} Edge Node for {path}");
+
+        if (_edgeCache.TryGetValue(path, out var cached))
+        {
+            Console.WriteLine("  ✓ [CACHE HIT] Serving sub-millisecond from edge PoP.");
+            return cached;
+        }
+
+        Console.WriteLine("  ✗ [CACHE MISS] Fetching across backbone from Origin...");
+        var payload = await origin.FetchFileAsync(path);
+        _edgeCache.TryAdd(path, payload);
+        return payload;
+    }
+}
+
+public class AnycastGeoRouter
+{
+    private readonly Dictionary&lt;string, CdnNode&gt; _nodes = new();
+
+    public void RegisterPoP(string region, CdnNode node) =&gt; _nodes[region] = node;
+
+    public CdnNode RouteToNearestPoP(string userRegion) =&gt;
+        _nodes.GetValueOrDefault(userRegion, _nodes["USA"]);
+}</code></pre>
+      </div>
+    </div>
 
     <h2>Popular CDN Providers</h2>
     <p>You rarely build a CDN from scratch. Most companies use third-party providers:</p>

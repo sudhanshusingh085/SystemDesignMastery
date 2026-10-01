@@ -122,17 +122,14 @@
     <h2>Java 21 Code: Handling JSON in a REST-like way</h2>
     <p>Let's look at how we might parse a request and return a JSON response using Java 21 features.</p>
 
-    <span class="code-label">Java</span>
-    <pre>
-/**
- * Demonstrating how a server might handle different HTTP Methods
- * and return JSON data using Java 21 features like Enhanced Switch.
- */
-public class RestApiConcept {
-
-    // Record representing our User resource
+    <div class="code-tabs">
+      <div class="code-tabs-header">
+        <button class="code-tab-btn active" data-tab="java">☕ Java 21</button>
+        <button class="code-tab-btn" data-tab="csharp">🔷 C# 12</button>
+      </div>
+      <div class="code-tab-content active" data-tab-content="java">
+        <pre><code class="language-java">public class RestApiConcept {
     public record User(int id, String name, String email) {
-        // Simple helper to convert to JSON string (In reality, use Jackson or Gson)
         public String toJson() {
             return """
                 {
@@ -145,41 +142,41 @@ public class RestApiConcept {
     }
 
     public static class UserController {
-        
         public String handleRequest(String httpMethod, String path) {
-            // Pattern matching / Enhanced switch in Java 21
             return switch (httpMethod) {
-                case "GET" -> {
+                case "GET" -&gt; {
                     if (path.equals("/users/1")) {
                         User u = new User(1, "Bob", "bob@example.com");
                         yield "HTTP 200 OK\n" + u.toJson();
                     }
                     yield "HTTP 404 Not Found\n{ \"error\": \"User not found\" }";
                 }
-                case "POST" -> "HTTP 201 Created\n{ \"status\": \"User saved\" }";
-                case "DELETE" -> "HTTP 204 No Content";
-                default -> "HTTP 405 Method Not Allowed";
+                case "POST" -&gt; "HTTP 201 Created\n{ \"status\": \"User saved\" }";
+                case "DELETE" -&gt; "HTTP 204 No Content";
+                default -&gt; "HTTP 405 Method Not Allowed";
             };
         }
     }
+}</code></pre>
+      </div>
+      <div class="code-tab-content" data-tab-content="csharp">
+        <pre><code class="language-csharp">using System.Text.Json;
 
-    public static void main(String[] args) {
-        UserController controller = new UserController();
-        
-        // Simulating a GET request
-        System.out.println("Client sends: GET /users/1");
-        System.out.println("Server responds:");
-        System.out.println(controller.handleRequest("GET", "/users/1"));
-        
-        System.out.println("\n------------------\n");
-        
-        // Simulating a POST request
-        System.out.println("Client sends: POST /users");
-        System.out.println("Server responds:");
-        System.out.println(controller.handleRequest("POST", "/users"));
-    }
-}
-    </pre>
+public record User(int Id, string Name, string Email);
+
+public class UserController
+{
+    public static string HandleRequest(string httpMethod, string path) =&gt; (httpMethod, path) switch
+    {
+        ("GET", "/users/1") =&gt; "HTTP 200 OK\n" + JsonSerializer.Serialize(new User(1, "Bob", "bob@example.com")),
+        ("GET", _)          =&gt; "HTTP 404 Not Found\n{ \"error\": \"User not found\" }",
+        ("POST", "/users")  =&gt; "HTTP 201 Created\n{ \"status\": \"User saved\" }",
+        ("DELETE", _)       =&gt; "HTTP 204 No Content",
+        _                   =&gt; "HTTP 405 Method Not Allowed"
+    };
+}</code></pre>
+      </div>
+    </div>
 
     <div class="page-nav">
       <a href="client-server.html" class="prev"><span class="label">← Previous</span><span class="title">Client & Server</span></a>

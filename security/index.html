@@ -18,14 +18,17 @@
 <h2>2. Password Hashing</h2>
 <p>Never store plain text passwords! Always hash them using a strong algorithm like BCrypt, and add a <span class="jargon">salt</span> (random data) to prevent rainbow table attacks.</p>
 
-<span class="code-label">Java 21</span>
-<pre>
-import java.security.MessageDigest;
+<div class="code-tabs">
+  <div class="code-tabs-header">
+    <button class="code-tab-btn active" data-tab="java">☕ Java 21</button>
+    <button class="code-tab-btn" data-tab="csharp">🔷 C# 12</button>
+  </div>
+  <div class="code-tab-content active" data-tab-content="java">
+    <pre><code class="language-java">import java.security.MessageDigest;
 import java.security.SecureRandom;
 import java.util.Base64;
 
 public class PasswordHasher {
-    // Simplified hashing example (In real apps use BCrypt/Argon2)
     public record HashedResult(String hash, String salt) {}
 
     public HashedResult hash(String password) throws Exception {
@@ -41,8 +44,34 @@ public class PasswordHasher {
             Base64.getEncoder().encodeToString(salt)
         );
     }
-}
-</pre>
+}</code></pre>
+  </div>
+  <div class="code-tab-content" data-tab-content="csharp">
+    <pre><code class="language-csharp">using System.Security.Cryptography;
+
+public record HashedResult(string Hash, string Salt);
+
+public class PasswordHasher
+{
+    public HashedResult HashPassword(string password)
+    {
+        byte[] salt = RandomNumberGenerator.GetBytes(16);
+        byte[] hash = Rfc2898DeriveBytes.Pbkdf2(
+            password,
+            salt,
+            iterations: 100_000,
+            hashAlgorithm: HashAlgorithmName.SHA256,
+            outputLength: 32
+        );
+
+        return new HashedResult(
+            Convert.ToBase64String(hash),
+            Convert.ToBase64String(salt)
+        );
+    }
+}</code></pre>
+  </div>
+</div>
 
 <h2>3. JWT (JSON Web Token)</h2>
 <p>A JWT is a stateless way to prove who you are. It consists of 3 parts: Header, Payload (claims), and Signature. The server verifies the signature to ensure the token wasn't tampered with.</p>
@@ -107,9 +136,13 @@ stmt.setString(1, userInput);</pre>
 
 <h2>10. API Security</h2>
 <p>Protecting your backend endpoints.</p>
-<span class="code-label">Java 21</span>
-<pre>
-public class ApiSecurity {
+<div class="code-tabs">
+  <div class="code-tabs-header">
+    <button class="code-tab-btn active" data-tab="java">☕ Java 21</button>
+    <button class="code-tab-btn" data-tab="csharp">🔷 C# 12</button>
+  </div>
+  <div class="code-tab-content active" data-tab-content="java">
+    <pre><code class="language-java">public class ApiSecurity {
     // Java 21 pattern matching in switch
     public boolean authorizeRequest(String role, String endpoint) {
         return switch (role) {
@@ -118,8 +151,21 @@ public class ApiSecurity {
             case null, default -> false;
         };
     }
-}
-</pre>
+}</code></pre>
+  </div>
+  <div class="code-tab-content" data-tab-content="csharp">
+    <pre><code class="language-csharp">public class ApiSecurity
+{
+    // C# 12 pattern matching switch expression
+    public static bool AuthorizeRequest(string? role, string endpoint) =&gt; role switch
+    {
+        "ADMIN"                           =&gt; true,
+        "USER" when endpoint.StartsWith("/api/public/", StringComparison.OrdinalIgnoreCase) =&gt; true,
+        _                                 =&gt; false
+    };
+}</code></pre>
+  </div>
+</div>
 
 <h2>11. Principle of Least Privilege</h2>
 <p>Users and systems should only have the minimum permissions necessary to do their job.</p>

@@ -78,12 +78,16 @@
       <li><strong>Sliding Window Counter:</strong> A hybrid that is memory efficient and avoids the edge-spike problem.</li>
     </ul>
 
-    <h2>Java 21 Code Example</h2>
-    <p>Let's build a mini API Gateway with routing and a Token Bucket rate limiter using modern Java.</p>
+    <h2>Code Example: Mini API Gateway with Token Bucket Rate Limiting</h2>
+    <p>Let's build a mini API Gateway with route dispatching and a thread-safe Token Bucket rate limiter in Java and C#.</p>
     
-    <span class="code-label">Java</span>
-    <pre>
-import java.time.Instant;
+    <div class="code-tabs">
+      <div class="code-tabs-header">
+        <button class="code-tab-btn active" data-tab="java">☕ Java 21</button>
+        <button class="code-tab-btn" data-tab="csharp">🔷 C# 12</button>
+      </div>
+      <div class="code-tab-content active" data-tab-content="java">
+        <pre><code class="language-java">import java.time.Instant;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -91,7 +95,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 public class ApiGatewayDemo {
 
     // --- 1. Rate Limiting Logic ---
-    
     interface RateLimiter {
         boolean isAllowed(String clientId);
     }
@@ -102,8 +105,6 @@ public class ApiGatewayDemo {
     static class TokenBucketRateLimiter implements RateLimiter {
         private final int maxTokens;
         private final long refillRateMs;
-        
-        // Storing state per client
         private final Map&lt;String, ClientState&gt; clientStates = new HashMap&lt;&gt;();
 
         record ClientState(AtomicInteger tokens, long lastRefillTime) {}
@@ -116,23 +117,18 @@ public class ApiGatewayDemo {
         @Override
         public synchronized boolean isAllowed(String clientId) {
             long now = Instant.now().toEpochMilli();
-            
-            // Get or create state for client
             var state = clientStates.computeIfAbsent(clientId, 
                 id -&gt; new ClientState(new AtomicInteger(maxTokens), now));
 
-            // Refill tokens based on time passed
             long timePassed = now - state.lastRefillTime();
             int tokensToAdd = (int) (timePassed / refillRateMs);
             
             if (tokensToAdd &gt; 0) {
                 int newTokens = Math.min(maxTokens, state.tokens().get() + tokensToAdd);
                 state.tokens().set(newTokens);
-                // Update time in map (requires creating new record since it's immutable)
                 clientStates.put(clientId, new ClientState(state.tokens(), now));
             }
 
-            // Consume a token if available
             if (state.tokens().get() &gt; 0) {
                 state.tokens().decrementAndGet();
                 return true;
@@ -142,7 +138,6 @@ public class ApiGatewayDemo {
     }
 
     // --- 2. Microservice Mock ---
-    
     interface Microservice {
         String handle(String request);
     }
@@ -156,55 +151,131 @@ public class ApiGatewayDemo {
     }
 
     // --- 3. The API Gateway ---
-
     static class ApiGateway {
         private final RateLimiter rateLimiter;
         private final Map&lt;String, Microservice&gt; routingTable = new HashMap&lt;&gt;();
 
         public ApiGateway(RateLimiter rateLimiter) {
             this.rateLimiter = rateLimiter;
-            // Register routes
             routingTable.put("/users", new UserService());
             routingTable.put("/orders", new OrderService());
         }
 
         public String routeRequest(String clientId, String path) {
-            // Step 1: Rate Limiting
             if (!rateLimiter.isAllowed(clientId)) {
                 return "HTTP 429: Too Many Requests (Rate limit exceeded for " + clientId + ")";
             }
 
-            // Step 2: Routing
-            // Java 21 Pattern Matching and concise switch would be cool, 
-            // but map lookup is faster for routing
             Microservice service = routingTable.get(path);
-            
             if (service != null) {
                 return "HTTP 200: " + service.handle(path);
-            } else {
-                return "HTTP 404: Route Not Found";
             }
+            return "HTTP 404: Route Not Found";
         }
     }
 
     public static void main(String[] args) throws InterruptedException {
-        // Allows 2 requests, refills 1 token every 1000ms
         RateLimiter limiter = new TokenBucketRateLimiter(2, 1000);
         ApiGateway gateway = new ApiGateway(limiter);
-
         String client = "user_abc_123";
 
         System.out.println(gateway.routeRequest(client, "/users"));   // Allowed
         System.out.println(gateway.routeRequest(client, "/orders"));  // Allowed
-        System.out.println(gateway.routeRequest(client, "/users"));   // Blocked (Bucket empty)
+        System.out.println(gateway.routeRequest(client, "/users"));   // Blocked
         
-        System.out.println("Waiting for bucket to refill...");
         Thread.sleep(1100); 
-        
         System.out.println(gateway.routeRequest(client, "/users"));   // Allowed again
     }
+}</code></pre>
+      </div>
+      <div class="code-tab-content" data-tab-content="csharp">
+        <pre><code class="language-csharp">using System.Collections.Concurrent;
+using System.Diagnostics;
+
+public interface IRateLimiter
+{
+    bool IsAllowed(string clientId);
 }
-    </pre>
+
+public class TokenBucketRateLimiter(int maxTokens, TimeSpan refillInterval) : IRateLimiter
+{
+    private sealed class ClientState(int tokens, long lastRefillTick)
+    {
+        public int Tokens = tokens;
+        public long LastRefillTick = lastRefillTick;
+    }
+
+    private readonly ConcurrentDictionary&lt;string, ClientState&gt; _clientStates = new();
+    private readonly long _refillIntervalTicks = refillInterval.Ticks;
+    private readonly object _syncRoot = new();
+
+    public bool IsAllowed(string clientId)
+    {
+        lock (_syncRoot)
+        {
+            long now = Stopwatch.GetTimestamp();
+            var state = _clientStates.GetOrAdd(clientId, _ =&gt; new ClientState(maxTokens, now));
+
+            long elapsedTicks = now - state.LastRefillTick;
+            int tokensToAdd = (int)(elapsedTicks / _refillIntervalTicks);
+
+            if (tokensToAdd &gt; 0)
+            {
+                state.Tokens = Math.Min(maxTokens, state.Tokens + tokensToAdd);
+                state.LastRefillTick = now;
+            }
+
+            if (state.Tokens &gt; 0)
+            {
+                state.Tokens--;
+                return true;
+            }
+
+            return false;
+        }
+    }
+}
+
+public interface IMicroservice
+{
+    string Handle(string request);
+}
+
+public class UserService : IMicroservice
+{
+    public string Handle(string request) =&gt; "User Data from backend (.NET 8)";
+}
+
+public class OrderService : IMicroservice
+{
+    public string Handle(string request) =&gt; "Order Data from backend (.NET 8)";
+}
+
+public class ApiGateway(IRateLimiter rateLimiter)
+{
+    private readonly Dictionary&lt;string, IMicroservice&gt; _routingTable = new()
+    {
+        ["/users"] = new UserService(),
+        ["/orders"] = new OrderService()
+    };
+
+    public string RouteRequest(string clientId, string path)
+    {
+        if (!rateLimiter.IsAllowed(clientId))
+        {
+            return $"HTTP 429: Too Many Requests (Rate limit exceeded for {clientId})";
+        }
+
+        if (_routingTable.TryGetValue(path, out var service))
+        {
+            return $"HTTP 200: {service.Handle(path)}";
+        }
+
+        return "HTTP 404: Route Not Found";
+    }
+}</code></pre>
+      </div>
+    </div>
 
     <h2>Popular Tools</h2>
     <ul>

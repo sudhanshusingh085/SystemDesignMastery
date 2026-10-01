@@ -27,17 +27,20 @@
     <li><strong>USE Method (for resources):</strong> <b>U</b>tilization (% busy), <b>S</b>aturation (queue length), <b>E</b>rrors.</li>
 </ul>
 
-<span class="code-label">Java 21</span>
-<pre>
-import java.util.concurrent.atomic.AtomicLong;
+<div class="code-tabs">
+  <div class="code-tabs-header">
+    <button class="code-tab-btn active" data-tab="java">☕ Java 21</button>
+    <button class="code-tab-btn" data-tab="csharp">🔷 C# 12</button>
+  </div>
+  <div class="code-tab-content active" data-tab-content="java">
+    <pre><code class="language-java">import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.DoubleAdder;
 
 public class MetricsDemo {
-    // Java 21 approach to metrics using basic primitives
     record MetricsCollector(
-        AtomicLong requestCounter, // Counter: Only goes up
-        AtomicLong activeConnections, // Gauge: Goes up and down
-        DoubleAdder totalResponseTime // Used to calculate summary/histogram
+        AtomicLong requestCounter,
+        AtomicLong activeConnections,
+        DoubleAdder totalResponseTime
     ) {
         public MetricsCollector() {
             this(new AtomicLong(0), new AtomicLong(0), new DoubleAdder());
@@ -51,8 +54,29 @@ public class MetricsDemo {
         public void openConnection() { activeConnections.incrementAndGet(); }
         public void closeConnection() { activeConnections.decrementAndGet(); }
     }
-}
-</pre>
+}</code></pre>
+  </div>
+  <div class="code-tab-content" data-tab-content="csharp">
+    <pre><code class="language-csharp">using System.Diagnostics.Metrics;
+
+public class MetricsDemo
+{
+    private static readonly Meter AppMeter = new("Ecommerce.Api", "1.0.0");
+    private static readonly Counter&lt;long&gt; RequestCounter = AppMeter.CreateCounter&lt;long&gt;("requests.total");
+    private static readonly UpDownCounter&lt;int&gt; ActiveConnections = AppMeter.CreateUpDownCounter&lt;int&gt;("connections.active");
+    private static readonly Histogram&lt;double&gt; RequestDuration = AppMeter.CreateHistogram&lt;double&gt;("request.duration.ms");
+
+    public void RecordRequest(double durationMs)
+    {
+        RequestCounter.Add(1);
+        RequestDuration.Record(durationMs);
+    }
+
+    public void OpenConnection() =&gt; ActiveConnections.Add(1);
+    public void CloseConnection() =&gt; ActiveConnections.Add(-1);
+}</code></pre>
+  </div>
+</div>
 
 <h2>4. Logging Best Practices</h2>
 <p>Logs should be structured (usually JSON) so they can be easily queried and filtered by tools like Elasticsearch or Splunk.</p>
@@ -69,12 +93,15 @@ public class MetricsDemo {
     </div>
 </div>
 
-<span class="code-label">Java 21</span>
-<pre>
-import java.time.Instant;
+<div class="code-tabs">
+  <div class="code-tabs-header">
+    <button class="code-tab-btn active" data-tab="java">☕ Java 21</button>
+    <button class="code-tab-btn" data-tab="csharp">🔷 C# 12</button>
+  </div>
+  <div class="code-tab-content active" data-tab-content="java">
+    <pre><code class="language-java">import java.time.Instant;
 
 public class LoggingDemo {
-    // Structured log record using Java 21
     record LogMessage(
         String level, 
         Instant timestamp, 
@@ -83,7 +110,6 @@ public class LoggingDemo {
         String message
     ) {
         public String toJson() {
-            // Simplified JSON creation for demonstration
             return """
                 {
                     "level": "%s",
@@ -95,8 +121,24 @@ public class LoggingDemo {
                 """.formatted(level, timestamp, correlationId, service, message);
         }
     }
-}
-</pre>
+}</code></pre>
+  </div>
+  <div class="code-tab-content" data-tab-content="csharp">
+    <pre><code class="language-csharp">using System.Text.Json;
+
+public record LogMessage(
+    string Level,
+    DateTime TimestampUtc,
+    string CorrelationId,
+    string Service,
+    string Message
+)
+{
+    // C# 12 raw string literal or System.Text.Json serialization
+    public string ToJson() =&gt; JsonSerializer.Serialize(this, new JsonSerializerOptions { WriteIndented = false });
+}</code></pre>
+  </div>
+</div>
 
 <h2>5. Distributed Tracing</h2>
 <p>When a single request hits 5 different microservices, how do you debug a failure? Distributed tracing assigns a unique <span class="jargon">Trace ID</span> to the request at the gateway. This ID is passed to every downstream service.</p>
@@ -110,23 +152,26 @@ sequenceDiagram
     participant Order
     participant Payment
     
-    User->>Gateway: POST /order
-    Gateway->>Gateway: Generate TraceID: 123
-    Gateway->>Auth: Verify Token (TraceID: 123)
-    Auth-->>Gateway: OK
-    Gateway->>Order: Create Order (TraceID: 123)
-    Order->>Payment: Charge Card (TraceID: 123)
-    Payment-->>Order: Success
-    Order-->>Gateway: Order Created
-    Gateway-->>User: 200 OK
+    User-&gt;&gt;Gateway: POST /order
+    Gateway-&gt;&gt;Gateway: Generate TraceID: 123
+    Gateway-&gt;&gt;Auth: Verify Token (TraceID: 123)
+    Auth--&gt;&gt;Gateway: OK
+    Gateway-&gt;&gt;Order: Create Order (TraceID: 123)
+    Order-&gt;&gt;Payment: Charge Card (TraceID: 123)
+    Payment--&gt;&gt;Order: Success
+    Order--&gt;&gt;Gateway: Order Created
+    Gateway--&gt;&gt;User: 200 OK
 </div>
 <p class="caption">Figure 1: Trace ID propagation across services</p>
 </div>
 
-<span class="code-label">Java 21</span>
-<pre>
-public class TracingDemo {
-    // Span represents a single operation within a trace
+<div class="code-tabs">
+  <div class="code-tabs-header">
+    <button class="code-tab-btn active" data-tab="java">☕ Java 21</button>
+    <button class="code-tab-btn" data-tab="csharp">🔷 C# 12</button>
+  </div>
+  <div class="code-tab-content active" data-tab-content="java">
+    <pre><code class="language-java">public class TracingDemo {
     record Span(String traceId, String spanId, String parentSpanId, String name, long startTime, long endTime) {}
     
     public class Tracer {
@@ -136,8 +181,31 @@ public class TracingDemo {
         public static String getTraceId() { return currentTraceId.get(); }
         public static void clear() { currentTraceId.remove(); }
     }
-}
-</pre>
+}</code></pre>
+  </div>
+  <div class="code-tab-content" data-tab-content="csharp">
+    <pre><code class="language-csharp">using System.Diagnostics;
+
+public class TracingDemo
+{
+    // Industry standard W3C Activity Source in .NET 8 / OpenTelemetry
+    private static readonly ActivitySource Source = new("Ecommerce.DistributedTracer");
+
+    public static Activity? StartSpan(string operationName)
+    {
+        return Source.StartActivity(operationName, ActivityKind.Server);
+    }
+
+    // Fallback ambient trace context using AsyncLocal for async flows
+    public static class AsyncLocalTracer
+    {
+        private static readonly AsyncLocal&lt;string?&gt; CurrentTraceId = new();
+        public static void SetTraceId(string traceId) =&gt; CurrentTraceId.Value = traceId;
+        public static string? GetTraceId() =&gt; CurrentTraceId.Value;
+    }
+}</code></pre>
+  </div>
+</div>
 
 <h2>6. Alerting</h2>
 <p>Don't alert on everything. <span class="jargon">Alert Fatigue</span> happens when engineers ignore alerts because there are too many false positives. Alert on symptoms (high latency, high error rate) rather than causes (high CPU).</p>

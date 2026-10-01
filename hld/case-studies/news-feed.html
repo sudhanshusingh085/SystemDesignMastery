@@ -79,10 +79,60 @@
     
     <p><strong>The Solution: Hybrid Approach.</strong> Use Push for normal users, and Pull for celebrities to avoid overloading the system when a celebrity posts.</p>
 
-    <h2>Step 4 — Implementation (Java 21)</h2>
-    <span class="code-label">Java</span>
-    <pre>
-import java.util.List;
+
+    <!-- WHY THIS, WHY NOT OTHER? -->
+    <h2>⚖️ Architectural Decision Matrix: Why This, Why Not Other?</h2>
+    <table class="comparison-table">
+      <thead>
+        <tr>
+          <th>Architectural Decision</th>
+          <th>Chosen Approach</th>
+          <th>Alternative Considered</th>
+          <th>WHY THIS? (Winning Strengths)</th>
+          <th>WHY NOT THE OTHER? (Disqualifying Trade-offs)</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Feed Fan-Out Model</strong></td>
+          <td><strong>Hybrid Fan-Out (Push for Normal, Pull for Celebrities)</strong></td>
+          <td>Pure Fan-Out on Write (Push) OR Pure Fan-Out on Read (Pull)</td>
+          <td>Gives 99% of normal users sub-50ms O(1) feed reads while shielding the system from write amplification when celebrities post.</td>
+          <td>Pure Push collapses when Elon Musk/Cristiano Ronaldo posts (100M+ duplicate writes). Pure Pull requires querying 1,000 followees and merge-sorting on every single feed load, causing massive DB lag.</td>
+        </tr>
+        <tr>
+          <td><strong>Feed Storage Cache</strong></td>
+          <td><strong>Redis Sorted Sets (ZSET)</strong></td>
+          <td>Relational DB (PostgreSQL / MySQL)</td>
+          <td><code>ZREVRANGEBYSCORE</code> fetches paginated post IDs by timestamp in O(log N + M) in-memory time. Capped via <code>ZREMRANGEBYRANK</code> to keep only the top 800 recent posts per user.</td>
+          <td>Fetching feeds by running relational multi-table JOINs across millions of rows on every feed refresh saturates database IOPS.</td>
+        </tr>
+        <tr>
+          <td><strong>Social Graph Storage</strong></td>
+          <td><strong>Graph DB (Neo4j) / Distributed KV (Redis / DynamoDB)</strong></td>
+          <td>Relational Self-Referential Table</td>
+          <td>Traversing 2nd-degree friend connections ("Friends of Friends", "People You May Know") executes in sub-10ms without recursive SQL CTE joins.</td>
+          <td>Relational self-joins (<code>SELECT * FROM Follows f1 JOIN Follows f2 ...</code>) don't scale past hundreds of millions of user edges.</td>
+        </tr>
+        <tr>
+          <td><strong>Feed Worker Decoupling</strong></td>
+          <td><strong>Kafka Partitioned Message Broker</strong></td>
+          <td>Synchronous HTTP Post Calls</td>
+          <td>Publishing a post returns in &lt;10ms. Fan-out workers consume asynchronously in batches. If 500 workers crash, messages remain durable in Kafka.</td>
+          <td>Synchronous fan-out locks the HTTP request thread until all 50,000 followers are updated; an error midway causes partial delivery with zero retry resilience.</td>
+        </tr>
+      </tbody>
+    </table>
+    <h2>Step 4 — Implementation (Java 21 &amp; C# 12)</h2>
+    <p>Compare the fan-out strategy patterns in Java 21 and modern C# 12 with primary constructors and asynchronous pipelines.</p>
+
+    <div class="code-tabs">
+      <div class="code-tabs-header">
+        <button class="code-tab-btn active" data-tab="java">☕ Java 21</button>
+        <button class="code-tab-btn" data-tab="csharp">🔷 C#</button>
+      </div>
+      <div class="code-tab-content active" data-tab-content="java">
+        <pre><code class="language-java">import java.util.List;
 import java.util.ArrayList;
 
 // Java 21 Record for a post
@@ -159,6 +209,78 @@ class SocialGraph {
     }
 }
     </pre>
+</code></pre>
+      </div>
+      <div class="code-tab-content" data-tab-content="csharp">
+        <pre><code class="language-csharp">using System;
+using System.Collections.Generic;
+using System.Threading.Tasks;
+
+// C# 12 Record for Post
+public record Post(string PostId, string AuthorId, string Content, long Timestamp);
+
+public interface IFanoutStrategy
+{
+    Task ProcessAsync(Post post, IReadOnlyList<string> followers);
+}
+
+// Push Fanout: Writes directly to followers' Redis mailboxes
+public class PushFanout(IFeedCache cache) : IFanoutStrategy
+{
+    public async Task ProcessAsync(Post post, IReadOnlyList<string> followers)
+    {
+        foreach (var followerId in followers)
+        {
+            await cache.AddPostToFeedAsync(followerId, post);
+        }
+    }
+}
+
+// Pull Fanout: No-op on write; merged dynamically at read time
+public class PullFanout : IFanoutStrategy
+{
+    public Task ProcessAsync(Post post, IReadOnlyList<string> followers) => Task.CompletedTask;
+}
+
+// Hybrid Fanout: Routes based on celebrity threshold (e.g. 50,000 followers)
+public class HybridFanout(PushFanout push, PullFanout pull) : IFanoutStrategy
+{
+    private const int CelebrityThreshold = 50_000;
+
+    public async Task ProcessAsync(Post post, IReadOnlyList<string> followers)
+    {
+        if (followers.Count > CelebrityThreshold)
+        {
+            await pull.ProcessAsync(post, followers); // Celebrities skipped on push!
+        }
+        else
+        {
+            await push.ProcessAsync(post, followers);
+        }
+    }
+}
+
+public interface IFeedCache
+{
+    Task AddPostToFeedAsync(string userId, Post post);
+}
+
+// Feed Service orchestrating publishing
+public class FeedService(IFanoutStrategy fanout, ISocialGraphService graph)
+{
+    public async Task PublishPostAsync(Post post)
+    {
+        var followers = await graph.GetFollowersAsync(post.AuthorId);
+        await fanout.ProcessAsync(post, followers);
+    }
+}
+
+public interface ISocialGraphService
+{
+    Task<IReadOnlyList<string>> GetFollowersAsync(string userId);
+}</code></pre>
+      </div>
+    </div>
 
     <h2>Step 5 — Optimization</h2>
     <ul>

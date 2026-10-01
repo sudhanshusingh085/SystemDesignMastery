@@ -23,6 +23,14 @@
     <h1>Java 21 Design Fundamentals</h1>
     <p>Modern Java has evolved significantly. Let's look at the foundational constructs you'll use daily to architect clean, safe, and maintainable systems.</p>
 
+    <div class="callout callout-info" style="margin-bottom: 2rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+      <div>
+        <strong>Looking for the .NET / C# equivalent?</strong>
+        <p style="margin: 0.25rem 0 0 0;">Check out our deep dive into modern C# 12 and .NET 8 language constructs, memory layouts, records, pattern matching, and ref structs.</p>
+      </div>
+      <a href="../dotnet/modern-csharp/index.html" class="btn" style="background: var(--dotnet-accent, #512bd4); color: white; padding: 0.6rem 1.2rem; border-radius: 6px; font-weight: 600; text-decoration: none; white-space: nowrap;">🔷 View C# 12 Mastery Track →</a>
+    </div>
+
     <div class="card">
       <h2>1. Interfaces</h2>
       <p><strong>What is it?</strong> An interface is a contract. It declares a set of methods that a class must implement.</p>
@@ -35,18 +43,22 @@
         <div class="mermaid">
           classDiagram
             class Flyable {
-              <<interface>>
+              &lt;&lt;interface&gt;&gt;
               +fly()
             }
-            Flyable <|.. Bird
-            Flyable <|.. Airplane
+            Flyable &lt;|.. Bird
+            Flyable &lt;|.. Airplane
         </div>
         <p class="caption">Figure 1: Interface Implementation</p>
       </div>
 
-      <span class="code-label">Java</span>
-      <pre>
-public interface Flyable {
+      <div class="code-tabs">
+        <div class="code-tabs-header">
+          <button class="code-tab-btn active" data-tab="java">☕ Java 21</button>
+          <button class="code-tab-btn" data-tab="csharp">🔷 C# 12</button>
+        </div>
+        <div class="code-tab-content active" data-tab-content="java">
+          <pre><code class="language-java">public interface Flyable {
     // Abstract method (implicitly public and abstract)
     void fly();
     
@@ -68,10 +80,31 @@ public class Airplane implements Flyable {
     public void fly() {
         System.out.println("Starting jet engines.");
     }
+}</code></pre>
+        </div>
+        <div class="code-tab-content" data-tab-content="csharp">
+          <pre><code class="language-csharp">public interface IFlyable
+{
+    // Implicitly public abstract method
+    void Fly();
+
+    // Default interface implementation (C# 8+)
+    void Land() =&gt; Console.WriteLine("Landing smoothly...");
 }
-      </pre>
+
+public class Bird : IFlyable
+{
+    public void Fly() =&gt; Console.WriteLine("Flapping wings.");
+}
+
+public class Airplane : IFlyable
+{
+    public void Fly() =&gt; Console.WriteLine("Starting jet engines.");
+}</code></pre>
+        </div>
+      </div>
       <div class="callout callout-info">
-        <strong>Interview Tip:</strong> Mention <em>Functional Interfaces</em> (interfaces with exactly one abstract method) which allow the use of lambda expressions.
+        <strong>Interview Tip:</strong> Mention <em>Functional Interfaces</em> in Java vs <em>delegates / func</em> in C# for first-class functional execution.
       </div>
     </div>
 
@@ -80,9 +113,13 @@ public class Airplane implements Flyable {
       <p><strong>What is it?</strong> A class that cannot be instantiated on its own. It acts as a partial blueprint, allowing you to define some concrete methods and some abstract ones.</p>
       <p><strong>When to use it?</strong> When you have closely related classes that share code and a common core identity.</p>
 
-      <span class="code-label">Java</span>
-      <pre>
-public abstract class Vehicle {
+      <div class="code-tabs">
+        <div class="code-tabs-header">
+          <button class="code-tab-btn active" data-tab="java">☕ Java 21</button>
+          <button class="code-tab-btn" data-tab="csharp">🔷 C# 12</button>
+        </div>
+        <div class="code-tab-content active" data-tab-content="java">
+          <pre><code class="language-java">public abstract class Vehicle {
     protected String id;
     
     public Vehicle(String id) {
@@ -96,8 +133,22 @@ public abstract class Vehicle {
     
     // Abstract method that children MUST implement
     public abstract String fuelType();
-}
-      </pre>
+}</code></pre>
+        </div>
+        <div class="code-tab-content" data-tab-content="csharp">
+          <pre><code class="language-csharp">// Primary constructor on abstract class in C# 12
+public abstract class Vehicle(string id)
+{
+    protected string Id { get; } = id;
+
+    // Concrete method shared by all children
+    public void StartEngine() =&gt; Console.WriteLine($"Engine started for {Id}");
+
+    // Abstract method that subclasses MUST implement
+    public abstract string FuelType();
+}</code></pre>
+        </div>
+      </div>
       
       <table>
         <thead>
@@ -128,16 +179,20 @@ public abstract class Vehicle {
     </div>
 
     <div class="card">
-      <h2>3. Final</h2>
-      <p><strong>What is it?</strong> A keyword that restricts modification. A <code>final</code> class cannot be extended. A <code>final</code> method cannot be overridden. A <code>final</code> variable cannot be reassigned.</p>
+      <h2>3. Final &amp; Sealed (Immutability &amp; Invariance)</h2>
+      <p><strong>What is it?</strong> A keyword that restricts modification. A <code>final</code> (Java) / <code>sealed</code> (C#) class cannot be extended. A method cannot be overridden. A variable/field cannot be reassigned.</p>
       <p><strong>When to use it?</strong> To enforce immutability, prevent inheritance for security reasons (like <code>String</code>), or ensure a method's logic isn't tampered with by subclasses.</p>
       
       <h3>Real-World Analogy</h3>
       <p>A <strong>sealed envelope</strong>. Once it's sealed (finalized), you cannot change what's inside without breaking it.</p>
 
-      <span class="code-label">Java</span>
-      <pre>
-// Cannot be subclassed
+      <div class="code-tabs">
+        <div class="code-tabs-header">
+          <button class="code-tab-btn active" data-tab="java">☕ Java 21</button>
+          <button class="code-tab-btn" data-tab="csharp">🔷 C# 12</button>
+        </div>
+        <div class="code-tab-content active" data-tab-content="java">
+          <pre><code class="language-java">// Cannot be subclassed
 public final class Configuration {
     // Cannot be reassigned
     private final String url;
@@ -150,26 +205,35 @@ public final class Configuration {
     public final String getUrl() {
         return url;
     }
-}
-      </pre>
+}</code></pre>
+        </div>
+        <div class="code-tab-content" data-tab-content="csharp">
+          <pre><code class="language-csharp">// sealed keyword prevents inheritance; readonly property prevents mutation
+public sealed class Configuration(string url)
+{
+    public string Url { get; } = url;
+}</code></pre>
+        </div>
+      </div>
     </div>
 
     <div class="card">
-      <h2>4. Sealed Classes (Java 17+)</h2>
-      <p><strong>What is it?</strong> A feature that restricts which classes can extend a superclass. It gives you control over inheritance hierarchies.</p>
-      <p><strong>When to use it?</strong> Domain modeling where you know all possible variants of a type (e.g., AST nodes, specific business events).</p>
+      <h2>4. Sealed Classes / Discriminated Unions</h2>
+      <p><strong>What is it?</strong> A feature that restricts which classes can extend a superclass. It gives you compiler-verified exhaustive control over type hierarchies.</p>
+      <p><strong>When to use it?</strong> Domain modeling where you know all possible variants of a type (e.g., AST nodes, specific business events, result envelopes).</p>
       
       <h3>Real-World Analogy</h3>
       <p>An <strong>exclusive club with a guest list</strong>. Only the names on the permit list are allowed in.</p>
 
-      <span class="code-label">Java</span>
-      <pre>
-// The guest list: only Circle, Rectangle, and Triangle can extend Shape
-public sealed class Shape permits Circle, Rectangle, Triangle {
-    // Common fields
-}
+      <div class="code-tabs">
+        <div class="code-tabs-header">
+          <button class="code-tab-btn active" data-tab="java">☕ Java 21</button>
+          <button class="code-tab-btn" data-tab="csharp">🔷 C# 12</button>
+        </div>
+        <div class="code-tab-content active" data-tab-content="java">
+          <pre><code class="language-java">// The guest list: only Circle, Rectangle, and Triangle can extend Shape
+public sealed class Shape permits Circle, Rectangle, Triangle {}
 
-// Subclasses must be declared final, sealed, or non-sealed
 public final class Circle extends Shape {
     double radius;
 }
@@ -184,14 +248,35 @@ public non-sealed class Triangle extends Shape {
 
 // Java 21 Pattern Matching with Sealed Classes
 public void printShapeInfo(Shape shape) {
-    // Exhaustive switch: no default case needed because Java knows all permutations!
+    // Exhaustive switch: compiler verifies all branches!
     switch(shape) {
-        case Circle c -> System.out.println("Circle radius: " + c.radius);
-        case Rectangle r -> System.out.println("Rectangle w: " + r.w);
-        case Triangle t -> System.out.println("Triangle");
+        case Circle c -&gt; System.out.println("Circle radius: " + c.radius);
+        case Rectangle r -&gt; System.out.println("Rectangle w: " + r.w);
+        case Triangle t -&gt; System.out.println("Triangle");
     }
+}</code></pre>
+        </div>
+        <div class="code-tab-content" data-tab-content="csharp">
+          <pre><code class="language-csharp">// Closed discriminated union pattern in C# 12
+public abstract record Shape
+{
+    private Shape() { } // Closed private constructor prevents external subclassing
+
+    public sealed record Circle(double Radius) : Shape;
+    public sealed record Rectangle(double Width, double Height) : Shape;
+    public record Triangle(double BaseLength, double Height) : Shape;
 }
-      </pre>
+
+// C# 12 Pattern Matching switch expression
+public static string PrintShapeInfo(Shape shape) =&gt; shape switch
+{
+    Shape.Circle c    =&gt; $"Circle radius: {c.Radius}",
+    Shape.Rectangle r =&gt; $"Rectangle {r.Width}x{r.Height}",
+    Shape.Triangle t  =&gt; $"Triangle base: {t.BaseLength}",
+    _                 =&gt; throw new InvalidOperationException("Unreachable")
+};</code></pre>
+        </div>
+      </div>
     </div>
 
     <div class="card">
@@ -202,9 +287,13 @@ public void printShapeInfo(Shape shape) {
       <h3>Real-World Analogy</h3>
       <p>The <strong>days of the week</strong>. There are exactly 7. You can't invent an 8th day.</p>
 
-      <span class="code-label">Java</span>
-      <pre>
-public enum OrderStatus {
+      <div class="code-tabs">
+        <div class="code-tabs-header">
+          <button class="code-tab-btn active" data-tab="java">☕ Java 21</button>
+          <button class="code-tab-btn" data-tab="csharp">🔷 C# 12</button>
+        </div>
+        <div class="code-tab-content active" data-tab-content="java">
+          <pre><code class="language-java">public enum OrderStatus {
     CREATED("Order created, unpaid"),
     PAID("Payment received"),
     SHIPPED("On the way"),
@@ -220,75 +309,136 @@ public enum OrderStatus {
     public String getDescription() {
         return description;
     }
+}</code></pre>
+        </div>
+        <div class="code-tab-content" data-tab-content="csharp">
+          <pre><code class="language-csharp">public enum OrderStatus
+{
+    Created,
+    Paid,
+    Shipped,
+    Delivered
 }
-      </pre>
+
+// C# 12 Extension method for rich enum behavior
+public static class OrderStatusExtensions
+{
+    public static string GetDescription(this OrderStatus status) =&gt; status switch
+    {
+        OrderStatus.Created   =&gt; "Order created, unpaid",
+        OrderStatus.Paid      =&gt; "Payment received",
+        OrderStatus.Shipped   =&gt; "On the way",
+        OrderStatus.Delivered =&gt; "Delivered successfully",
+        _                     =&gt; status.ToString()
+    };
+}</code></pre>
+        </div>
+      </div>
     </div>
 
     <div class="card">
-      <h2>6. Records (Java 16+)</h2>
-      <p><strong>What is it?</strong> A concise syntax for creating immutable data carriers. It automatically generates a constructor, getters, <code>equals()</code>, <code>hashCode()</code>, and <code>toString()</code>.</p>
-      <p><strong>When to use it?</strong> For DTOs, configurations, tuples, or any class whose sole purpose is to hold data.</p>
+      <h2>6. Records &amp; Data Carriers</h2>
+      <p><strong>What is it?</strong> A concise syntax for creating immutable data carriers. It automatically generates a constructor, getters/properties, value-based <code>equals()</code>, <code>hashCode()</code>, and <code>toString()</code>.</p>
+      <p><strong>When to use it?</strong> For DTOs, configurations, tuples, or any class whose primary purpose is to hold data.</p>
 
       <h3>Real-World Analogy</h3>
       <p>A <strong>shipping label</strong>. It just carries information (address, name). It doesn't perform actions, and once printed, it shouldn't be altered.</p>
 
-      <span class="code-label">Java</span>
-      <pre>
-// That's it! 1 line replaces ~40 lines of boilerplate code.
+      <div class="code-tabs">
+        <div class="code-tabs-header">
+          <button class="code-tab-btn active" data-tab="java">☕ Java 21</button>
+          <button class="code-tab-btn" data-tab="csharp">🔷 C# 12</button>
+        </div>
+        <div class="code-tab-content active" data-tab-content="java">
+          <pre><code class="language-java">// Compact record definition in Java 21
 public record Point(int x, int y) {
-    
-    // Compact constructor for validation
+    // Compact constructor for boundary validation
     public Point {
-        if (x < 0 || y < 0) {
+        if (x &lt; 0 || y &lt; 0) {
             throw new IllegalArgumentException("Coordinates must be positive");
         }
     }
     
-    // Can define custom methods too
     public double distanceFromOrigin() {
         return Math.sqrt(x * x + y * y);
     }
-}
-      </pre>
+}</code></pre>
+        </div>
+        <div class="code-tab-content" data-tab-content="csharp">
+          <pre><code class="language-csharp">// Positional readonly record struct for zero heap allocation (C# 12)
+public readonly record struct Point(int X, int Y)
+{
+    public Point(int x, int y) : this()
+    {
+        ArgumentOutOfRangeException.ThrowIfNegative(x);
+        ArgumentOutOfRangeException.ThrowIfNegative(y);
+        X = x;
+        Y = y;
+    }
+
+    public double DistanceFromOrigin() =&gt; Math.Sqrt(X * X + Y * Y);
+}</code></pre>
+        </div>
+      </div>
     </div>
 
     <div class="card">
-      <h2>7. Immutability</h2>
+      <h2>7. Immutability &amp; Defensive Copying</h2>
       <p><strong>What is it?</strong> Designing an object so its state cannot change after construction.</p>
-      <p><strong>Why does it matter?</strong> Thread safety without locking, great for caching, reduces side effects, and makes reasoning about code easier.</p>
+      <p><strong>Why does it matter?</strong> Thread safety without locking, cache friendliness, zero side effects, and safe concurrent access.</p>
       <div class="jargon">📖 <strong>Defensive Copy</strong>: Copying mutable objects when passing them in or out of an immutable class to prevent external modification.</div>
 
-      <span class="code-label">Java</span>
-      <pre>
-public final class ImmutableUser {
+      <div class="code-tabs">
+        <div class="code-tabs-header">
+          <button class="code-tab-btn active" data-tab="java">☕ Java 21</button>
+          <button class="code-tab-btn" data-tab="csharp">🔷 C# 12</button>
+        </div>
+        <div class="code-tab-content active" data-tab-content="java">
+          <pre><code class="language-java">public final class ImmutableUser {
     private final String name;
-    private final List<String> roles;
+    private final List&lt;String&gt; roles;
     
-    public ImmutableUser(String name, List<String> roles) {
+    public ImmutableUser(String name, List&lt;String&gt; roles) {
         this.name = name;
-        // Defensive copy on the way in
+        // Defensive copy on constructor input
         this.roles = List.copyOf(roles); 
     }
     
-    public List<String> getRoles() {
-        // Safe to return because List.copyOf creates an unmodifiable list
+    public List&lt;String&gt; getRoles() {
+        // Safe because List.copyOf creates an unmodifiable list
         return roles;
     }
-}
-      </pre>
+}</code></pre>
+        </div>
+        <div class="code-tab-content" data-tab-content="csharp">
+          <pre><code class="language-csharp">using System.Collections.Immutable;
+
+public sealed class ImmutableUser(string name, IEnumerable&lt;string&gt; roles)
+{
+    public string Name { get; } = name;
+    
+    // System.Collections.Immutable guarantees thread-safe immutability
+    public ImmutableArray&lt;string&gt; Roles { get; } = [.. roles];
+}</code></pre>
+        </div>
+      </div>
     </div>
 
     <div class="card">
-      <h2>8. Generics</h2>
-      <p><strong>What is it?</strong> Parameterized types. Writing code that works with any object type while providing compile-time type safety.</p>
+      <h2>8. Generics &amp; Constraints</h2>
+      <p><strong>What is it?</strong> Parameterized types. Writing reusable components that work with multiple types while enforcing compile-time type safety.</p>
       
       <h3>Real-World Analogy</h3>
       <p>A <strong>shipping container</strong>. The container can hold electronics, clothes, or food. It's a generic box, but when you label it "Box of Electronics", you know you shouldn't put food in it.</p>
 
-      <span class="code-label">Java</span>
-      <pre>
-// Generic class
-public class Box<T> {
+      <div class="code-tabs">
+        <div class="code-tabs-header">
+          <button class="code-tab-btn active" data-tab="java">☕ Java 21</button>
+          <button class="code-tab-btn" data-tab="csharp">🔷 C# 12</button>
+        </div>
+        <div class="code-tab-content active" data-tab-content="java">
+          <pre><code class="language-java">// Generic class
+public class Box&lt;T&gt; {
     private T item;
     
     public void put(T item) { this.item = item; }
@@ -296,23 +446,40 @@ public class Box<T> {
 }
 
 // Bounded generic: Type must implement Comparable
-public <T extends Comparable<T>> T findMax(List<T> list) {
+public &lt;T extends Comparable&lt;T&gt;&gt; T findMax(List&lt;T&gt; list) {
     return Collections.max(list);
+}</code></pre>
+        </div>
+        <div class="code-tab-content" data-tab-content="csharp">
+          <pre><code class="language-csharp">public class Box&lt;T&gt;
+{
+    public T? Item { get; set; }
 }
-      </pre>
+
+// Bounded generic with where constraint in C# 12
+public static T FindMax&lt;T&gt;(IEnumerable&lt;T&gt; list) where T : IComparable&lt;T&gt;
+{
+    return list.Max() ?? throw new InvalidOperationException("Empty collection");
+}</code></pre>
+        </div>
+      </div>
     </div>
 
     <div class="card">
       <h2>9. Exception Design</h2>
-      <p><strong>What is it?</strong> Properly classifying and handling errors in an application.</p>
+      <p><strong>What is it?</strong> Properly classifying and handling errors across boundaries in an application.</p>
       <ul>
-        <li><strong>Checked Exceptions:</strong> Extend <code>Exception</code>. Must be handled (try-catch) or declared (throws). Use for recoverable errors (e.g., FileNotFound).</li>
-        <li><strong>Unchecked Exceptions:</strong> Extend <code>RuntimeException</code>. Don't need to be declared. Use for programming errors (e.g., NullPointer) or fatal issues.</li>
+        <li><strong>Recoverable / Business Exceptions:</strong> Errors expected in normal operations (e.g. insufficient funds, entity not found).</li>
+        <li><strong>Fatal / Technical Exceptions:</strong> Infrastructure or unrecoverable bugs (e.g. database timeout, null pointer).</li>
       </ul>
 
-      <span class="code-label">Java</span>
-      <pre>
-// Using sealed classes for structured exception hierarchies (Modern Java approach)
+      <div class="code-tabs">
+        <div class="code-tabs-header">
+          <button class="code-tab-btn active" data-tab="java">☕ Java 21</button>
+          <button class="code-tab-btn" data-tab="csharp">🔷 C# 12</button>
+        </div>
+        <div class="code-tab-content active" data-tab-content="java">
+          <pre><code class="language-java">// Sealed exception hierarchy in Java 21
 public sealed abstract class AppException extends RuntimeException 
     permits BusinessException, TechnicalException {
     
@@ -327,8 +494,20 @@ public final class BusinessException extends AppException {
 
 public final class TechnicalException extends AppException {
     public TechnicalException(String msg) { super(msg); }
-}
-      </pre>
+}</code></pre>
+        </div>
+        <div class="code-tab-content" data-tab-content="csharp">
+          <pre><code class="language-csharp">// Exception hierarchy in C# 12 using primary constructors
+public abstract class AppException(string message, Exception? inner = null) 
+    : Exception(message, inner);
+
+public sealed class BusinessException(string message) 
+    : AppException(message);
+
+public sealed class TechnicalException(string message, Exception? inner = null) 
+    : AppException(message, inner);</code></pre>
+        </div>
+      </div>
     </div>
 
     <div class="card">

@@ -104,9 +104,13 @@
     <h2>Java 21 Code: A Simple Client-Server Program</h2>
     <p>Java includes built-in tools to create HTTP servers and clients. Here is a simple example using the modern Java HTTP Client and the lightweight HttpServer.</p>
 
-    <span class="code-label">Java</span>
-    <pre>
-import com.sun.net.httpserver.HttpServer;
+    <div class="code-tabs">
+      <div class="code-tabs-header">
+        <button class="code-tab-btn active" data-tab="java">☕ Java 21</button>
+        <button class="code-tab-btn" data-tab="csharp">🔷 C# 12 (.NET 8)</button>
+      </div>
+      <div class="code-tab-content active" data-tab-content="java">
+        <pre><code class="language-java">import com.sun.net.httpserver.HttpServer;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
@@ -115,68 +119,55 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 
-/**
- * Demonstrates a basic Client-Server interaction in Java.
- */
 public class ClientServerExample {
-
-    // 1. Define the Server
     public static void startServer() throws IOException {
-        // Create a server listening on port 8080
         HttpServer server = HttpServer.create(new InetSocketAddress(8080), 0);
-        
-        // Define an API endpoint (context) at "/hello"
-        server.createContext("/hello", exchange -> {
-            String responseMessage = "Hello from the Java 21 Server!";
-            
-            // Send HTTP 200 OK status and the length of the message
-            exchange.sendResponseHeaders(200, responseMessage.getBytes().length);
-            
-            // Write the response body
+        server.createContext("/hello", exchange -&gt; {
+            String response = "Hello from the Java 21 Server!";
+            exchange.sendResponseHeaders(200, response.getBytes().length);
             try (OutputStream os = exchange.getResponseBody()) {
-                os.write(responseMessage.getBytes());
+                os.write(response.getBytes());
             }
         });
-        
-        // Start the server in the background
-        server.setExecutor(null); 
+        server.setExecutor(null);
         server.start();
         System.out.println("Server started on port 8080...");
     }
 
-    // 2. Define the Client
     public static void makeClientRequest() throws Exception {
-        // Create a modern Java HttpClient
         try (HttpClient client = HttpClient.newHttpClient()) {
-            
-            // Build the HTTP Request
             HttpRequest request = HttpRequest.newBuilder()
                     .uri(URI.create("http://localhost:8080/hello"))
                     .GET()
                     .build();
-
-            // Send the request and get the response
-            System.out.println("Client sending request to /hello...");
-            HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
-
-            // Print the result
-            System.out.println("Client received Status Code: " + response.statusCode());
-            System.out.println("Client received Body: " + response.body());
+            HttpResponse&lt;String&gt; response = client.send(request, HttpResponse.BodyHandlers.ofString());
+            System.out.println("Status: " + response.statusCode());
+            System.out.println("Body: " + response.body());
         }
     }
+}</code></pre>
+      </div>
+      <div class="code-tab-content" data-tab-content="csharp">
+        <pre><code class="language-csharp">// .NET 8 Client-Server Model with Minimal APIs and HttpClient
+using System.Net.Http;
+using Microsoft.AspNetCore.Builder;
 
-    public static void main(String[] args) throws Exception {
-        startServer();
-        
-        // Wait a tiny bit to ensure server is up
-        Thread.sleep(500); 
-        
-        makeClientRequest();
-        
-        System.exit(0);
-    }
-}
-    </pre>
+// 1. Define Server (Minimal API in .NET 8)
+var builder = WebApplication.CreateBuilder();
+var app = builder.Build();
+
+app.MapGet("/hello", () =&gt; "Hello from the .NET 8 C# Server!");
+_ = app.RunAsync("http://localhost:8080");
+
+// 2. Define Client (HttpClient)
+using var client = new HttpClient();
+var response = await client.GetAsync("http://localhost:8080/hello");
+var body = await response.Content.ReadAsStringAsync();
+
+Console.WriteLine($"Status: {(int)response.StatusCode}");
+Console.WriteLine($"Body: {body}");</code></pre>
+      </div>
+    </div>
 
     <div class="callout callout-warn">
       <strong>Important:</strong> In the real world, servers handle thousands of concurrent requests, meaning they need robust multithreading. Modern Java handles this beautifully with <em>Virtual Threads</em>, introduced in Java 21, which allow millions of lightweight threads to run simultaneously.

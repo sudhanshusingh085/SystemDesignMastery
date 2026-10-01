@@ -108,12 +108,16 @@
 
     <p>In this diagram, the User connects via the Internet to a Load Balancer, which distributes the traffic evenly between two Web Servers. These servers then read and write data to a central Database.</p>
 
-    <h2>Java 21 Code: Modeling a Request and Response</h2>
-    <p>Even at a high level, components communicate via requests and responses. With Java 21, we can model this elegantly using <code>record</code> classes, which are perfect for immutable data carriers.</p>
+    <h2>Code Implementation: Modeling a Request and Response</h2>
+    <p>Even at a high level, components communicate via requests and responses. We can model this elegantly using immutable records and switch pattern matching in modern Java 21 and C# 12.</p>
 
-    <span class="code-label">Java</span>
-    <pre>
-/**
+    <div class="code-tabs">
+      <div class="code-tabs-header">
+        <button class="code-tab-btn active" data-tab="java">☕ Java 21</button>
+        <button class="code-tab-btn" data-tab="csharp">🔷 C# 12 (.NET 8)</button>
+      </div>
+      <div class="code-tab-content active" data-tab-content="java">
+        <pre><code class="language-java">/**
  * Using Java 21 Records to model a simple API Request and Response.
  * Records are immutable data carriers, perfect for transferring data
  * between different parts of a system.
@@ -147,8 +151,44 @@ public class SystemDesignBasics {
         ApiResponse res1 = server.handleRequest(req1);
         System.out.println("Response: " + res1); // Prints 200, Welcome Home!
     }
+}</code></pre>
+      </div>
+      <div class="code-tab-content" data-tab-content="csharp">
+        <pre><code class="language-csharp">using System;
+
+// Using C# 12 Positional Records to model immutable API Request & Response
+public record ApiRequest(string Endpoint, string Payload);
+public record ApiResponse(int StatusCode, string Body);
+
+public class SimpleServer
+{
+    public ApiResponse HandleRequest(ApiRequest request)
+    {
+        Console.WriteLine($"Processing request to: {request.Endpoint}");
+        
+        // C# 12 Pattern Matching switch expression
+        return request.Endpoint switch
+        {
+            "/home"  => new ApiResponse(200, "Welcome Home!"),
+            "/about" => new ApiResponse(200, "About Us"),
+            _        => new ApiResponse(404, "Page Not Found")
+        };
+    }
 }
-    </pre>
+
+public static class Program
+{
+    public static void Main()
+    {
+        var server = new SimpleServer();
+        
+        var req1 = new ApiRequest("/home", "");
+        var res1 = server.HandleRequest(req1);
+        Console.WriteLine($"Response: {res1}"); // Prints 200, Welcome Home!
+    }
+}</code></pre>
+      </div>
+    </div>
 
     <div class="callout callout-purple">
       <strong>Interview Tip:</strong> System Design is the #1 interview topic for senior roles because it tests your experience. You can memorize algorithms, but designing a system requires you to weigh trade-offs (e.g., speed vs accuracy, consistency vs availability). Always be prepared to explain <em>why</em> you chose a specific design.

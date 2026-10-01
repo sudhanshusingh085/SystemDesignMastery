@@ -23,21 +23,42 @@
 
 <h2>5. Auto-Scaling</h2>
 <p>Dynamically adjusting the number of servers based on traffic.</p>
-<span class="code-label">Java 21</span>
-<pre>
-public class AutoScaler {
-    // Java 21 records
+<div class="code-tabs">
+  <div class="code-tabs-header">
+    <button class="code-tab-btn active" data-tab="java">☕ Java 21</button>
+    <button class="code-tab-btn" data-tab="csharp">🔷 C# 12</button>
+  </div>
+  <div class="code-tab-content active" data-tab-content="java">
+    <pre><code class="language-java">public class AutoScaler {
     record SystemMetrics(double cpuUsage, int activeConnections) {}
     
     public void evaluateScaling(SystemMetrics metrics) {
-        if (metrics.cpuUsage() > 80.0) {
+        if (metrics.cpuUsage() &gt; 80.0) {
             System.out.println("Scale Out: Adding 1 instance");
-        } else if (metrics.cpuUsage() < 20.0) {
+        } else if (metrics.cpuUsage() &lt; 20.0) {
             System.out.println("Scale In: Removing 1 instance");
         }
     }
-}
-</pre>
+}</code></pre>
+  </div>
+  <div class="code-tab-content" data-tab-content="csharp">
+    <pre><code class="language-csharp">public record SystemMetrics(double CpuUsage, int ActiveConnections);
+
+public class AutoScaler
+{
+    public void EvaluateScaling(SystemMetrics metrics)
+    {
+        var action = metrics switch
+        {
+            { CpuUsage: &gt; 80.0 } =&gt; "Scale Out: Adding 1 instance (.NET 8)",
+            { CpuUsage: &lt; 20.0 } =&gt; "Scale In: Removing 1 instance",
+            _                   =&gt; "Steady state: No scaling adjustment"
+        };
+        Console.WriteLine(action);
+    }
+}</code></pre>
+  </div>
+</div>
 
 <h2>6. Load Balancing Deep Dive</h2>
 <p>Distributes incoming traffic across multiple backend servers.</p>
@@ -85,9 +106,13 @@ graph LR
 <h2>10. Stateless vs Stateful Services</h2>
 <p>To easily scale horizontally, your application must be <span class="jargon">Stateless</span> — meaning it doesn't store session data locally. Store sessions in a shared Redis cache instead.</p>
 
-<span class="code-label">Java 21</span>
-<pre>
-public class StatelessServiceDemo {
+<div class="code-tabs">
+  <div class="code-tabs-header">
+    <button class="code-tab-btn active" data-tab="java">☕ Java 21</button>
+    <button class="code-tab-btn" data-tab="csharp">🔷 C# 12</button>
+  </div>
+  <div class="code-tab-content active" data-tab-content="java">
+    <pre><code class="language-java">public class StatelessServiceDemo {
     // BAD: Stateful - cannot be easily scaled horizontally
     private int userSessionScore = 0;
     
@@ -101,8 +126,24 @@ public class StatelessServiceDemo {
     record RedisClient() {
         void increment(String key) { /* Call external DB */ }
     }
+}</code></pre>
+  </div>
+  <div class="code-tab-content" data-tab-content="csharp">
+    <pre><code class="language-csharp">public interface IDistributedCacheClient
+{
+    Task IncrementAsync(string key, CancellationToken ct = default);
 }
-</pre>
+
+// Pure stateless service - zero instance state
+public class StatelessScoreService(IDistributedCacheClient cache)
+{
+    public async Task IncrementScoreStatelessAsync(string userId, CancellationToken ct = default)
+    {
+        await cache.IncrementAsync($"score:{userId}", ct);
+    }
+}</code></pre>
+  </div>
+</div>
 
 <h2>11. Queue-Based Load Leveling</h2>
 <p>If traffic spikes unpredictably, place a Message Queue (like Kafka or RabbitMQ) in front of your workers. The queue buffers requests so workers aren't overwhelmed.</p>

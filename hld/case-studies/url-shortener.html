@@ -93,12 +93,67 @@
     <h3>Deep Dive 3: Database Schema & Sharding</h3>
     <p>A relational DB (like PostgreSQL) works, but NoSQL (like Cassandra or DynamoDB) is better because we only need basic Key-Value lookups, not complex joins. Sharding by <code>hash(short_url)</code> ensures uniform distribution across partitions, avoiding hotspots.</p>
 
-    <h2>PILLAR 4: Production-Grade Java 21 Code</h2>
-    <p>Here we leverage modern Java 21 features: Records for DTOs, Pattern Matching, and structured concurrency principles.</p>
 
-    <span class="code-label">Java 21</span>
-    <pre>
-import java.util.Optional;
+    <!-- WHY THIS, WHY NOT OTHER? -->
+    <h2>⚖️ Architectural Decision Matrix: Why This, Why Not Other?</h2>
+    <table class="comparison-table">
+      <thead>
+        <tr>
+          <th>Architectural Decision</th>
+          <th>Chosen Approach</th>
+          <th>Alternative Considered</th>
+          <th>WHY THIS? (Winning Strengths)</th>
+          <th>WHY NOT THE OTHER? (Disqualifying Trade-offs)</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Encoding Algorithm</strong></td>
+          <td><strong>Base62 + KGS (Pre-generated)</strong></td>
+          <td>MD5 / SHA-256 Truncation</td>
+          <td>Base62 produces compact 7-char URLs (62^7 = 3.5 Trillion keys). 100% collision-free by design with KGS.</td>
+          <td>Truncating a 128-bit MD5 hash to 7 chars causes hash collisions. Checking the database on collision and retrying adds unbearable write latency.</td>
+        </tr>
+        <tr>
+          <td><strong>HTTP Redirect Code</strong></td>
+          <td><strong>302 Found (Temporary)</strong></td>
+          <td>301 Moved Permanently</td>
+          <td>Every click hits our edge servers, guaranteeing 100% accurate click analytics, geolocation, and referrer metrics.</td>
+          <td>301 is permanently cached by browser clients; subsequent clicks never hit our servers, making monetization and analytics impossible.</td>
+        </tr>
+        <tr>
+          <td><strong>Primary Database</strong></td>
+          <td><strong>NoSQL Key-Value / Wide-Column (DynamoDB / Cassandra)</strong></td>
+          <td>Relational RDBMS (PostgreSQL)</td>
+          <td>Workload is 100% simple key-value reads/writes (<code>WHERE short_url = ?</code>). Auto-partitioning horizontally across nodes.</td>
+          <td>No relational joins or foreign keys are required. Scaling RDBMS writes to 100M URLs/month requires manual sharding, connection pooling limits, and higher cost.</td>
+        </tr>
+        <tr>
+          <td><strong>Cache Layer</strong></td>
+          <td><strong>Distributed Redis Cluster (Cache-Aside)</strong></td>
+          <td>In-Memory Server Cache</td>
+          <td>Shared state across hundreds of autoscaled stateless web pods. Resilient to pod restarts. Memory sized via 80/20 rule (~35 GB RAM).</td>
+          <td>In-memory process cache causes data inconsistency across pods, consumes container RAM, and is lost every time a container autoscales.</td>
+        </tr>
+        <tr>
+          <td><strong>ID Generation</strong></td>
+          <td><strong>Key Generation Service (KGS)</strong></td>
+          <td>Database Auto-Increment</td>
+          <td>Decoupled microservice that generates and buffers keys in RAM; zero database lock contention; eliminates predictability/enumeration attacks.</td>
+          <td>Central DB auto-increment creates a single point of failure (SPOF) and leak sequence IDs to competitors.</td>
+        </tr>
+      </tbody>
+    </table>
+    <h2>PILLAR 4: Production-Grade Code (Java 21 &amp; C# 12)</h2>
+    <p>Compare the modern implementations in Java 21 (Records, Sealed Results) and C# 12 (Primary Constructors, Distributed Cache, Records).</p>
+
+    <div class="code-tabs">
+      <div class="code-tabs-header">
+        <button class="code-tab-btn active" data-tab="java">☕ Java 21</button>
+        <button class="code-tab-btn" data-tab="csharp">🔷 C#</button>
+      </div>
+      <div class="code-tab-content active" data-tab-content="java">
+        <pre><code class="language-java">import java.util.Optional;
 import java.time.Instant;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -201,7 +256,104 @@ interface KGSClient {
     String fetchPreGeneratedKey();
 }
     </pre>
+</code></pre>
+      </div>
+      <div class="code-tab-content" data-tab-content="csharp">
+        <pre><code class="language-csharp">using System;
+using System.Text;
+using System.Threading.Tasks;
+using Microsoft.Extensions.Caching.Distributed;
 
+// Domain Model: C# 12 Record
+public record UrlMapping(string ShortUrl, string LongUrl, DateTime ExpiresAtUtc);
+
+// Discriminated Union / Result Pattern via abstract record
+public abstract record RedirectResult
+{
+    public sealed record Success(string LongUrl) : RedirectResult;
+    public sealed record NotFound : RedirectResult;
+    public sealed record Expired : RedirectResult;
+}
+
+// Thread-Safe Base62 Encoder using ReadOnlySpan<char>
+public static class Base62Encoder
+{
+    private const string Alphabet = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+    private static readonly int Base = Alphabet.Length;
+
+    public static string Encode(long id)
+    {
+        if (id == 0) return Alphabet[0].ToString();
+        var sb = new StringBuilder();
+        while (id > 0)
+        {
+            sb.Append(Alphabet[(int)(id % Base)]);
+            id /= Base;
+        }
+        // Reverse in place
+        char[] chars = sb.ToString().ToCharArray();
+        Array.Reverse(chars);
+        return new string(chars);
+    }
+}
+
+// Core URL Shortener Service (C# 12 Primary Constructor)
+public class UrlShortenerService(
+    IUrlRepository dbRepo, 
+    IDistributedCache cache, 
+    IKgsClient kgsClient)
+{
+    public async Task<string> ShortenAsync(string longUrl, string? customAlias = null)
+    {
+        string shortAlias = customAlias ?? await kgsClient.FetchPreGeneratedKeyAsync();
+        var mapping = new UrlMapping(shortAlias, longUrl, DateTime.UtcNow.AddYears(5));
+
+        await dbRepo.SaveAsync(mapping);
+        // Eager cache write
+        await cache.SetStringAsync($"url:{shortAlias}", mapping.LongUrl);
+
+        return shortAlias;
+    }
+
+    public async Task<RedirectResult> ResolveAsync(string shortAlias)
+    {
+        // 1. Check Distributed Redis Cache (Sub-millisecond)
+        string? cachedLongUrl = await cache.GetStringAsync($"url:{shortAlias}");
+        if (cachedLongUrl is not null)
+        {
+            return new RedirectResult.Success(cachedLongUrl);
+        }
+
+        // 2. Cache Miss -> Check Database
+        var mapping = await dbRepo.FindByShortUrlAsync(shortAlias);
+        if (mapping is null)
+        {
+            return new RedirectResult.NotFound();
+        }
+
+        if (DateTime.UtcNow > mapping.ExpiresAtUtc)
+        {
+            return new RedirectResult.Expired();
+        }
+
+        // 3. Populate Cache and Return
+        await cache.SetStringAsync($"url:{shortAlias}", mapping.LongUrl);
+        return new RedirectResult.Success(mapping.LongUrl);
+    }
+}
+
+public interface IUrlRepository
+{
+    Task SaveAsync(UrlMapping mapping);
+    Task<UrlMapping?> FindByShortUrlAsync(string shortUrl);
+}
+
+public interface IKgsClient
+{
+    Task<string> FetchPreGeneratedKeyAsync();
+}</code></pre>
+      </div>
+    </div>
     <h2>PILLAR 5: The Interviewer's Deep Follow-Up Questions (The Grill Round)</h2>
     <div class="callout callout-warning">
       <strong>Q1: What if an attacker spams our endpoint to generate billions of URLs?</strong><br>
