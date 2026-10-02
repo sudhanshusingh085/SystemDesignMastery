@@ -1,12 +1,12 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Kafka & Messaging — Event-Driven Trading Architecture</title>
+    <title>Kafka &amp; Event-Driven Messaging — From Scratch to Principal Architect</title>
     <link rel="stylesheet" href="../../css/style.css">
-    
-  <script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.0/dist/mermaid.min.js"></script>
+    <script src="../../js/main.js" defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.0/dist/mermaid.min.js"></script>
 </head>
 <body>
 
@@ -16,134 +16,317 @@
   <aside class="sidebar" id="sidebar"></aside>
 
   <main class="main-content">
-<nav class="breadcrumb">
-        <a href="../index.html">Home</a> &gt; <span>Kafka & Messaging</span>
+    <div class="platform-switcher">
+      <span>Mastery Portals:</span>
+      <a href="../../index.html">🏛️ System Design</a>
+      <a href="../index.html" class="active">☕ Core Java 21</a>
+      <a href="../../sqlserver/index.html">🗄️ MS SQL Server</a>
+      <a href="../../dotnet/index.html">🔷 .NET 8 / C# 12</a>
+    </div>
+
+    <nav aria-label="breadcrumb">
+      <ol class="breadcrumb">
+        <li><a href="../index.html">Core Java 21</a></li>
+        <li><span>14 · Kafka &amp; Distributed Messaging</span></li>
+      </ol>
     </nav>
-    
+
     <header>
-        <h1>Kafka & Messaging — Event-Driven Trading Architecture</h1>
-        <p>Mastering distributed event streaming for high-frequency trading platforms.</p>
+      <h1>📨 Apache Kafka &amp; Event-Driven Financial Architecture</h1>
+      <p class="subtitle">An architectural masterclass on distributed event streaming: Zero-copy disk storage, In-Sync Replicas (ISR) &amp; zero data loss configurations (acks=all), Idempotent producers &amp; transactions (EOS), Cooperative Sticky rebalancing, and the Principal Engineer Grill Round.</p>
     </header>
 
-    
-        <section class="pillar">
-            <h2>PILLAR 1: Ground-Zero Theory & The Pain Point</h2>
-            <p><strong>What is it?</strong> Apache Kafka is a distributed event streaming platform designed to handle trillions of events a day. In the finance domain, think of Kafka as the central nervous system of a trading platform.</p>
-            <p><strong>The Pain Point:</strong> Without Kafka, microservices rely on synchronous REST or brittle message queues. If the matching engine is down, trade events are lost. If we use a traditional RDBMS to store transient events, it becomes a severe bottleneck.</p>
-            <div class="jargon-box">
-                <strong>.jargon: Topic</strong> - A category or feed name. Analogy: A conveyor belt in a factory.<br>
-                <strong>.jargon: Partition</strong> - A topic is divided into partitions for parallel processing. Analogy: Parallel lanes on the conveyor belt.<br>
-                <strong>.jargon: Offset</strong> - A unique ID for each message within a partition.
-            </div>
-            <div class="mermaid">
-            flowchart TD
-                P1[Trade Producer] -->|Send| B1(Broker 1: Leader P0)
-                P2[Order Producer] -->|Send| B2(Broker 2: Leader P1)
-                B1 --> C1[Trade Consumer Grp A]
-                B2 --> C2[Settlement Consumer Grp B]
-            </div>
-        </section>
+    <!-- TABLE OF CONTENTS -->
+    <nav class="toc-container">
+      <h3>Table of Contents</h3>
+      <ul>
+        <li><a href="#definitions">1. Formal Textbook Definitions &amp; 10-Second Elevator Pitch</a></li>
+        <li><a href="#storage-engine">2. Kafka Storage Engine: Append-Only Logs, Page Cache &amp; Zero-Copy</a></li>
+        <li><a href="#zero-data-loss">3. Zero Data Loss Architecture: acks=all, ISR &amp; Idempotence</a></li>
+        <li><a href="#consumer-rebalance">4. Consumer Groups &amp; Cooperative Sticky Rebalancing</a></li>
+        <li><a href="#eos-transactions">5. Exactly-Once Semantics (EOS) &amp; Transactional Workflows</a></li>
+        <li><a href="#dlq-patterns">6. Resilient Error Handling: Non-Blocking Retry Topics &amp; DLQs</a></li>
+        <li><a href="#interview-grill">7. The Principal Engineer's 10-Question Grill Round</a></li>
+      </ul>
+    </nav>
 
-        <section class="pillar">
-            <h2>PILLAR 2: Architectural Decision Rationales & Modifier Deep Dives</h2>
-            <h3>Producer Acks</h3>
-            <p><code>acks=0</code>: Fire and forget. <code>acks=1</code>: Leader acknowledgment. <code>acks=all</code> (or <code>-1</code>): Leader and all in-sync replicas (ISR) acknowledge. For financial trades, <strong>always use acks=all</strong>.</p>
-            <h3>Idempotent Producer</h3>
-            <p><code>enable.idempotence=true</code> ensures that retries don't result in duplicate trades. It assigns a Producer ID (PID) and sequence number to messages.</p>
-            <h3>Schema Registry</h3>
-            <p>Financial messages evolve (e.g., adding a `taxRate` field). Schema Registry (Avro, Protobuf) enforces schemas, ensuring backward/forward compatibility. If an upstream service changes the message structure abruptly, the schema registry rejects it.</p>
-        </section>
+    <!-- SECTION 1: DEFINITIONS & ELEVATOR PITCH -->
+    <section id="definitions">
+      <h2>1. Formal Textbook Definitions &amp; 10-Second Elevator Pitch</h2>
 
-        <section class="pillar">
-            <h2>PILLAR 3: Step-by-Step Evolution & Thought Process</h2>
-            <p><strong>Naive:</strong> REST API to save trade -> DB crashes -> Trade lost.</p>
-            <p><strong>Better:</strong> Messaging Queue (RabbitMQ) -> Good, but messages are deleted after reading. Hard to replay.</p>
-            <p><strong>Best (Kafka):</strong> Distributed log. Messages persist. If the settlement service is down, it can resume from its last committed offset when it wakes up.</p>
-        </section>
+      <div class="callout callout-info">
+        <div class="callout-title">🧠 The 10-Second Elevator Pitch</div>
+        <p><strong>"Apache Kafka is a distributed, horizontally partitioned, replicated commit log service designed for high-throughput event streaming. It achieves millions of messages per second by writing to append-only disk segments, relying on the Linux OS Page Cache, and transferring bytes directly to network sockets via zero-copy DMA (sendfile). Message durability is guaranteed through In-Sync Replicas (ISR) and idempotent sequence deduplication, while consumer groups scale horizontally via cooperative rebalancing."</strong></p>
+      </div>
 
-        <section class="pillar">
-            <h2>PILLAR 4: Production-Grade Java 21 Code</h2>
-            <pre><code>
-import org.springframework.kafka.core.KafkaTemplate;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
+      <div class="definition-box">
+        <h3>Formal Architectural Terminology</h3>
+        <dl>
+          <dt>Topic &amp; Partition</dt>
+          <dd>A <strong>Topic</strong> is a logical stream category. A topic is divided into one or more physical <strong>Partitions</strong> distributed across cluster brokers. Each partition is an immutable, ordered sequence of records continuously appended with a monotonic sequence identifier called an <strong>Offset</strong>. The partition is Kafka's fundamental unit of parallelism.</dd>
 
-public record TradeEvent(String tradeId, String currencyPair, double amount, String action) {}
+          <dt>In-Sync Replicas (ISR)</dt>
+          <dd>The subset of partition replica brokers currently caught up with the partition Leader broker within the time boundary specified by <code>replica.lag.time.max.ms</code>. Only replicas currently inside the ISR are eligible to be elected as new leaders or count toward <code>acks=all</code> quorum.</dd>
 
-@Service
-public class TradeProducerService {
-    
-    private final KafkaTemplate&lt;String, TradeEvent&gt; kafkaTemplate;
-    
-    public TradeProducerService(KafkaTemplate&lt;String, TradeEvent&gt; kafkaTemplate) {
-        this.kafkaTemplate = kafkaTemplate;
+          <dt>Zero-Copy Network Transfer</dt>
+          <dd>A Linux kernel optimization utilized by Kafka via Java's <code>FileChannel.transferTo()</code> mapping to the OS <code>sendfile()</code> system call. Network data is copied directly from the OS Page Cache into the Network Interface Card (NIC) buffer via Direct Memory Access (DMA), completely bypassing JVM user-space memory and CPU copy cycles.</dd>
+
+          <dt>Idempotent Producer</dt>
+          <dd>A producer configuration (<code>enable.idempotence=true</code>) that guarantees duplicate messages are never committed even if network retries occur. The broker assigns a 64-bit Producer ID (PID) and tracks sequence numbers per partition, rejecting duplicate sequence numbers as no-ops.</dd>
+
+          <dt>Consumer Group &amp; Rebalancing</dt>
+          <dd>A cooperative set of consumers sharing the work of consuming topic partitions. Each partition is assigned to exactly one consumer within the group. <strong>Rebalancing</strong> is the cluster coordinator process that reassigns partition ownership when consumers join, leave, or fail heartbeats.</dd>
+
+          <dt>Log Compaction</dt>
+          <dd>A topic retention policy where Kafka retains only the latest record value for each primary message key, discarding older historical updates. Essential for replicating state tables (like Order Book snapshots or account balances).</dd>
+        </dl>
+      </div>
+    </section>
+
+    <!-- SECTION 2: STORAGE ENGINE -->
+    <section id="storage-engine">
+      <h2>2. Kafka Storage Engine: Append-Only Logs, Page Cache &amp; Zero-Copy</h2>
+
+      <div class="mermaid">
+flowchart TD
+    subgraph TraditionalBroker["❌ Traditional Message Broker (Heavy OS Overhead)"]
+        Disk1["Disk"] -->|Read into Kernel| K1["Kernel Buffer"]
+        K1 -->|Copy to User Space| JVM1["JVM User Memory"]
+        JVM1 -->|Copy to Socket Buffer| K2["Socket Buffer"]
+        K2 -->|DMA Copy| NIC1["Network Card (NIC)"]
+        Note1["4 Context Switches + 3 Memory Copies per message!"]
+    end
+
+    subgraph KafkaZeroCopy["✅ Kafka Zero-Copy via sendfile() / DMA"]
+        Disk2["Disk / Page Cache"] -->|OS Direct Memory Access| NIC2["Network Card (NIC)"]
+        Note2["2 Context Switches + 0 CPU Copies! (Hardware DMA)"]
+    end
+      </div>
+
+      <h3>Why Kafka Writes to Disk Faster than Databases Write to RAM</h3>
+      <ol>
+        <li><strong>Sequential Disk I/O:</strong> Kafka treats disks like magnetic tape—strictly append-only. Sequential disk writes on modern NVMe drives achieve 3,000+ MB/sec, orders of magnitude faster than random RAM memory pointer chases.</li>
+        <li><strong>Linux OS Page Cache:</strong> Kafka does not cache messages in the JVM heap (avoiding GC overhead!). It relies entirely on the OS Page Cache. When a consumer reads recent messages, the data is served directly from OS RAM without touching physical disk platters.</li>
+        <li><strong>Zero-Copy Transfer:</strong> The <code>sendfile</code> system call transfers bytes straight from page cache to the network socket, avoiding JVM memory allocations completely.</li>
+      </ol>
+    </section>
+
+    <!-- SECTION 3: ZERO DATA LOSS -->
+    <section id="zero-data-loss">
+      <h2>3. Zero Data Loss Architecture: acks=all, ISR &amp; Idempotence</h2>
+
+      <div class="callout callout-danger">
+        <div class="callout-title">🚨 The Golden Production Formula for Financial Zero Data Loss</div>
+        <p>In financial trading and payment processing, losing a message means regulatory fines or financial insolvency. To guarantee that <strong>no message is ever lost under broker crashes or network splits</strong>, you must configure this exact triad:</p>
+        <ol>
+          <li><code>producer.acks = all</code> (or <code>-1</code>)</li>
+          <li><code>topic.min.insync.replicas = 2</code></li>
+          <li><code>topic.replication.factor = 3</code></li>
+          <li><code>producer.enable.idempotence = true</code></li>
+        </ol>
+      </div>
+
+      <pre><code class="language-java">import org.apache.kafka.clients.producer.*;
+import org.apache.kafka.common.serialization.StringSerializer;
+import java.util.Properties;
+
+public final class MissionCriticalTradeProducer {
+    public static Producer&lt;String, String&gt; createProducer() {
+        Properties props = new Properties();
+        props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "kafka-broker-1:9092,kafka-broker-2:9092");
+        props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
+        props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
+
+        // 🚨 1. MANDATORY DURABILITY SETTINGS
+        props.put(ProducerConfig.ACKS_CONFIG, "all"); // Wait for all in-sync replicas!
+        props.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "true"); // Prevent duplicate writes!
+        props.put(ProducerConfig.RETRIES_CONFIG, Integer.MAX_VALUE); // Retry until acknowledged!
+        props.put(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, 5); // Safe ordering with idempotence!
+
+        // 2. High-Throughput Batching (Micro-batching)
+        props.put(ProducerConfig.LINGER_MS_CONFIG, 5); // Wait 5ms to assemble batches
+        props.put(ProducerConfig.BATCH_SIZE_CONFIG, 64 * 1024); // 64 KB batches
+        props.put(ProducerConfig.COMPRESSION_TYPE_CONFIG, "lz4"); // Fast compression
+
+        return new KafkaProducer&lt;&gt;(props);
     }
-    
-    // Exactly-once semantics with Transactional outbox/Kafka transactions
-    @Transactional
-    public void executeTrade(TradeEvent event) {
-        // Partitioning by currencyPair ensures strict ordering for a given pair
-        kafkaTemplate.send("fx-trades", event.currencyPair(), event);
-    }
-}
-            </code></pre>
-            <pre><code>
-import org.springframework.kafka.annotation.KafkaListener;
-import org.springframework.stereotype.Component;
+}</code></pre>
+    </section>
 
-@Component
-public class TradeConsumer {
+    <!-- SECTION 4: CONSUMER REBALANCE -->
+    <section id="consumer-rebalance">
+      <h2>4. Consumer Groups &amp; Cooperative Sticky Rebalancing</h2>
 
-    @KafkaListener(topics = "fx-trades", groupId = "settlement-group")
-    public void consumeTrade(TradeEvent event) {
-        try {
-            // Process settlement
-        } catch (Exception e) {
-            // Dead Letter Queue (DLQ) routing for poison messages
-            sendToDlq(event, e);
+      <p>Historically, when a consumer joined or left a group, Kafka executed an <strong>Eager Rebalance</strong>: all consumers dropped all their partition assignments, stopped consuming (Stop-The-World pause), and waited for the coordinator to reassign all partitions from scratch.</p>
+      <p>Modern Kafka uses the <strong>Cooperative Sticky Assignor</strong> (Incremental Cooperative Rebalancing):</p>
+
+      <div class="mermaid">
+sequenceDiagram
+    autonumber
+    participant C1 as Consumer 1 (Partitions: 0, 1)
+    participant C2 as Consumer 2 (Partitions: 2, 3)
+    participant Coord as Group Coordinator Broker
+    participant C3 as New Consumer 3 Joins
+
+    C3->>Coord: JoinGroup Request
+    Coord->>C1: Rebalance Round 1: Revoke ONLY Partition 1
+    Coord->>C2: Rebalance Round 1: Revoke ONLY Partition 3
+    Note over C1: C1 continues consuming Partition 0 without interruption!
+    Note over C2: C2 continues consuming Partition 2 without interruption!
+    C1-->>Coord: Partition 1 revoked
+    C2-->>Coord: Partition 3 revoked
+    Coord->>C3: Assign Partitions 1 and 3 to C3
+    Note over C1,C3: Zero Stop-The-World cluster pause!
+      </div>
+
+      <pre><code class="language-java">// Enable Cooperative Sticky Rebalance in Consumer Config:
+props.put(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG, 
+    "org.apache.kafka.clients.consumer.CooperativeStickyAssignor");</code></pre>
+    </section>
+
+    <!-- SECTION 5: EOS TRANSACTIONS -->
+    <section id="eos-transactions">
+      <h2>5. Exactly-Once Semantics (EOS) &amp; Transactional Workflows</h2>
+
+      <p>In "Consume-Process-Produce" pipelines (e.g. read from <code>incoming-orders</code>, calculate risk, produce to <code>validated-trades</code>, commit consumer offset), a crash causes messages to be reprocessed. Kafka Transactions enable atomic commits across multiple topics and offsets:</p>
+
+      <pre><code class="language-java">producer.initTransactions();
+
+try {
+    while (true) {
+        ConsumerRecords&lt;String, String&gt; records = consumer.poll(Duration.ofMillis(100));
+        if (records.isEmpty()) continue;
+
+        // 1. Begin atomic multi-topic transaction
+        producer.beginTransaction();
+
+        for (ConsumerRecord&lt;String, String&gt; record : records) {
+            String processedOrder = processOrder(record.value());
+            producer.send(new ProducerRecord&lt;&gt;("validated-trades", record.key(), processedOrder));
         }
+
+        // 2. Commit consumer offsets ATOMICALLY inside the same transaction!
+        Map&lt;TopicPartition, OffsetAndMetadata&gt; offsets = calculateOffsets(records);
+        producer.sendOffsetsToTransaction(offsets, consumer.groupMetadata());
+
+        // 3. Atomically commit both the produced messages AND consumer offsets!
+        producer.commitTransaction();
     }
-}
-            </code></pre>
-        </section>
+} catch (ProducerFencedException e) {
+    // Another instance with same transactional.id started -> terminate gracefully
+    producer.close();
+} catch (KafkaException e) {
+    producer.abortTransaction(); // Rollback everything!
+}</code></pre>
+    </section>
 
-        <section class="pillar">
-            <h2>PILLAR 5: The Interviewer's Deep Follow-Up Questions</h2>
-            <div class="interview-box">
-                <h3>📋 How to Answer This in an Interview</h3>
-                <p><strong>Q: How would Kafka partitions help with ordering?</strong><br>
-                <em>Candidate:</em> Kafka only guarantees order within a partition. To maintain order for a specific entity (like all trades for `EUR/USD`), we use the entity ID as the message key. Kafka hashes the key to assign it to the same partition consistently.</p>
-            </div>
-            
-            <div class="interview-box">
-                <h3>🎯 Interviewer Follow-Up Questions</h3>
-                <p><strong>Q: How would you prevent duplicate transactions if the user clicks multiple times?</strong><br>
-                <em>Answer:</em> 1) UI debouncing. 2) Idempotent API with a unique `requestId` stored in a Redis/DB with a unique constraint. 3) Kafka Idempotent producer `enable.idempotence=true` prevents network retry duplicates.</p>
-                
-                <p><strong>Q: What happens when a database crashes while consuming data from Kafka?</strong><br>
-                <em>Answer:</em> Disable auto-commit (`enable.auto.commit=false`). Process the message, write to DB, and manually commit the offset. If DB crashes before commit, the consumer restarts and re-reads the uncommitted message. The DB write must be idempotent.</p>
-                
-                <p><strong>Q: How would you process 1 lakh (100,000) messages/second?</strong><br>
-                <em>Answer:</em> 1. Increase topic partitions. 2. Scale consumer instances (up to the number of partitions). 3. Tune `batch.size` and `linger.ms` on producer. 4. Use LZ4 or ZSTD compression. 5. Optimize consumer processing (e.g., async DB batch inserts).</p>
-            </div>
-        </section>
+    <!-- SECTION 6: DLQ PATTERNS -->
+    <section id="dlq-patterns">
+      <h2>6. Resilient Error Handling: Non-Blocking Retry Topics &amp; DLQs</h2>
 
-        <section class="pillar">
-            <h2>PILLAR 6: Trade-offs & When NOT To Use It</h2>
-            <h3>REST vs Kafka</h3>
-            <table border="1">
-                <tr><th>Feature</th><th>REST API</th><th>Kafka (Event-Driven)</th></tr>
-                <tr><td>Communication</td><td>Synchronous (Request-Reply)</td><td>Asynchronous (Publish-Subscribe)</td></tr>
-                <tr><td>Coupling</td><td>Tight (Service A must know B's URL)</td><td>Loose (Producers don't know Consumers)</td></tr>
-                <tr><td>Use Case</td><td>Fetching balance, synchronous validation</td><td>Trade execution, log aggregation</td></tr>
-            </table>
-            <p><strong>Don't use Kafka if:</strong> You need immediate, synchronous user feedback (e.g., login validation), or if the infrastructure overhead is too high for a simple CRUD app.</p>
-        </section>
+      <p>In high-throughput systems, if a single message fails (e.g. downstream REST timeout), pausing the entire partition creates head-of-line blocking. The enterprise pattern uses <strong>Non-Blocking Retry Topics with Exponential Backoff</strong>:</p>
+
+      <div class="mermaid">
+flowchart LR
+    Main["orders-main (Partition 0)"] --> Consumer["Order Consumer"]
+    Consumer -->|Success| Ack["Commit Offset"]
+    Consumer -->|Transient Error| R1["orders-retry-5s"]
+    R1 --> ConsumerR1["Retry Consumer 1"]
+    ConsumerR1 -->|Failed Again| R2["orders-retry-30s"]
+    R2 --> ConsumerR2["Retry Consumer 2"]
+    ConsumerR2 -->|Permanent Failure| DLQ["orders-dlt (Dead Letter Topic)"]
+    DLQ --> Alert["PagerDuty Alert / Manual Review Dashboard"]
+      </div>
+    </section>
+
+    <!-- SECTION 7: INTERVIEW GRILL ROUND -->
+    <section id="interview-grill">
+      <h2>7. The Principal Engineer's 10-Question Grill Round</h2>
+
+      <div class="callout callout-danger">
+        <div class="callout-title">🔥 Question 1: What exact broker and producer configuration guarantees zero message loss in Kafka?</div>
+        <div class="callout-content">
+          <p><strong>Senior Answer:</strong> Zero message loss requires configuring: (1) <code>producer.acks = all</code> (or <code>-1</code>), so the leader waits for all in-sync replicas to write before acknowledging, (2) <code>topic.min.insync.replicas = 2</code>, guaranteeing that at least two brokers have committed the record before success is returned, (3) <code>topic.replication.factor = 3</code>, ensuring the partition tolerates 1 broker outage while still satisfying the min ISR requirement, (4) <code>producer.enable.idempotence = true</code> with <code>retries = Integer.MAX_VALUE</code>, and (5) <code>unclean.leader.election.enable = false</code> on brokers to prevent out-of-sync replicas from ever becoming leader.</p>
+          <p><strong>🚩 Red Flag to Avoid:</strong> Setting <code>acks=all</code> with <code>min.insync.replicas=1</code>, which quietly degenerates to <code>acks=1</code> if replicas lag!</p>
+        </div>
+      </div>
+
+      <div class="callout callout-danger">
+        <div class="callout-title">🔥 Question 2: How does Kafka achieve massive throughput using Linux OS Page Cache and Zero-Copy?</div>
+        <div class="callout-content">
+          <p><strong>Senior Answer:</strong> Kafka avoids caching messages in JVM heap, eliminating GC pause penalties and object header memory overhead. It relies directly on the Linux OS Page Cache. Furthermore, message transfer uses Java's <code>FileChannel.transferTo()</code>, which maps to the Linux <code>sendfile()</code> system call. This triggers <strong>Zero-Copy DMA (Direct Memory Access)</strong>: bytes are transferred directly from the OS page cache to the Network Interface Card (NIC) buffer without passing through JVM user space. This cuts CPU context switches from 4 to 2 and eliminates CPU memory copy cycles entirely.</p>
+          <p><strong>🚩 Red Flag to Avoid:</strong> Believing Kafka is fast because it caches all messages inside an in-memory Java HashMap.</p>
+        </div>
+      </div>
+
+      <div class="callout callout-danger">
+        <div class="callout-title">🔥 Question 3: What causes CommitFailedException in Kafka consumers, and how do you resolve it?</div>
+        <div class="callout-content">
+          <p><strong>Senior Answer:</strong> <code>CommitFailedException</code> occurs when the time taken to process a batch of records exceeds <code>max.poll.interval.ms</code> (defaulting to 5 minutes). The Group Coordinator assumes the consumer has crashed, kicks it out of the group, and triggers a rebalance. When the consumer finally finishes processing and attempts to commit offsets, the coordinator rejects the commit. To resolve this: (1) Decrease <code>max.poll.records</code> so each batch processes in under 30 seconds, (2) Increase <code>max.poll.interval.ms</code> if processing genuine heavy tasks, or (3) Decouple message consumption from processing using internal worker queues (like <code>ThreadPoolExecutor</code> or Disruptor).</p>
+          <p><strong>🚩 Red Flag to Avoid:</strong> Increasing <code>session.timeout.ms</code> to solve a processing timeout; <code>session.timeout.ms</code> governs background thread heartbeats, not poll intervals!</p>
+        </div>
+      </div>
+
+      <div class="callout callout-danger">
+        <div class="callout-title">🔥 Question 4: How does Kafka ensure message ordering, and what happens when partitions scale?</div>
+        <div class="callout-content">
+          <p><strong>Senior Answer:</strong> Kafka guarantees strict total ordering <strong>only within a single partition</strong>. It does not provide global ordering across multiple partitions. To maintain ordering for related events (e.g. all orders for Account #42), messages must specify the entity ID as their message <code>key</code>, which the default partitioner hashes to the exact same partition. Scaling partitions increases topic throughput, but if an entity's messages span multiple partitions, ordering between them is lost.</p>
+          <p><strong>🚩 Red Flag to Avoid:</strong> Claiming Kafka provides total global ordering across all partitions in a topic.</p>
+        </div>
+      </div>
+
+      <div class="callout callout-danger">
+        <div class="callout-title">🔥 Question 5: What is the Cooperative Sticky Assignor and how does it prevent cluster Stop-The-World pauses?</div>
+        <div class="callout-content">
+          <p><strong>Senior Answer:</strong> Traditional Eager rebalancing forced all consumers in a group to revoke all their partitions whenever any consumer joined or left, pausing message consumption across the entire cluster. <strong>Incremental Cooperative Rebalancing</strong> (<code>CooperativeStickyAssignor</code>) revokes only the specific partitions that need to be migrated to new consumers in a two-phase protocol. Consumers unaffected by the rebalance continue processing their assigned partitions without interruption, reducing rebalance downtime from seconds to zero.</p>
+          <p><strong>🚩 Red Flag to Avoid:</strong> Defending default Eager rebalancing for high-scale enterprise microservices.</p>
+        </div>
+      </div>
+
+      <div class="callout callout-danger">
+        <div class="callout-title">🔥 Question 6: What is the difference between Log Retention and Log Compaction?</div>
+        <div class="callout-content">
+          <p><strong>Senior Answer:</strong> <strong>Log Retention</strong> deletes records based on time (<code>log.retention.hours</code>) or size (<code>log.retention.bytes</code>). <strong>Log Compaction</strong> (<code>cleanup.policy=compact</code>) scans partition logs and retains the latest record value for each primary message key, garbage collecting older versions of the same key. A key written with a <code>null</code> payload acts as a <strong>Tombstone</strong>, signaling that the key should be completely removed after <code>delete.retention.ms</code>. Log compaction is essential for event sourcing projections and maintaining materialized key-value states.</p>
+          <p><strong>🚩 Red Flag to Avoid:</strong> Thinking compacted topics delete keys immediately when updated.</p>
+        </div>
+      </div>
+
+      <div class="callout callout-danger">
+        <div class="callout-title">🔥 Question 7: How do Kafka Transactions achieve Exactly-Once Semantics (EOS)?</div>
+        <div class="callout-content">
+          <p><strong>Senior Answer:</strong> EOS coordinates an atomic write across output topics and the consumer offset topic (<code>__consumer_offsets</code>). It requires: (1) an idempotent producer with a unique <code>transactional.id</code>, (2) a Transaction Coordinator broker managing a <code>__transaction_state</code> topic via two-phase commit, and (3) consumers configured with <code>isolation.level = read_committed</code>. When <code>commitTransaction()</code> is invoked, the coordinator writes a commit marker to all affected partitions. Consumers in <code>read_committed</code> mode ignore uncommitted messages until the commit marker appears, preventing dirty reads and duplicate processing.</p>
+          <p><strong>🚩 Red Flag to Avoid:</strong> Believing EOS works if consumers are configured with <code>read_uncommitted</code> (the default!).</p>
+        </div>
+      </div>
+
+      <div class="callout callout-danger">
+        <div class="callout-title">🔥 Question 8: What is Unclean Leader Election, and why must it be disabled in financial systems?</div>
+        <div class="callout-content">
+          <p><strong>Senior Answer:</strong> If the partition leader dies and all in-sync replicas (ISR) are also offline, setting <code>unclean.leader.election.enable = true</code> allows an out-of-sync replica (which missed several committed messages) to become leader to maintain availability. This results in <strong>silent data loss and log truncation</strong>, violating financial consistency. In financial and ledger systems, <code>unclean.leader.election.enable</code> must be set to <code>false</code>: the partition remains temporarily unavailable until an ISR broker recovers, prioritizing absolute consistency over availability (CP over AP in CAP theorem).</p>
+          <p><strong>🚩 Red Flag to Avoid:</strong> Enabling unclean leader election to "ensure the system never goes down."</p>
+        </div>
+      </div>
+
+      <div class="callout callout-danger">
+        <div class="callout-title">🔥 Question 9: Why should you avoid synchronous REST calls inside a Kafka consumer loop?</div>
+        <div class="callout-content">
+          <p><strong>Senior Answer:</strong> Invoking synchronous HTTP/REST APIs inside a consumer loop blocks the consumer thread. If the downstream REST service experiences latency (e.g. 500ms response times), processing 500 messages takes 250 seconds, putting the consumer in danger of breaching <code>max.poll.interval.ms</code> and triggering a <code>CommitFailedException</code> rebalance cascade. Furthermore, if the REST service throws an error, the partition stalls. Downstream operations should be asynchronous or routed through non-blocking retry topics.</p>
+          <p><strong>🚩 Red Flag to Avoid:</strong> Adding a <code>Thread.sleep()</code> inside a Kafka consumer poll loop.</p>
+        </div>
+      </div>
+
+      <div class="callout callout-danger">
+        <div class="callout-title">🔥 Question 10: How does Producer batching (linger.ms and batch.size) impact throughput vs latency?</div>
+        <div class="callout-content">
+          <p><strong>Senior Answer:</strong> When <code>linger.ms = 0</code>, the producer sends every message immediately in its own network packet, yielding lowest latency for individual records but devastating throughput due to network packet overhead and CPU syscalls. Setting <code>linger.ms = 5</code> instructs the producer to wait up to 5 milliseconds to accumulate multiple messages into a single buffer up to <code>batch.size</code> (e.g. 64 KB). This introduces microsecond batching that increases network packet compression (LZ4/Zstandard) efficiency and boosts cluster throughput by 500–1000% with negligible latency impact.</p>
+          <p><strong>🚩 Red Flag to Avoid:</strong> Leaving <code>linger.ms=0</code> on high-throughput trade feeds.</p>
+        </div>
+      </div>
+    </section>
+
   </main>
 </div>
 
 <button class="scroll-top" aria-label="Scroll to top">↑</button>
-<script src="../../js/main.js"></script>
 </body>
 </html>
-

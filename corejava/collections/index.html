@@ -29,49 +29,33 @@
 <p><strong>The Real-World Finance Pain Point:</strong> Choosing the wrong collection for an Order Book or a Trade Ledger leads to $O(n)$ traversals during critical market hours, causing queue build-ups and potentially breaching FIX sequence numbers or missing execution windows.</p>
 
 <div class="mermaid">
-classDiagram
-    class Iterable {
-        <<interface>>
-        +iterator() Iterator
-    }
-    class Collection {
-        <<interface>>
-    }
-    class List {
-        <<interface>>
-    }
-    class Set {
-        <<interface>>
-    }
-    class Queue {
-        <<interface>>
-    }
-    class Map {
-        <<interface>>
-    }
-    
-    Iterable <|-- Collection
-    Collection <|-- List
-    Collection <|-- Set
-    Collection <|-- Queue
-    
-    class ArrayList
-    class LinkedList
-    class HashSet
-    class TreeSet
-    class ConcurrentLinkedQueue
-    class HashMap
-    class ConcurrentHashMap
-    class TreeMap
-    
-    List <|.. ArrayList
-    List <|.. LinkedList
-    Set <|.. HashSet
-    Set <|.. TreeSet
-    Queue <|.. ConcurrentLinkedQueue
-    Map <|.. HashMap
-    Map <|.. ConcurrentHashMap
-    Map <|.. TreeMap
+flowchart TD
+    Iterable["«interface»<br/>Iterable&lt;T&gt;"]
+    Collection["«interface»<br/>Collection&lt;T&gt;"]
+    List["«interface»<br/>List&lt;T&gt;"]
+    Set["«interface»<br/>Set&lt;T&gt;"]
+    Queue["«interface»<br/>Queue&lt;T&gt;"]
+    Deque["«interface»<br/>Deque&lt;T&gt;"]
+    Map["«interface»<br/>Map&lt;K,V&gt;"]
+
+    Iterable --> Collection
+    Collection --> List
+    Collection --> Set
+    Collection --> Queue
+    Queue --> Deque
+
+    ArrayList["ArrayList"] -.->|implements| List
+    LinkedList["LinkedList"] -.->|implements| List
+    LinkedList -.->|implements| Deque
+    HashSet["HashSet"] -.->|implements| Set
+    TreeSet["TreeSet"] -.->|implements| Set
+    ArrayDeque["ArrayDeque"] -.->|implements| Deque
+    PriorityQueue["PriorityQueue"] -.->|implements| Queue
+    ConcurrentLinkedQueue["ConcurrentLinkedQueue"] -.->|implements| Queue
+
+    HashMap["HashMap"] -.->|implements| Map
+    ConcurrentHashMap["ConcurrentHashMap"] -.->|implements| Map
+    TreeMap["TreeMap"] -.->|implements| Map
 </div>
 
 <p><em>Architectural Note:</em> <code>Map</code> does not inherit from <code>Collection</code> because maps associate keys to values (a set of key-value pairs), representing a mathematically distinct paradigm from a set or list of single elements.</p>
