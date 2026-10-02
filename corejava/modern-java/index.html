@@ -1,11 +1,12 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Java 11-21 Modern Features — The New Java</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Modern Java 17 to 21 Features — From Scratch to Principal Architect</title>
     <link rel="stylesheet" href="../../css/style.css">
     <script src="../../js/main.js" defer></script>
-  <script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.0/dist/mermaid.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.0/dist/mermaid.min.js"></script>
 </head>
 <body>
 
@@ -15,114 +16,476 @@
   <aside class="sidebar" id="sidebar"></aside>
 
   <main class="main-content">
-<div class="breadcrumb">Home &gt; Modern Java (11-21)</div>
-    <h1>Java 11-21 Modern Features — The New Java</h1>
+    <div class="platform-switcher">
+      <span>Mastery Portals:</span>
+      <a href="../../index.html">🏛️ System Design</a>
+      <a href="../index.html" class="active">☕ Core Java 21</a>
+      <a href="../../sqlserver/index.html">🗄️ MS SQL Server</a>
+      <a href="../../dotnet/index.html">🔷 .NET 8 / C# 12</a>
+    </div>
 
-    <section id="var">
-        <h2>1. var (Type Inference)</h2>
-        <div class="theory">
-            <p><strong>PILLAR 1: Theory</strong><br>
-            Introduced in Java 10. Allows the compiler to infer the type of a local variable from its initializer. It reduces verbosity.</p>
-            <p><strong>PILLAR 6: Trade-offs</strong><br>
-            Do not use <code>var</code> when it obscures the type and harms readability (e.g., <code>var result = calculate();</code>). Use it when the RHS explicitly shows the type (e.g., <code>var cache = new HashMap&lt;String, Trade&gt;();</code>).</p>
+    <nav aria-label="breadcrumb">
+      <ol class="breadcrumb">
+        <li><a href="../index.html">Core Java 21</a></li>
+        <li><span>07 · Modern Java (17 to 21 LTS) Architecture</span></li>
+      </ol>
+    </nav>
+    
+    <header>
+      <h1>🚀 Modern Java 17 to 21 Architecture: Records, Sealed Types &amp; Virtual Threads</h1>
+      <p class="subtitle">An exhaustive engineering guide to modern Java's LTS paradigm shifts: Records and canonical serialization, Sealed Class algebraic type hierarchies, Pattern Matching for switch and record deconstruction, Sequenced Collections, Project Panama FFM API, and the Principal Engineer Grill Round.</p>
+    </header>
+
+    <!-- TABLE OF CONTENTS -->
+    <nav class="toc-container">
+      <h3>Table of Contents</h3>
+      <ul>
+        <li><a href="#definitions">1. Formal Textbook Definitions &amp; 10-Second Elevator Pitch</a></li>
+        <li><a href="#records-internals">2. Records Architecture: Compact Constructors, Component Reflection &amp; Serialization Bypass</a></li>
+        <li><a href="#sealed-hierarchies">3. Sealed Types (Classes &amp; Interfaces): Algebraic Data Types &amp; Compiler Exhaustiveness</a></li>
+        <li><a href="#pattern-matching">4. Pattern Matching Revolution: Type Patterns, Record Deconstruction &amp; Guarded Switch</a></li>
+        <li><a href="#sequenced-collections">5. Sequenced Collections (Java 21): Unifying Order Across Lists, Deques &amp; Sets</a></li>
+        <li><a href="#panama-ffm">6. Project Panama: Foreign Function &amp; Memory (FFM) API Replacing JNI</a></li>
+        <li><a href="#production-pipeline">7. Production-Grade Java 21 Order Processing Engine</a></li>
+        <li><a href="#interview-grill">8. The Principal Engineer's 10-Question Grill Round</a></li>
+      </ul>
+    </nav>
+
+    <!-- SECTION 1: DEFINITIONS & ELEVATOR PITCH -->
+    <section id="definitions">
+      <h2>1. Formal Textbook Definitions &amp; 10-Second Elevator Pitch</h2>
+
+      <div class="callout callout-info">
+        <div class="callout-title">🧠 The 10-Second Elevator Pitch</div>
+        <p><strong>"Modern Java (17 through 21 LTS) transforms the language from verbose, object-oriented ceremony into a concise, data-oriented paradigm. By combining Records (immutable transparent data carriers), Sealed Types (controlled algebraic hierarchies), and Pattern Matching (deconstruction without explicit casts), Java achieves compile-time exhaustive domain modeling. Combined with Sequenced Collections, Project Loom Virtual Threads, and Panama's zero-copy off-heap memory access, Java 21 matches Rust/C++ throughput while preserving memory safety."</strong></p>
+      </div>
+
+      <div class="definition-grid">
+        <div class="def-card">
+          <h4>Record (JEP 395)</h4>
+          <p>A specialized, restricted class form that acts as a transparent, immutable carrier for a nominal tuple of state. The compiler automatically synthesizes private final fields, canonical constructors, component accessors, <code>equals()</code>, <code>hashCode()</code>, and <code>toString()</code> via <code>ObjectMethods.bootstrap</code>, backed by secure deserialization protocols.</p>
         </div>
+        <div class="def-card">
+          <h4>Sealed Classes (JEP 409)</h4>
+          <p>A language mechanism that restricts which classes or interfaces may extend or implement a given type via the <code>permits</code> clause. Sealed classes enable Algebraic Data Types (Sum Types) in Java, allowing the compiler to verify exhaustive pattern matching without requiring a redundant <code>default</code> clause.</p>
+        </div>
+        <div class="def-card">
+          <h4>Pattern Matching for switch (JEP 441)</h4>
+          <p>An extension of <code>switch</code> expressions and statements allowing arbitrary type patterns, record patterns, and guarded conditions (<code>when</code>). It evaluates patterns sequentially, binds matched variables safely with smart casting, and performs compile-time exhaustiveness checking against sealed hierarchies.</p>
+        </div>
+        <div class="def-card">
+          <h4>Record Patterns (JEP 440)</h4>
+          <p>A pattern matching capability that disassembles a record instance into its individual constituent components in a single syntactic step (nested deconstruction), eliminating manual getter boilerplate and defensive null checking.</p>
+        </div>
+        <div class="def-card">
+          <h4>Sequenced Collections (JEP 431)</h4>
+          <p>A unified interface hierarchy (<code>SequencedCollection</code>, <code>SequencedSet</code>, <code>SequencedMap</code>) introduced in Java 21 that provides consistent first/last element access, reverse-order views, and predictable encounter order across <code>ArrayList</code>, <code>ArrayDeque</code>, <code>LinkedHashSet</code>, and <code>TreeMap</code>.</p>
+        </div>
+        <div class="def-card">
+          <h4>Foreign Function &amp; Memory (FFM) API (JEP 454)</h4>
+          <p>A safe, efficient alternative to JNI (Java Native Interface) and <code>sun.misc.Unsafe</code> that allows Java programs to allocate off-heap memory (<code>Arena</code>, <code>MemorySegment</code>) and invoke native C libraries directly with zero JNI overhead and deterministic memory deallocation.</p>
+        </div>
+      </div>
     </section>
 
-    <section id="text-blocks">
-        <h2>2. Text Blocks</h2>
-        <div class="theory">
-            <p>Multi-line string literals (Java 15). Eliminates the need for cumbersome concatenation and escaping, perfect for SQL queries, JSON, or FIX messages in trading systems.</p>
-            <pre><code class="language-java">
-String fixMessage = """
-    8=FIX.4.4
-    9=148
-    35=D
-    49=CLIENT1
-    56=BROKER
-    52=20231024-10:00:00.000
-    """;
-            </code></pre>
+    <!-- SECTION 2: RECORDS ARCHITECTURE -->
+    <section id="records-internals">
+      <h2>2. Records Architecture: Compact Constructors, Component Reflection &amp; Serialization Bypass</h2>
+
+      <p>A <code>record</code> is fundamentally distinct from a standard class annotated with Lombok's <code>@Value</code> or <code>@Data</code>. It is a first-class citizen embedded into the Java Virtual Machine specification (JVMS §4.7.30).</p>
+
+      <div class="diagram-box">
+        <div class="diagram-title">Record Compilation: JVM Bytecode &amp; Bootstrap Synthesis</div>
+        <div class="mermaid">
+flowchart TD
+    Source["public record Trade(String id, double price)"] --> Compiler["javac Compiler"]
+    Compiler --> Bytecode["Trade.class"]
+    
+    subgraph ClassMetadata["Classfile Bytecode Structure"]
+        Super["Superclass: java.lang.Record (implicitly final)"]
+        Fields["Private final fields: String id, double price"]
+        CompDesc["Record Attribute: [id: String, price: double]"]
+        Dynamic["equals(), hashCode(), toString() dispatches to<br/>java.lang.runtime.ObjectMethods.bootstrap()"]
+    end
+
+    Bytecode --> ClassMetadata
+    style Source fill:#1e1e1e,stroke:#4ec9b0,stroke-width:2px,color:#fff
+    style Compiler fill:#2d3748,stroke:#a0aec0,color:#fff
+    style Bytecode fill:#1b4d3e,stroke:#48bb78,color:#fff
+    style ClassMetadata fill:#2d3748,stroke:#ed8936,color:#fff
         </div>
+      </div>
+
+      <h3>The Three Constructors of a Record</h3>
+      <ol>
+        <li><strong>Canonical Constructor:</strong> Matches the exact signature of the record's component list. Generated automatically if omitted.</li>
+        <li><strong>Compact Constructor:</strong> Omits the parameter list entirely (e.g., <code>public Trade { ... }</code>). Used for invariant validation and normalization. Parameters are assigned to fields automatically <em>after</em> the compact block finishes.</li>
+        <li><strong>Custom Non-Canonical Constructor:</strong> Must delegate to the canonical constructor via <code>this(...)</code>. Cannot initialize fields directly.</li>
+      </ol>
+
+      <div class="callout callout-warning">
+        <div class="callout-title">⚠️ The Security Vulnerability Solved by Record Serialization</div>
+        <p>Traditional Java object serialization (implementing <code>Serializable</code>) is a known security vulnerability because deserialization reconstructs objects by bypassing constructors entirely, using low-level reflection (<code>ReflectionFactory</code>). Malicious payloads can inject corrupted state into private fields.</p>
+        <p><strong>Records fix this:</strong> During deserialization of a <code>Record</code>, the JVM <em>must</em> read the stream components and invoke the <strong>canonical constructor</strong>. Invariant validations inside compact constructors execute without exception during deserialization, rendering gadget injection attacks impossible!</p>
+      </div>
     </section>
 
-    <section id="records">
-        <h2>3. Records</h2>
-        <div class="theory">
-            <p><strong>PILLAR 1: Theory</strong><br>
-            Introduced in Java 16, Records are transparent carriers for immutable data. They automatically generate constructors, accessors, equals(), hashCode(), and toString().</p>
-            <pre><code class="language-java">
-public record Trade(String tradeId, String currencyPair, BigDecimal amount, LocalDateTime timestamp) {
-    // Compact constructor for validation
-    public Trade {
-        if (amount.compareTo(BigDecimal.ZERO) <= 0) {
-            throw new IllegalArgumentException("Trade amount must be positive");
+    <!-- SECTION 3: SEALED TYPES -->
+    <section id="sealed-hierarchies">
+      <h2>3. Sealed Types (Classes &amp; Interfaces): Algebraic Data Types &amp; Compiler Exhaustiveness</h2>
+
+      <p>Before Java 17, inheritance was open-ended: any class could extend a public non-final class. Sealed classes provide <strong>Sum Types</strong> (tagged unions) found in functional languages like Haskell, OCaml, and Scala.</p>
+
+      <div class="diagram-box">
+        <div class="diagram-title">Sealed Type Hierarchy with Strict Subclass Modifiers</div>
+        <div class="mermaid">
+flowchart TD
+    Sealed["sealed interface TradeOrder<br/>permits MarketOrder, LimitOrder, ConditionalOrder"]
+    
+    Sub1["final record MarketOrder(String id, int qty)<br/>implements TradeOrder"]
+    Sub2["final record LimitOrder(String id, double price, int qty)<br/>implements TradeOrder"]
+    Sub3["non-sealed class ConditionalOrder<br/>implements TradeOrder"]
+    Sub4["class TrailingStopOrder extends ConditionalOrder"]
+
+    Sealed --> Sub1
+    Sealed --> Sub2
+    Sealed --> Sub3
+    Sub3 --> Sub4
+
+    style Sealed fill:#1e1e1e,stroke:#4ec9b0,stroke-width:2px,color:#fff
+    style Sub1 fill:#1a2d1a,stroke:#38a169,color:#fff
+    style Sub2 fill:#1a2d1a,stroke:#38a169,color:#fff
+    style Sub3 fill:#2d3748,stroke:#ed8936,color:#fff
+    style Sub4 fill:#2d1a1a,stroke:#e53e3e,color:#fff
+        </div>
+      </div>
+
+      <h3>Subclass Modifier Rules</h3>
+      <p>Every permitted subclass of a sealed class must explicitly declare one of three modifiers:</p>
+      <ul>
+        <li><strong><code>final</code>:</strong> Prevents any further inheritance down the branch. (Records are implicitly final).</li>
+        <li><strong><code>sealed</code>:</strong> Continues controlled inheritance, defining its own <code>permits</code> list.</li>
+        <li><strong><code>non-sealed</code>:</strong> Opens the branch for unrestricted inheritance, deliberately opting out of compiler exhaustiveness for that specific subtree.</li>
+      </ul>
+    </section>
+
+    <!-- SECTION 4: PATTERN MATCHING REVOLUTION -->
+    <section id="pattern-matching">
+      <h2>4. Pattern Matching Revolution: Type Patterns, Record Deconstruction &amp; Guarded Switch</h2>
+
+      <p>Java has evolved from primitive <code>instanceof</code> casting to full structural decomposition:</p>
+
+      <div class="diagram-box">
+        <div class="diagram-title">Evolution of Type Inspection in Java</div>
+        <div class="mermaid">
+flowchart LR
+    Legacy["Java 8: Verbose<br/>if (obj instanceof Order) {<br/>  Order o = (Order) obj;<br/>  return o.getPrice();<br/>}"]
+    Java16["Java 16: Type Pattern<br/>if (obj instanceof Order o) {<br/>  return o.getPrice();<br/>}"]
+    Java21["Java 21: Record Deconstruction<br/>if (obj instanceof Order(var id, var price)) {<br/>  return price;<br/>}"]
+
+    Legacy --> Java16 --> Java21
+    style Legacy fill:#2d1a1a,stroke:#e53e3e,color:#fff
+    style Java16 fill:#2d3748,stroke:#4299e1,color:#fff
+    style Java21 fill:#1a2d1a,stroke:#38a169,stroke-width:2px,color:#fff
+        </div>
+      </div>
+
+      <h3>Exhaustive Pattern Matching with `when` Guards</h3>
+      <p>When switching over a sealed type, the compiler verifies that all permitted subclasses are covered. Adding a <code>default</code> clause when all cases are handled is an anti-pattern because it hides future compiler warnings when a new permitted subclass is added.</p>
+
+      <pre><code>public String routeOrder(TradeOrder order, double currentMarketPrice) {
+    return switch (order) {
+        case MarketOrder(String id, int qty) -> 
+            "Executing Market Order #" + id + " for " + qty + " shares immediately.";
+            
+        case LimitOrder(String id, double price, int qty) when price &gt;= currentMarketPrice -> 
+            "Executing In-The-Money Limit Order #" + id + " at " + price;
+            
+        case LimitOrder(String id, double price, int qty) -> 
+            "Placing Limit Order #" + id + " in order book at " + price;
+            
+        case ConditionalOrder c -> 
+            "Routing complex conditional order to risk engine: " + c.toString();
+        // NO DEFAULT NEEDED! Compiler proves exhaustiveness at build time.
+    };
+}</code></pre>
+    </section>
+
+    <!-- SECTION 5: SEQUENCED COLLECTIONS -->
+    <section id="sequenced-collections">
+      <h2>5. Sequenced Collections (Java 21): Unifying Order Across Lists, Deques &amp; Sets</h2>
+
+      <p>Prior to Java 21, getting the first or last element of a collection was notoriously inconsistent across standard types:</p>
+      <ul>
+        <li><code>List</code>: <code>list.get(0)</code> and <code>list.get(list.size() - 1)</code></li>
+        <li><code>Deque</code>: <code>deque.getFirst()</code> and <code>deque.getLast()</code></li>
+        <li><code>SortedSet</code>: <code>set.first()</code> and <code>set.last()</code></li>
+        <li><code>LinkedHashSet</code>: Required <code>set.iterator().next()</code> to get first, and iterating through the entire set to get the last!</li>
+      </ul>
+
+      <div class="diagram-box">
+        <div class="diagram-title">Java 21 Sequenced Collections Interface Hierarchy</div>
+        <div class="mermaid">
+flowchart TD
+    Coll["Collection&lt;E&gt;"] --> SeqColl["SequencedCollection&lt;E&gt;<br/>addFirst(), addLast()<br/>getFirst(), getLast()<br/>removeFirst(), removeLast()<br/>reversed()"]
+    SeqColl --> List["List&lt;E&gt;"]
+    SeqColl --> Deque["Deque&lt;E&gt;"]
+    SeqColl --> SeqSet["SequencedSet&lt;E&gt;"]
+    
+    SeqSet --> Set["Set&lt;E&gt;"]
+    SeqSet --> LinkedHashSet["LinkedHashSet&lt;E&gt;"]
+    SeqSet --> SortedSet["SortedSet&lt;E&gt;"]
+
+    style Coll fill:#2d3748,stroke:#a0aec0,color:#fff
+    style SeqColl fill:#1e1e1e,stroke:#4ec9b0,stroke-width:2px,color:#fff
+    style SeqSet fill:#1e1e1e,stroke:#4ec9b0,stroke-width:2px,color:#fff
+    style LinkedHashSet fill:#1a202c,stroke:#ed8936,color:#fff
+        </div>
+      </div>
+
+      <p>Calling <code>collection.reversed()</code> returns a zero-copy, reverse-ordered view of the underlying collection. Any mutation to the reversed view is directly reflected in the original collection.</p>
+    </section>
+
+    <!-- SECTION 6: PANAMA FFM API -->
+    <section id="panama-ffm">
+      <h2>6. Project Panama: Foreign Function &amp; Memory (FFM) API Replacing JNI</h2>
+
+      <p>For high-frequency trading and low-latency storage engines, interacting with C libraries or shared memory via JNI (Java Native Interface) has historically introduced heavy overhead and dangerous crashes. Java 22 (finalized from Java 21 previews) introduces the FFM API (<code>java.lang.foreign</code>).</p>
+
+      <div class="diagram-box">
+        <div class="diagram-title">JNI (Fragile, C Glue Code) vs Panama FFM API (Pure Java Safe Direct Access)</div>
+        <div class="mermaid">
+flowchart LR
+    subgraph JNI["Legacy JNI"]
+        direction TB
+        J1["Java Code"] --> J2["JNI Glue C++ Layer (.so/.dll)"]
+        J2 --> J3["Native C Library"]
+        J4["High JNI Call Overhead + Unsafe Pointers"]
+    end
+
+    subgraph FFM["Project Panama FFM API (Java 21+)"]
+        direction TB
+        F1["Pure Java (Arena, MemorySegment)"]
+        F2["Linker.nativeLinker().downcallHandle()"]
+        F1 --> F2 --> F3["Direct Native Library (Zero C Glue!)"]
+        F4["Deterministic Off-Heap Memory Lifetimes"]
+    end
+
+    style JNI fill:#2d1a1a,stroke:#e53e3e,color:#fff
+    style FFM fill:#1a2d1a,stroke:#38a169,stroke-width:2px,color:#fff
+        </div>
+      </div>
+
+      <p>Using <code>Arena.ofConfined()</code> guarantees that off-heap memory is safely freed when exiting a <code>try-with-resources</code> block, completely eliminating memory leaks without relying on the Garbage Collector.</p>
+    </section>
+
+    <!-- SECTION 7: PRODUCTION PIPELINE -->
+    <section id="production-pipeline">
+      <h2>7. Production-Grade Java 21 Order Processing Engine</h2>
+
+      <p>The following production order routing engine combines Records, Sealed Types, Exhaustive Pattern Matching, and Sequenced Collections to process institutional market orders.</p>
+
+      <pre><code>package com.finance.trading.modern;
+
+import java.time.Instant;
+import java.util.*;
+
+/**
+ * Modern Java 21 Institutional Execution Engine.
+ * Demonstrates:
+ * 1. Sealed interface domain model with record payloads.
+ * 2. Exhaustive pattern matching with record deconstruction.
+ * 3. Sequenced Collection for ultra-fast LIFO/FIFO order books.
+ */
+public class ModernOrderExecutionEngine {
+
+    // 1. Sealed Algebraic Domain Hierarchy
+    public sealed interface Order permits LimitOrder, MarketOrder, CancelRequest {
+        String orderId();
+        Instant timestamp();
+    }
+
+    public record LimitOrder(String orderId, Instant timestamp, String symbol, double price, int qty) implements Order {
+        public LimitOrder {
+            Objects.requireNonNull(orderId, "orderId cannot be null");
+            if (price &lt;= 0.0) throw new IllegalArgumentException("Price must be positive");
+            if (qty &lt;= 0) throw new IllegalArgumentException("Quantity must be positive");
         }
     }
-}
-            </code></pre>
-            <div class="interview-box">
-                <h3>📋 How to Answer This in an Interview</h3>
-                <p><strong>Records vs Lombok @Value vs Classes:</strong> "Records are a language-level feature guaranteeing immutability and providing a standard semantic for data carriers. Unlike Lombok, which relies on annotation processing and bytecode manipulation, Records are natively understood by the JVM, which optimizes them (e.g., in serialization). They are ideal for DTOs and API responses."</p>
-            </div>
-        </div>
-    </section>
 
-    <section id="sealed-classes">
-        <h2>4. Sealed Classes</h2>
-        <div class="theory">
-            <p><strong>PILLAR 1: Theory</strong><br>
-            Restricts which classes can extend or implement a class/interface. Provides exhaustiveness for pattern matching.</p>
-            <pre><code class="language-java">
-public sealed interface OrderType permits MarketOrder, LimitOrder, StopOrder {}
-            </code></pre>
-        </div>
-    </section>
-
-    <section id="pattern-matching">
-        <h2>5. Pattern Matching</h2>
-        <div class="theory">
-            <p>Allows <code>instanceof</code> to declare a binding variable, eliminating explicit casting. Combined with switch expressions, it creates expressive, data-oriented logic.</p>
-            <pre><code class="language-java">
-public void processOrder(OrderType order) {
-    switch(order) {
-        case MarketOrder m -> executeMarket(m);
-        case LimitOrder l when l.price().compareTo(currentPrice) >= 0 -> executeLimit(l);
-        case LimitOrder l -> queueLimit(l);
-        case StopOrder s -> monitorStop(s);
+    public record MarketOrder(String orderId, Instant timestamp, String symbol, int qty) implements Order {
+        public MarketOrder {
+            Objects.requireNonNull(orderId, "orderId cannot be null");
+            if (qty &lt;= 0) throw new IllegalArgumentException("Quantity must be positive");
+        }
     }
-}
-            </code></pre>
-        </div>
+
+    public record CancelRequest(String orderId, Instant timestamp, String reason) implements Order {}
+
+    // Execution Result Sealed Hierarchy
+    public sealed interface ExecutionReport permits ExecutionReport.Filled, ExecutionReport.Queued, ExecutionReport.Rejected {
+        record Filled(String orderId, double executedPrice, int executedQty) implements ExecutionReport {}
+        record Queued(String orderId, int queuePosition) implements ExecutionReport {}
+        record Rejected(String orderId, String reason) implements ExecutionReport {}
+    }
+
+    // 2. Sequenced Collection Order Book (FIFO bids)
+    private final SequencedCollection&lt;LimitOrder&gt; bidOrderBook = new ArrayDeque&lt;&gt;();
+
+    public ExecutionReport processIncomingOrder(Order order, double marketAskPrice) {
+        // Exhaustive switch expression with Record Deconstruction &amp; Guards
+        return switch (order) {
+            case MarketOrder(var id, var _, var _, var qty) -> {
+                System.out.printf("[FILL] Market Order %s matched at current market price: $%.2f%n", id, marketAskPrice);
+                yield new ExecutionReport.Filled(id, marketAskPrice, qty);
+            }
+            case LimitOrder(var id, var _, var _, var price, var qty) when price &gt;= marketAskPrice -> {
+                System.out.printf("[CROSS] Limit Order %s crossed spread ($%.2f &gt;= $%.2f). Executed!%n", id, price, marketAskPrice);
+                yield new ExecutionReport.Filled(id, marketAskPrice, qty);
+            }
+            case LimitOrder limitOrder -&gt; {
+                bidOrderBook.addLast(limitOrder); // SequencedCollection addLast
+                int position = bidOrderBook.size();
+                System.out.printf("[QUEUE] Limit Order %s placed at position %d%n", limitOrder.orderId(), position);
+                yield new ExecutionReport.Queued(limitOrder.orderId(), position);
+            }
+            case CancelRequest(var id, var _, var reason) -&gt; {
+                boolean removed = bidOrderBook.removeIf(lo -&gt; lo.orderId().equals(id));
+                yield removed 
+                    ? new ExecutionReport.Rejected(id, "Cancelled: " + reason)
+                    : new ExecutionReport.Rejected(id, "Not found in active book");
+            }
+        };
+    }
+
+    public void inspectOrderBook() {
+        if (!bidOrderBook.isEmpty()) {
+            LimitOrder oldest = bidOrderBook.getFirst(); // Java 21 SequencedCollection
+            LimitOrder newest = bidOrderBook.getLast();
+            System.out.printf("Oldest Order: %s | Newest Order: %s%n", oldest.orderId(), newest.orderId());
+        }
+    }
+}</code></pre>
     </section>
 
-    <section id="virtual-threads">
-        <h2>6. Virtual Threads (Project Loom)</h2>
-        <div class="theory">
-            <p><strong>PILLAR 1: Theory</strong><br>
-            Java 21 feature. Virtual threads are lightweight, JVM-managed threads. They solve the thread-per-request bottleneck in I/O-heavy applications (like trading gateways). Millions of virtual threads can be created, running on a small pool of platform (OS) threads.</p>
-            <div class="interview-box">
-                <h3>📋 How to Answer This in an Interview</h3>
-                <p><strong>Why use Virtual Threads?</strong> "Platform threads map 1:1 to OS threads, which are expensive (~1MB stack, context switching overhead). In blocking I/O applications, threads sit idle waiting for responses. Virtual threads map M:N to OS threads. When a virtual thread blocks on I/O, the JVM unmounts it from the carrier platform thread, allowing another virtual thread to execute. This achieves reactive-level scalability (millions of concurrent connections) without the complex, callback-hell programming model of reactive frameworks like WebFlux."</p>
-            </div>
-            <h4>🎯 Interviewer Follow-Up Questions</h4>
-            <ul>
-                <li><strong>Trap:</strong> "Will virtual threads make CPU-intensive tasks faster?"<br><strong>Answer:</strong> No. Virtual threads excel at blocking I/O tasks. For pure CPU-bound tasks, platform threads or parallel streams are better.</li>
-                <li><strong>Trap:</strong> "What is thread pinning?"<br><strong>Answer:</strong> If a virtual thread performs a blocking operation while inside a <code>synchronized</code> block or native method, it pins the carrier thread to the OS thread, blocking others. We must migrate <code>synchronized</code> to <code>ReentrantLock</code> to prevent this.</li>
-            </ul>
+    <!-- SECTION 8: PRINCIPAL ENGINEER GRILL ROUND -->
+    <section id="interview-grill">
+      <h2>8. The Principal Engineer's 10-Question Grill Round</h2>
+
+      <div class="interview-card">
+        <div class="question-header">
+          <span class="q-num">Q1</span>
+          <h4>How do Java Records differ from Lombok's `@Value` under the hood in bytecode and serialization?</h4>
         </div>
+        <div class="answer-content">
+          <p>Lombok is an annotation processor generating standard Java class bytecode at compile time. In contrast, <code>record</code> is a first-class JVM primitive with a dedicated <code>Record</code> attribute in the <code>.class</code> file, implicitly extending <code>java.lang.Record</code>. Crucially, Java serialization deserializes standard classes by allocating raw uninitialized heap memory via <code>ReflectionFactory</code> without invoking constructors. Records completely bypass this security vulnerability: the JVM <em>always</em> deserializes records by invoking their canonical constructor, ensuring compact constructor validation logic is never circumvented.</p>
+          <div class="callout callout-danger"><span class="badge badge-danger">🚩 Red Flag to Avoid</span> Claiming records are merely "syntactic sugar" for a standard class with getters.</div>
+        </div>
+      </div>
+
+      <div class="interview-card">
+        <div class="question-header">
+          <span class="q-num">Q2</span>
+          <h4>What are the three allowed modifiers for subclasses of a `sealed` class, and what does each signify?</h4>
+        </div>
+        <div class="answer-content">
+          <p>Every permitted subclass of a sealed class must explicitly declare one of three modifiers: (1) <code>final</code>, which prevents any further inheritance on that branch; (2) <code>sealed</code>, which continues controlled inheritance by specifying its own explicit <code>permits</code> list; or (3) <code>non-sealed</code>, which deliberately re-opens that branch for unrestricted extension by arbitrary external subclasses, opting out of exhaustiveness guarantees for that sub-hierarchy.</p>
+          <div class="callout callout-danger"><span class="badge badge-danger">🚩 Red Flag to Avoid</span> Forgetting <code>non-sealed</code> or assuming default package-private access is permitted for subclasses.</div>
+        </div>
+      </div>
+
+      <div class="interview-card">
+        <div class="question-header">
+          <span class="q-num">Q3</span>
+          <h4>Why does adding a `default` clause to a switch over a sealed hierarchy constitute an anti-pattern?</h4>
+        </div>
+        <div class="answer-content">
+          <p>Because sealed classes define a closed set of subtypes, the compiler can mathematically verify exhaustiveness. If a developer provides cases for all permitted subtypes, no <code>default</code> clause is required. If someone adds a new permitted subtype (e.g., <code>StopLimitOrder</code>) in the future, omitting <code>default</code> causes the compiler to flag an error at every <code>switch</code> expression that needs updating. If a <code>default</code> clause had been added, the compiler would remain silent, and the new subtype would silently execute fallback logic at runtime, causing bugs.</p>
+          <div class="callout callout-danger"><span class="badge badge-danger">🚩 Red Flag to Avoid</span> Adding a defensive <code>default: throw new IllegalStateException();</code> to a sealed switch expression.</div>
+        </div>
+      </div>
+
+      <div class="interview-card">
+        <div class="question-header">
+          <span class="q-num">Q4</span>
+          <h4>How does Java 21 Record Deconstruction pattern matching handle nested object graphs?</h4>
+        </div>
+        <div class="answer-content">
+          <p>Record patterns support nested deconstruction. If a record contains other records (e.g., <code>record Point(int x, int y)</code> and <code>record Rectangle(Point topLeft, Point bottomRight)</code>), pattern matching can deconstruct the nested components directly in a single statement: <code>case Rectangle(Point(var x1, var y1), Point(var x2, var y2))</code>. This extracts and binds all four coordinates simultaneously while automatically performing type checks and defensive null verification on the outer and inner objects.</p>
+          <div class="callout callout-danger"><span class="badge badge-danger">🚩 Red Flag to Avoid</span> Manually writing nested <code>if (r != null &amp;&amp; r.topLeft() != null)</code> checks in Java 21.</div>
+        </div>
+      </div>
+
+      <div class="interview-card">
+        <div class="question-header">
+          <span class="q-num">Q5</span>
+          <h4>What architectural problem did Java 21 Sequenced Collections (JEP 431) solve?</h4>
+        </div>
+        <div class="answer-content">
+          <p>Before Java 21, the Collections Framework lacked a common super-interface for collections with a defined encounter order. Accessing the first or last element required distinct APIs: <code>List.get(0)</code> / <code>List.get(size-1)</code>, <code>Deque.getFirst()</code> / <code>getLast()</code>, <code>SortedSet.first()</code> / <code>last()</code>, and <code>LinkedHashSet</code> required creating an iterator. <code>SequencedCollection</code> provides a unified abstraction across lists, deques, and ordered sets with consistent methods: <code>getFirst()</code>, <code>getLast()</code>, <code>addFirst()</code>, <code>addLast()</code>, and zero-allocation reverse views via <code>reversed()</code>.</p>
+          <div class="callout callout-danger"><span class="badge badge-danger">🚩 Red Flag to Avoid</span> Thinking <code>HashSet</code> implements <code>SequencedCollection</code>. (It does not, because <code>HashSet</code> has no encounter order).</div>
+        </div>
+      </div>
+
+      <div class="interview-card">
+        <div class="question-header">
+          <span class="q-num">Q6</span>
+          <h4>What is the difference between a Compact Constructor and a Canonical Constructor in a Record?</h4>
+        </div>
+        <div class="answer-content">
+          <p>A canonical constructor explicitly specifies the parameter list matching the record's components (e.g., <code>public Order(String id, double price) { this.id = id; this.price = price; }</code>). A compact constructor omits the parameter list entirely (<code>public Order { ... }</code>). Inside the compact constructor, parameters are modified or validated directly by name without <code>this.</code> qualification. At the end of the compact constructor block, the compiler automatically injects field assignments (<code>this.id = id; this.price = price;</code>), preventing boilerplate and assignment bugs.</p>
+          <div class="callout callout-danger"><span class="badge badge-danger">🚩 Red Flag to Avoid</span> Attempting to write <code>this.id = id;</code> inside a compact constructor (this produces a compilation error).</div>
+        </div>
+      </div>
+
+      <div class="interview-card">
+        <div class="question-header">
+          <span class="q-num">Q7</span>
+          <h4>Why are Records inherently unsuitable as JPA / Hibernate `@Entity` classes?</h4>
+        </div>
+        <div class="answer-content">
+          <p>JPA entities require: (1) A no-arg public or protected constructor for proxy instantiation; (2) Non-final classes and non-final fields so Hibernate can generate CGLIB/ByteBuddy runtime subclasses and inject lazy-loading proxies; (3) Identity mutable setters or field access for dirty tracking and state updates. Records violate all three requirements: they are implicitly <code>final</code>, extend <code>java.lang.Record</code>, have only <code>final</code> fields, and lack no-arg constructors. Records are ideal as JPA query projection DTOs, but cannot serve as entity roots.</p>
+          <div class="callout callout-danger"><span class="badge badge-danger">🚩 Red Flag to Avoid</span> Suggesting converting existing JPA Hibernate entity domain classes into records.</div>
+        </div>
+      </div>
+
+      <div class="interview-card">
+        <div class="question-header">
+          <span class="q-num">Q8</span>
+          <h4>How does Java 21 Pattern Matching handle `null` in switch expressions?</h4>
+        </div>
+        <div class="answer-content">
+          <p>Traditionally, evaluating <code>switch (obj)</code> where <code>obj == null</code> immediately threw a <code>NullPointerException</code> before executing any case. In Java 21, <code>null</code> can be explicitly matched as a case label: <code>case null -&gt; handleNull();</code> or combined with a default: <code>case null, default -&gt; handleFallback();</code>. If no explicit <code>null</code> case is declared and a null reference is passed, the switch statement throws <code>NullPointerException</code> as before, preserving backward compatibility.</p>
+          <div class="callout callout-danger"><span class="badge badge-danger">🚩 Red Flag to Avoid</span> Writing an external <code>if (obj == null)</code> check prior to entering a modern Java 21 switch expression.</div>
+        </div>
+      </div>
+
+      <div class="interview-card">
+        <div class="question-header">
+          <span class="q-num">Q9</span>
+          <h4>How does Project Panama's Arena API prevent memory leaks in off-heap memory allocation?</h4>
+        </div>
+        <div class="answer-content">
+          <p>The Foreign Function &amp; Memory (FFM) API uses <code>Arena</code> to control the lifecycle of native off-heap memory segments. By using a confined arena inside a try-with-resources block (<code>try (Arena arena = Arena.ofConfined()) { MemorySegment seg = arena.allocate(1024); }</code>), all off-heap memory allocated within the arena is deterministically and immediately deallocated at the close of the block. If code attempts to access the memory segment after the arena closes, the JVM throws an <code>IllegalStateException</code> instead of causing a C++ segmentation fault.</p>
+          <div class="callout callout-danger"><span class="badge badge-danger">🚩 Red Flag to Avoid</span> Relying on garbage collector finalizers or <code>Cleaner</code> to free native off-heap buffers.</div>
+        </div>
+      </div>
+
+      <div class="interview-card">
+        <div class="question-header">
+          <span class="q-num">Q10</span>
+          <h4>Explain the performance and inlining benefits of `java.lang.runtime.ObjectMethods.bootstrap` for Records.</h4>
+        </div>
+        <div class="answer-content">
+          <p>When compiling records, <code>javac</code> does not emit hardcoded bytecode for <code>equals()</code>, <code>hashCode()</code>, and <code>toString()</code> in every record classfile. Instead, it emits an <code>invokedynamic</code> instruction pointing to <code>ObjectMethods.bootstrap</code>. At first execution, the JVM dynamically links a specialized <code>MethodHandle</code> tree based on the record's component types. The HotSpot C2 JIT compiler can aggressively inline and optimize these method handles into pure assembly instructions without virtual dispatch overhead, saving significant Metaspace and memory footprint.</p>
+          <div class="callout callout-danger"><span class="badge badge-danger">🚩 Red Flag to Avoid</span> Believing that record <code>equals()</code> and <code>hashCode()</code> perform slow reflective iteration on every call.</div>
+        </div>
+      </div>
     </section>
 
-    <section id="structured-concurrency">
-        <h2>7. Structured Concurrency (Preview)</h2>
-        <div class="theory">
-            <p>Provides a clean way to manage multi-threaded tasks as a single unit of work, simplifying error handling and cancellation. E.g., querying 3 different exchanges and cleanly canceling the others once the fastest responds.</p>
-        </div>
-    </section>
   </main>
 </div>
 
 <button class="scroll-top" aria-label="Scroll to top">↑</button>
-<script src="../../js/main.js"></script>
 </body>
 </html>
-

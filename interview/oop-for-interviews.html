@@ -275,7 +275,7 @@ public enum OrderStatus {
       <div class="mermaid">
         classDiagram
           class PaymentProcessor {
-              <<interface>>
+              «interface»
               +processPayment(amount)
           }
           class StripeProcessor {
@@ -288,13 +288,13 @@ public enum OrderStatus {
           PaymentProcessor <|.. PaypalProcessor
           
           class Shape {
-              <<sealed>>
+              «sealed»
           }
           class Circle {
-              <<final>>
+              «final»
           }
           class Square {
-              <<final>>
+              «final»
           }
           Shape <|-- Circle
           Shape <|-- Square

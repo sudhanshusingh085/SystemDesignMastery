@@ -3,10 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Spring Boot Deep Dive — Enterprise Java in Practice</title>
+    <title>Spring Boot 3 Internals &amp; Architecture — From Scratch to Principal Architect</title>
     <link rel="stylesheet" href="../../css/style.css">
-    
-  <script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.0/dist/mermaid.min.js"></script>
+    <script src="../../js/main.js" defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.0/dist/mermaid.min.js"></script>
 </head>
 <body>
 
@@ -16,212 +16,483 @@
   <aside class="sidebar" id="sidebar"></aside>
 
   <main class="main-content">
-<nav class="breadcrumb">
-        <a href="../index.html">Home</a> &gt; <span>Spring Boot Deep Dive</span>
-    </nav>
+    <div class="platform-switcher">
+      <span>Mastery Portals:</span>
+      <a href="../../index.html">🏛️ System Design</a>
+      <a href="../index.html" class="active">☕ Core Java 21</a>
+      <a href="../../sqlserver/index.html">🗄️ MS SQL Server</a>
+      <a href="../../dotnet/index.html">🔷 .NET 8 / C# 12</a>
+    </div>
 
+    <nav aria-label="breadcrumb">
+      <ol class="breadcrumb">
+        <li><a href="../index.html">Core Java 21</a></li>
+        <li><span>10 · Spring Boot 3 Internals &amp; Enterprise Architecture</span></li>
+      </ol>
+    </nav>
+    
     <header>
-        <h1>Spring Boot Deep Dive — Enterprise Java in Practice</h1>
-        <p class="subtitle">Mastering the heart of modern Java financial architectures</p>
+      <h1>🍃 Spring Boot 3 Internals &amp; Enterprise Architecture</h1>
+      <p class="subtitle">An architectural deep dive into the JVM's leading enterprise framework: SpringApplication startup phases, Auto-Configuration import mechanics, the complete 12-stage Bean Lifecycle, AOP dynamic proxy synthesis, the self-invocation @Transactional trap, DispatcherServlet internals, and the Principal Engineer Grill Round.</p>
     </header>
 
-    
-        <section class="topic-section" id="mvc-flow">
-            <h2>1. Spring MVC Request Flow</h2>
-            <div class="pillar pillar-1">
-                <h3>Pillar 1: Ground-Zero Theory & The Pain Point</h3>
-                <p>In the dark ages of Java web development, developers mapped every single HTTP endpoint to a distinct <code>HttpServlet</code>. This resulted in thousands of classes, redundant parsing logic, and unmaintainable routing tables. Spring MVC introduced the <strong>Front Controller</strong> pattern via the <code>DispatcherServlet</code>. It acts as the single point of entry, routing incoming requests, managing the lifecycle, and delegating to the appropriate business logic. Without it, you are manually parsing HTTP streams, which is a disaster for latency and maintainability.</p>
-                <div class="jargon"><strong>.jargon(Front Controller):</strong> A centralized entry point that handles all requests for a web application, providing a unified mechanism for routing, security, and rendering.</div>
-            </div>
+    <!-- TABLE OF CONTENTS -->
+    <nav class="toc-container">
+      <h3>Table of Contents</h3>
+      <ul>
+        <li><a href="#definitions">1. Formal Textbook Definitions &amp; 10-Second Elevator Pitch</a></li>
+        <li><a href="#startup-autoconfig">2. Spring Boot 3 Startup Sequence &amp; Auto-Configuration Mechanics</a></li>
+        <li><a href="#bean-lifecycle">3. The Complete 12-Step Spring Bean Lifecycle</a></li>
+        <li><a href="#aop-proxy-mechanics">4. Spring AOP Dynamic Proxies &amp; The Self-Invocation Trap</a></li>
+        <li><a href="#dispatcherservlet-flow">5. DispatcherServlet &amp; The Spring MVC Request Pipeline</a></li>
+        <li><a href="#virtual-threads-boot3">6. Spring Boot 3.2+ Virtual Threads &amp; Project Loom Integration</a></li>
+        <li><a href="#production-pipeline">7. Production-Grade Java 21 Spring Boot 3 Trading Service</a></li>
+        <li><a href="#interview-grill">8. The Principal Engineer's 10-Question Grill Round</a></li>
+      </ul>
+    </nav>
 
-            <div class="pillar pillar-2">
-                <h3>Pillar 2: Architectural Decision Rationales</h3>
-                <p>Why a single <code>DispatcherServlet</code> instead of multiple servlets? By centralizing the entry point, Spring can uniformly apply Cross-Origin Resource Sharing (CORS) rules, security filters, and content-negotiation strategies. The <code>HandlerMapping</code> is abstracted as an interface rather than a concrete class, allowing teams to route by URL, headers, or even custom annotations seamlessly.</p>
-            </div>
+    <!-- SECTION 1: DEFINITIONS & ELEVATOR PITCH -->
+    <section id="definitions">
+      <h2>1. Formal Textbook Definitions &amp; 10-Second Elevator Pitch</h2>
 
-            <div class="pillar pillar-3">
-                <h3>Pillar 3: Step-by-Step Evolution</h3>
-                <pre class="mermaid">
-                sequenceDiagram
-                    participant Client
-                    participant DispatcherServlet
-                    participant HandlerMapping
-                    participant Controller
-                    participant Service
-                    participant Repository
-                    
-                    Client->>DispatcherServlet: HTTP POST /api/v1/trades
-                    DispatcherServlet->>HandlerMapping: Inspect URL & Headers
-                    HandlerMapping-->>DispatcherServlet: Return TradeController & Interceptors
-                    DispatcherServlet->>Controller: Invoke executeTrade()
-                    Controller->>Service: process(tradeDTO)
-                    Service->>Repository: save(tradeEntity)
-                    Repository-->>Service: Trade ID
-                    Service-->>Controller: TradeResponse
-                    Controller-->>DispatcherServlet: ResponseEntity (JSON)
-                    DispatcherServlet-->>Client: 200 OK
-                </pre>
-            </div>
+      <div class="callout callout-info">
+        <div class="callout-title">🧠 The 10-Second Elevator Pitch</div>
+        <p><strong>"Spring Boot 3 provides opinionated, rapid enterprise application bootstrapping on top of Java 17/21. Its core engine builds an Inversion of Control (IoC) ApplicationContext through modular Auto-Configuration (evaluating conditions from <code>AutoConfiguration.imports</code>). Cross-cutting concerns—like transactions, security, and caching—are transparently woven using AOP dynamic proxies (CGLIB/ByteBuddy). Combined with DispatcherServlet front-controller routing and native Virtual Thread execution, Spring Boot scales to millions of concurrent requests with enterprise-grade resilience."</strong></p>
+      </div>
 
-            <div class="pillar pillar-4">
-                <h3>Pillar 4: Production-Grade Java 21 Code</h3>
-                <pre><code class="language-java">
-@RestController
-@RequestMapping("/api/v1/trades")
-public class TradeController {
-    
-    private final TradeService tradeService;
+      <div class="definition-grid">
+        <div class="def-card">
+          <h4>ApplicationContext (IoC Container)</h4>
+          <p>The central interface providing application configuration. It implements Inversion of Control (IoC) and Dependency Injection (DI) by managing bean lifecycles, configuration metadata, event publication, and resource loading via an internal <code>DefaultListableBeanFactory</code>.</p>
+        </div>
+        <div class="def-card">
+          <h4>Auto-Configuration</h4>
+          <p>A declarative bootstrapping system driven by <code>@EnableAutoConfiguration</code>. In Spring Boot 3, it reads configuration class candidates from <code>META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports</code> and applies them conditionally based on classpath presence and existing user beans.</p>
+        </div>
+        <div class="def-card">
+          <h4>BeanPostProcessor</h4>
+          <p>A foundational SPI interface allowing custom modification of new bean instances. Its two methods (<code>postProcessBeforeInitialization</code> and <code>postProcessAfterInitialization</code>) hook into the bean lifecycle, enabling Spring to wrap beans in AOP proxies (for <code>@Transactional</code>, <code>@Async</code>, etc.).</p>
+        </div>
+        <div class="def-card">
+          <h4>AOP Dynamic Proxy</h4>
+          <p>A runtime proxy pattern implementation. Spring AOP uses JDK Dynamic Proxies (for classes implementing interfaces) or CGLIB / ByteBuddy (for class-based inheritance proxies). The proxy intercepts method invocations to execute advice before, after, or around the target method.</p>
+        </div>
+        <div class="def-card">
+          <h4>DispatcherServlet</h4>
+          <p>The Front Controller for Spring MVC web applications. It centralizes request routing, delegates URL matching to <code>HandlerMapping</code>, dispatches execution via <code>HandlerAdapter</code>, handles interceptors, and marshals responses via <code>HttpMessageConverter</code>.</p>
+        </div>
+        <div class="def-card">
+          <h4>Self-Invocation Trap</h4>
+          <p>A subtle architectural failure where a bean calls another method within the same class using <code>this.method()</code>. Because the call bypasses the Spring AOP proxy wrapper, annotations like <code>@Transactional</code>, <code>@Cacheable</code>, and <code>@Async</code> fail to execute silently.</p>
+        </div>
+      </div>
+    </section>
 
-    public TradeController(TradeService tradeService) {
-        this.tradeService = tradeService;
+    <!-- SECTION 2: STARTUP SEQUENCE & AUTOCONFIG -->
+    <section id="startup-autoconfig">
+      <h2>2. Spring Boot 3 Startup Sequence &amp; Auto-Configuration Mechanics</h2>
+
+      <p>When you execute <code>SpringApplication.run(Application.class, args)</code>, HotSpot executes five distinct bootstrapping phases:</p>
+
+      <div class="diagram-box">
+        <div class="diagram-title">Spring Boot 3 Startup &amp; Auto-Configuration Pipeline</div>
+        <div class="mermaid">
+flowchart TD
+    A["1. Bootstrap &amp; Environment Setup<br/>(Load system properties, YAML, EnvironmentContributors)"] --> B["2. ApplicationContext Creation<br/>(AnnotationConfigServletWebServerApplicationContext)"]
+    B --> C["3. AutoConfiguration Candidate Discovery<br/>(Read META-INF/spring/...AutoConfiguration.imports)"]
+    C --> D["4. Condition Evaluation Stage<br/>(@ConditionalOnClass, @ConditionalOnMissingBean, etc.)"]
+    D --> E["5. Web Server Initialization &amp; Bean Instantiation<br/>(Tomcat/Jetty start, Bean Lifecycle execution, Port binding)"]
+
+    style A fill:#2d3748,stroke:#a0aec0,color:#fff
+    style B fill:#1e1e1e,stroke:#4ec9b0,color:#fff
+    style C fill:#2b6cb0,stroke:#63b3ed,color:#fff
+    style D fill:#744210,stroke:#d69e2e,color:#fff
+    style E fill:#1a2d1a,stroke:#38a169,stroke-width:2px,color:#fff
+        </div>
+      </div>
+
+      <h3>Spring Boot 3: The Death of `spring.factories`</h3>
+      <p>In Spring Boot 2.x, auto-configuration classes were listed in <code>META-INF/spring.factories</code> under the key <code>org.springframework.boot.autoconfigure.EnableAutoConfiguration</code>. In <strong>Spring Boot 3.0+</strong>, this legacy mechanism was completely removed in favor of a clean, newline-delimited file:</p>
+      <p><code>META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports</code></p>
+
+      <h3>The Big Three Conditional Annotations</h3>
+      <ul>
+        <li><strong><code>@ConditionalOnClass(DataSource.class)</code>:</strong> Activates configuration only if the specified class exists on the application's runtime classpath.</li>
+        <li><strong><code>@ConditionalOnMissingBean(DataSource.class)</code>:</strong> Only registers the default bean if the developer has <em>not</em> defined their own custom bean of that type. This provides out-of-the-box defaults that back off gracefully.</li>
+        <li><strong><code>@ConditionalOnProperty(name = "feature.enabled", havingValue = "true")</code>:</strong> Evaluates external configuration properties in <code>application.yml</code>.</li>
+      </ul>
+    </section>
+
+    <!-- SECTION 3: BEAN LIFECYCLE -->
+    <section id="bean-lifecycle">
+      <h2>3. The Complete 12-Step Spring Bean Lifecycle</h2>
+
+      <p>Understanding the exact sequence of bean instantiation is essential for diagnosing initialization order traps and proxy anomalies.</p>
+
+      <div class="diagram-box">
+        <div class="diagram-title">The 12 Distinct Phases of the Spring Bean Lifecycle</div>
+        <div class="mermaid">
+flowchart TD
+    S1["1. Instantiation (Constructor Reflection)"] --> S2["2. Populate Properties (Field &amp; Setter Injection)"]
+    S2 --> S3["3. Aware Interfaces (BeanNameAware, BeanFactoryAware, ApplicationContextAware)"]
+    S3 --> S4["4. BeanPostProcessor.postProcessBeforeInitialization()"]
+    S4 --> S5["5. @PostConstruct Method (JSR-250)"]
+    S5 --> S6["6. InitializingBean.afterPropertiesSet()"]
+    S6 --> S7["7. Custom XML/Config initMethod()"]
+    S7 --> S8["8. BeanPostProcessor.postProcessAfterInitialization()<br/>(AOP Proxies Created Here!)"]
+    S8 --> S9["9. BEAN READY IN SINGLETON REGISTRY"]
+    S9 --> S10["10. @PreDestroy Method (JSR-250)"]
+    S10 --> S11["11. DisposableBean.destroy()"]
+    S11 --> S12["12. Custom destroyMethod()"]
+
+    style S1 fill:#2d3748,stroke:#a0aec0,color:#fff
+    style S4 fill:#2b6cb0,stroke:#63b3ed,color:#fff
+    style S5 fill:#1e1e1e,stroke:#4ec9b0,color:#fff
+    style S8 fill:#742a2a,stroke:#f56565,stroke-width:2px,color:#fff
+    style S9 fill:#1a2d1a,stroke:#38a169,stroke-width:2px,color:#fff
+        </div>
+      </div>
+
+      <div class="callout callout-warning">
+        <div class="callout-title">⚠️ The @PostConstruct AOP Trap</div>
+        <p>Notice that <code>@PostConstruct</code> (Step 5) fires <strong>before</strong> <code>BeanPostProcessor.postProcessAfterInitialization()</code> (Step 8). Because AOP proxies are created in Step 8, calling an <code>@Async</code> or <code>@Transactional</code> method from within a <code>@PostConstruct</code> method <strong>will not execute asynchronously or within a transaction!</strong> The proxy does not yet exist; the call invokes the raw, un-proxied bean directly.</p>
+      </div>
+    </section>
+
+    <!-- SECTION 4: AOP & SELF-INVOCATION -->
+    <section id="aop-proxy-mechanics">
+      <h2>4. Spring AOP Dynamic Proxies &amp; The Self-Invocation Trap</h2>
+
+      <p>Spring AOP is <strong>proxy-based</strong>. When a bean is annotated with <code>@Transactional</code>, Spring does not modify the original class bytecode. Instead, it creates a CGLIB/ByteBuddy subclass that acts as a wrapper.</p>
+
+      <div class="diagram-box">
+        <div class="diagram-title">External Invocation vs The Self-Invocation (@Transactional) Trap</div>
+        <div class="mermaid">
+flowchart TD
+    subgraph HappyPath["External Call (Works via Proxy)"]
+        Caller1["Client / Controller"] --> Proxy1["CGLIB Spring Proxy"]
+        Proxy1 --> TxStart1["Begin Transaction (JDBC setAutoCommit false)"]
+        TxStart1 --> Real1["Target OrderService.executeTrade()"]
+        Real1 --> TxCommit1["Commit Transaction"]
+    end
+
+    subgraph Trap["Internal Self-Invocation (FAILS!)"]
+        Caller2["Client / Controller"] --> Proxy2["CGLIB Spring Proxy"]
+        Proxy2 --> M1["Target OrderService.placeOrder() (Non-Transactional)"]
+        M1 -->|this.executeTrade()| M2["Target OrderService.executeTrade() (@Transactional)"]
+        Note["Calls 'this' directly!<br/>Bypasses Proxy! Transaction NEVER starts!"]
+    end
+
+    style HappyPath fill:#1a2d1a,stroke:#38a169,color:#fff
+    style Trap fill:#2d1a1a,stroke:#e53e3e,color:#fff
+        </div>
+      </div>
+
+      <h3>Architectural Solutions to Self-Invocation</h3>
+      <ol>
+        <li><strong>Extract to a Separate Service (Recommended):</strong> Move the <code>@Transactional</code> method to a dedicated collaborator class and inject it via constructor injection. This honors the Single Responsibility Principle.</li>
+        <li><strong>Self-Injection:</strong> Inject the bean into itself via <code>@Lazy private final OrderService self;</code> and invoke <code>self.executeTrade()</code>.</li>
+        <li><strong>Compile-Time AspectJ Weaving:</strong> Use AspectJ's bytecode weaver (<code>ajc</code>) instead of runtime Spring dynamic proxies. AspectJ modifies the actual compiled bytecode, so <code>this.method()</code> calls are intercepted directly.</li>
+      </ol>
+    </section>
+
+    <!-- SECTION 5: DISPATCHERSERVLET FLOW -->
+    <section id="dispatcherservlet-flow">
+      <h2>5. DispatcherServlet &amp; The Spring MVC Request Pipeline</h2>
+
+      <p>The <code>DispatcherServlet</code> implements the Front Controller pattern. Every HTTP request passes through a strictly orchestrated pipeline before reaching your controller.</p>
+
+      <div class="diagram-box">
+        <div class="diagram-title">Complete Spring MVC DispatcherServlet Pipeline</div>
+        <div class="mermaid">
+sequenceDiagram
+    autonumber
+    actor Client as HTTP Client
+    participant DS as DispatcherServlet
+    participant HM as RequestMappingHandlerMapping
+    participant Interceptor as HandlerInterceptor
+    participant HA as RequestMappingHandlerAdapter
+    participant Resolver as HandlerMethodArgumentResolver
+    participant Ctrl as @RestController OrderController
+    participant Conv as HttpMessageConverter (Jackson)
+
+    Client->>DS: HTTP POST /api/v1/orders
+    DS->>HM: getHandler(request)
+    HM-->>DS: Returns HandlerExecutionChain (Controller + Interceptors)
+    DS->>Interceptor: preHandle()
+    DS->>HA: handle(request, response, handler)
+    HA->>Resolver: resolveArgument(RequestBody)
+    Resolver->>Conv: read Java Record from JSON stream
+    Conv-->>Resolver: OrderRequest record instance
+    HA->>Ctrl: submitOrder(OrderRequest)
+    Ctrl-->>HA: Returns OrderResponse record
+    HA->>Conv: write JSON bytes to HTTP response stream
+    DS->>Interceptor: postHandle() &amp; afterCompletion()
+    DS-->>Client: 200 OK (application/json)
+        </div>
+      </div>
+    </section>
+
+    <!-- SECTION 6: VIRTUAL THREADS IN BOOT 3 -->
+    <section id="virtual-threads-boot3">
+      <h2>6. Spring Boot 3.2+ Virtual Threads &amp; Project Loom Integration</h2>
+
+      <p>Starting in Spring Boot 3.2 (with Java 21), enabling Virtual Threads for all embedded web servers (Tomcat, Jetty) and asynchronous task executors requires a single configuration property:</p>
+
+      <pre><code># application.yml
+spring:
+  threads:
+    virtual:
+      enabled: true</code></pre>
+
+      <div class="diagram-box">
+        <div class="diagram-title">Platform Threads (Tomcat Thread Pool) vs Spring Boot 3.2 Virtual Threads</div>
+        <div class="mermaid">
+flowchart TD
+    subgraph Traditional["Traditional Tomcat (200 Platform Threads)"]
+        direction TB
+        Req1["201 Concurrent Requests"] --> Pool["Tomcat Worker Pool (Max: 200 OS Threads)"]
+        Pool --> Block["Request #201 Queues or Drops with 503 / Timeout!"]
+    end
+
+    subgraph Virtual["Spring Boot 3.2 Virtual Threads"]
+        direction TB
+        Req2["100,000 Concurrent Requests"] --> Loom["VirtualThreadPerTaskExecutor"]
+        Loom --> Sched["Carrier OS Thread Pool (Equal to CPU Cores)"]
+        Sched --> Nonblock["When waiting on DB/Kafka, Virtual Thread unmounts instantly.<br/>Zero queuing. 100,000 simultaneous connections handled!"]
+    end
+
+    style Traditional fill:#2d1a1a,stroke:#e53e3e,color:#fff
+    style Virtual fill:#1a2d1a,stroke:#38a169,stroke-width:2px,color:#fff
+        </div>
+      </div>
+    </section>
+
+    <!-- SECTION 7: PRODUCTION IMPLEMENTATION -->
+    <section id="production-pipeline">
+      <h2>7. Production-Grade Java 21 Spring Boot 3 Trading Service</h2>
+
+      <p>Below is a production-hardened institutional trading controller and service demonstrating constructor injection, self-invocation avoidance, RFC 7807 global exception handling, and Java 21 record DTOs.</p>
+
+      <pre><code>package com.finance.trading.boot;
+
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.*;
+import org.springframework.http.*;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.bind.annotation.*;
+
+import java.math.BigDecimal;
+import java.time.Instant;
+import java.util.UUID;
+
+// =========================================================================
+// 1. JAVA 21 IMMUTABLE DTO RECORDS
+// =========================================================================
+public class TradingApplication {
+
+    public record CreateOrderRequest(
+        @NotBlank String symbol,
+        @DecimalMin("0.01") BigDecimal price,
+        @Positive int quantity,
+        @NotBlank String clientAccount
+    ) {}
+
+    public record OrderResponse(
+        UUID orderId,
+        String symbol,
+        BigDecimal executedPrice,
+        int quantity,
+        String status,
+        Instant timestamp
+    ) {}
+
+    // =========================================================================
+    // 2. PRODUCTION REST CONTROLLER
+    // =========================================================================
+    @RestController
+    @RequestMapping("/api/v1/orders")
+    public static class OrderController {
+        private final OrderExecutionService executionService;
+
+        public OrderController(OrderExecutionService executionService) {
+            this.executionService = executionService;
+        }
+
+        @PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
+        public ResponseEntity&lt;OrderResponse&gt; submitOrder(@Valid @RequestBody CreateOrderRequest request) {
+            OrderResponse response = executionService.routeAndExecute(request);
+            return ResponseEntity.status(HttpStatus.CREATED).body(response);
+        }
     }
 
-    @PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE)
-    public ResponseEntity&lt;TradeResponse&gt; executeTrade(@RequestBody @Valid TradeRequest request) {
-        // DispatcherServlet routed us here via RequestMappingHandlerMapping
-        TradeResponse response = tradeService.execute(request);
-        return ResponseEntity.ok(response);
-    }
-}
-                </code></pre>
-            </div>
+    // =========================================================================
+    // 3. SERVICE WITH EXPLICIT TRANSACTION BOUNDARIES (NO SELF-INVOCATION)
+    // =========================================================================
+    @Service
+    public static class OrderExecutionService {
+        private final LedgerService ledgerService; // Separated collaborator to prevent self-invocation trap
 
-            <div class="pillar pillar-5">
-                <h3>Pillar 5: The Interviewer's Deep Follow-Up</h3>
-                <div class="interview-box">
-                    <h4>📋 How to Answer This in an Interview</h4>
-                    <p><strong>Q: "Explain the flow of Spring MVC from request to response."</strong></p>
-                    <p><em>Candidate:</em> "The request hits the Servlet container and reaches the DispatcherServlet. It consults the HandlerMapping to find the exact Controller method mapped to the URL. If interceptors are defined, their preHandle methods fire. The DispatcherServlet then uses a HandlerAdapter to invoke the Controller. The Controller delegates to the Service and returns a payload. Finally, the HttpMessageConverter serializes the return object (like a Record) to JSON and sends it back in the HTTP response."</p>
-                </div>
-                <div class="interview-box">
-                    <h4>🎯 Interviewer Follow-Up Questions</h4>
-                    <p><strong>Q: "What if the controller throws an exception? Where does the flow go?"</strong></p>
-                    <p><em>A:</em> "It bypasses the normal return flow and is caught by the <code>HandlerExceptionResolver</code>, specifically handled by an <code>@ControllerAdvice</code> class if defined, which translates the exception into an RFC-7807 ProblemDetail response."</p>
-                </div>
-            </div>
+        public OrderExecutionService(LedgerService ledgerService) {
+            this.ledgerService = ledgerService;
+        }
 
-            <div class="pillar pillar-6">
-                <h3>Pillar 6: Trade-offs & When NOT To Use It</h3>
-                <p>Spring MVC is thread-per-request. For extremely high-concurrency systems (like real-time market data streaming), this model blocks threads. In such cases, Spring WebFlux (Reactive) or Java 21 Virtual Threads (which make blocking cheap) are better suited than traditional MVC.</p>
-            </div>
-        </section>
-
-        <!-- Topic 2: Bean Lifecycle -->
-        <section class="topic-section" id="bean-lifecycle">
-            <h2>2. Bean Lifecycle</h2>
-            <div class="pillar pillar-1">
-                <h3>Pillar 1: Ground-Zero Theory & The Pain Point</h3>
-                <p>If you just use <code>new Object()</code>, you are responsible for initializing it, passing dependencies, and destroying it. Spring's Inversion of Control (IoC) container takes over. The Bean Lifecycle is the exact sequence of events Spring executes to create, wire, initialize, and destroy a bean. Failing to understand this means resource leaks (unclosed database connections) and NullPointerExceptions when accessing uninitialized properties.</p>
-            </div>
-            
-            <div class="pillar pillar-3">
-                <h3>Pillar 3: Step-by-Step Evolution</h3>
-                <pre class="mermaid">
-                flowchart TD
-                    A["Instantiation (Constructor)"] --> B["Populate Properties (Dependency Injection)"]
-                    B --> C["BeanNameAware / ApplicationContextAware"]
-                    C --> D["BeanPostProcessor preInit"]
-                    D --> E["@PostConstruct"]
-                    E --> F["InitializingBean afterPropertiesSet"]
-                    F --> G["BeanPostProcessor postInit"]
-                    G --> H["READY FOR USE"]
-                    H --> I["@PreDestroy"]
-                    I --> J["DisposableBean destroy"]
-                </pre>
-            </div>
-
-            <div class="pillar pillar-4">
-                <h3>Pillar 4: Production-Grade Java 21 Code</h3>
-                <pre><code class="language-java">
-@Component
-public class TradeProcessingBean implements InitializingBean, DisposableBean, ApplicationContextAware {
-    
-    private final FIXEngine fixEngine; // Field 1
-    private ApplicationContext context;
-
-    // 1. Instantiation & DI
-    public TradeProcessingBean(FIXEngine fixEngine) {
-        this.fixEngine = fixEngine;
-        System.out.println("1. Constructor: Dependencies injected");
+        public OrderResponse routeAndExecute(CreateOrderRequest request) {
+            System.out.printf("[LOG] Validating routing limits for account %s%n", request.clientAccount());
+            // Calling transactional collaborator via Spring CGLIB proxy
+            UUID txId = ledgerService.debitAccountTransactional(request.clientAccount(), 
+                request.price().multiply(BigDecimal.valueOf(request.quantity())));
+                
+            return new OrderResponse(txId, request.symbol(), request.price(), request.quantity(), "FILLED", Instant.now());
+        }
     }
 
-    // 2. Aware interfaces
-    @Override
-    public void setApplicationContext(ApplicationContext applicationContext) {
-        this.context = applicationContext;
-        System.out.println("2. ApplicationContextAware invoked");
+    @Service
+    public static class LedgerService {
+        @Transactional
+        public UUID debitAccountTransactional(String account, BigDecimal amount) {
+            System.out.printf("[TX-ACTIVE] Deducting %s from account %s within JDBC transaction%n", amount, account);
+            return UUID.randomUUID();
+        }
     }
 
-    // 3. JSR-250 Annotation
-    @PostConstruct
-    public void init() {
-        System.out.println("3. @PostConstruct: Warming up FIX caches");
+    // =========================================================================
+    // 4. RFC 7807 GLOBAL REST CONTROLLER ADVICE
+    // =========================================================================
+    @RestControllerAdvice
+    public static class GlobalTradingExceptionHandler {
+
+        @ExceptionHandler(IllegalArgumentException.class)
+        public ProblemDetail handleIllegalArgument(IllegalArgumentException ex) {
+            ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, ex.getMessage());
+            problem.setTitle("Invalid Trading Parameter");
+            problem.setProperty("timestamp", Instant.now());
+            problem.setProperty("errorCode", "TRD-4001");
+            return problem;
+        }
     }
+}</code></pre>
+    </section>
 
-    // 4. Spring specific initialization
-    @Override
-    public void afterPropertiesSet() throws Exception {
-        System.out.println("4. InitializingBean: Checking FIX connection");
-    }
+    <!-- SECTION 8: PRINCIPAL ENGINEER GRILL ROUND -->
+    <section id="interview-grill">
+      <h2>8. The Principal Engineer's 10-Question Grill Round</h2>
 
-    // 5. Destruction
-    @PreDestroy
-    public void shutdown() {
-        System.out.println("5. @PreDestroy: Draining FIX messages cleanly");
-    }
+      <div class="interview-card">
+        <div class="question-header">
+          <span class="q-num">Q1</span>
+          <h4>How has Auto-Configuration discovery changed from Spring Boot 2.x to Spring Boot 3.x?</h4>
+        </div>
+        <div class="answer-content">
+          <p>In Spring Boot 2.x, auto-configuration classes were declared in <code>META-INF/spring.factories</code> under the key <code>org.springframework.boot.autoconfigure.EnableAutoConfiguration</code>. In Spring Boot 3.0+, this mechanism was completely replaced. Auto-configuration classes must now be listed in <code>META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports</code>, with one fully qualified class name per line. If a legacy library still relies solely on <code>spring.factories</code>, its auto-configuration will fail to load in Spring Boot 3 without an adapter.</p>
+          <div class="callout callout-danger"><span class="badge badge-danger">🚩 Red Flag to Avoid</span> Claiming that <code>spring.factories</code> is still the primary auto-configuration configuration mechanism in Spring Boot 3.</div>
+        </div>
+      </div>
 
-    @Override
-    public void destroy() throws Exception {
-        System.out.println("6. DisposableBean: Socket closed");
-    }
-}
-                </code></pre>
-            </div>
-        </section>
+      <div class="interview-card">
+        <div class="question-header">
+          <span class="q-num">Q2</span>
+          <h4>Explain the exact mechanism of the Self-Invocation Trap with `@Transactional` or `@Async`.</h4>
+        </div>
+        <div class="answer-content">
+          <p>Spring AOP implements cross-cutting concerns by wrapping beans in runtime CGLIB or JDK dynamic proxies. When an external caller invokes a method, the proxy intercepts the call, starts the transaction or offloads to a thread pool, and delegates to the target bean. If method <code>a()</code> calls method <code>b()</code> within the same class using <code>this.b()</code>, the invocation is executed directly on the underlying target instance, bypassing the Spring proxy wrapper entirely. Consequently, any annotations on <code>b()</code> (such as <code>@Transactional</code>, <code>@Async</code>, or <code>@Cacheable</code>) are silently ignored.</p>
+          <div class="callout callout-danger"><span class="badge badge-danger">🚩 Red Flag to Avoid</span> Suggesting that declaring the private method public will resolve the self-invocation issue.</div>
+        </div>
+      </div>
 
-        <!-- Topic 5: @Transactional Trap -->
-        <section class="topic-section" id="transactional-trap">
-            <h2>5. The @Transactional TRAP</h2>
-            <div class="pillar pillar-1">
-                <h3>Pillar 1: Ground-Zero Theory</h3>
-                <p><code>@Transactional</code> guarantees ACID properties for database operations. If an exception occurs, changes are rolled back. However, Spring uses proxy-based Aspect-Oriented Programming (AOP). Spring wraps your bean in a proxy. When an external caller invokes the method, the proxy starts the transaction, delegates to your class, and commits. The trap occurs during <strong>self-invocation</strong>.</p>
-            </div>
+      <div class="interview-card">
+        <div class="question-header">
+          <span class="q-num">Q3</span>
+          <h4>Why does calling an `@Async` or `@Transactional` method inside `@PostConstruct` fail to work?</h4>
+        </div>
+        <div class="answer-content">
+          <p>In the Spring bean lifecycle, <code>@PostConstruct</code> methods are invoked during Step 5 (initialization), whereas AOP proxies are created in Step 8 by <code>BeanPostProcessor.postProcessAfterInitialization()</code>. When <code>@PostConstruct</code> executes, the bean instance is still the raw, unadorned Java object; the proxy wrapper has not yet been synthesized. Therefore, calling an <code>@Async</code> or <code>@Transactional</code> method from <code>@PostConstruct</code> executes synchronously and outside any transaction.</p>
+          <div class="callout callout-danger"><span class="badge badge-danger">🚩 Red Flag to Avoid</span> Expecting asynchronous tasks or transactional boundaries to trigger inside bean initialization constructors.</div>
+        </div>
+      </div>
 
-            <div class="pillar pillar-5">
-                <div class="interview-box">
-                    <h4>📋 How to Answer This in an Interview</h4>
-                    <p><strong>Q: "@Transactional is applied to a private method. Why does it silently have no effect?"</strong></p>
-                    <p><em>Candidate:</em> "Spring AOP relies on dynamic proxies (CGLIB or JDK). Proxies can only intercept public method calls coming from OUTSIDE the bean. If a method is private, the proxy cannot override it to inject transaction management logic. Furthermore, if a public non-transactional method inside the same bean calls a public transactional method inside that same bean, the transaction will ALSO fail to start. This is known as the self-invocation problem, because the internal call uses <code>this.method()</code>, completely bypassing the Spring proxy."</p>
-                </div>
-            </div>
+      <div class="interview-card">
+        <div class="question-header">
+          <span class="q-num">Q4</span>
+          <h4>Why is Constructor Injection preferred over Field Injection (`@Autowired` on private fields)?</h4>
+        </div>
+        <div class="answer-content">
+          <p>Field injection relies on reflection to mutate private fields, hiding dependencies from the class contract. This makes unit testing painful without mocking frameworks or Spring test runners, prevents fields from being declared <code>final</code> (destroying immutability), and hides circular dependency design smells until runtime. Constructor injection guarantees that objects cannot be instantiated in an uninitialized state, permits <code>final</code> fields, allows clean POJO unit tests with standard <code>new</code>, and causes the IoC container to fail fast on circular dependencies at startup.</p>
+          <div class="callout callout-danger"><span class="badge badge-danger">🚩 Red Flag to Avoid</span> Defending field injection for "cleaner looking code" without recognizing testability and immutability hazards.</div>
+        </div>
+      </div>
 
-            <div class="pillar pillar-4">
-                <h3>Pillar 4: Production-Grade Java 21 Code</h3>
-                <pre><code class="language-java">
-@Service
-public class OrderService {
+      <div class="interview-card">
+        <div class="question-header">
+          <span class="q-num">Q5</span>
+          <h4>How does Spring resolve the Prototype Bean inside a Singleton Bean dilemma?</h4>
+        </div>
+        <div class="answer-content">
+          <p>Because a singleton bean is initialized once during application startup, its dependencies are injected only once. If a prototype bean is injected directly via constructor injection, the singleton bean retains the identical prototype instance forever, nullifying the prototype scope. Solutions include: (1) Injecting <code>ObjectProvider&lt;PrototypeBean&gt;</code> or <code>Provider&lt;PrototypeBean&gt;</code> and calling <code>.getObject()</code> on each request; (2) Using <code>@Lookup</code> method injection, where CGLIB dynamically overrides an abstract method to query the ApplicationContext; (3) Configuring the prototype bean with <code>@Scope(value = "prototype", proxyMode = ScopedProxyMode.TARGET_CLASS)</code>.</p>
+          <div class="callout callout-danger"><span class="badge badge-danger">🚩 Red Flag to Avoid</span> Claiming injecting the prototype bean normally will supply a new instance on every method invocation.</div>
+        </div>
+      </div>
 
-    // TRAP: Caller hits this non-transactional method.
-    public void processOrder(Order order) {
-        // self-invocation! 'this' reference used. Bypasses proxy.
-        // @Transactional below is completely IGNORED.
-        saveToDatabase(order); 
-    }
+      <div class="interview-card">
+        <div class="question-header">
+          <span class="q-num">Q6</span>
+          <h4>What is the difference between JDK Dynamic Proxies and CGLIB/ByteBuddy in Spring AOP?</h4>
+        </div>
+        <div class="answer-content">
+          <p>JDK Dynamic Proxies require target classes to implement at least one interface. The proxy class implements the target interfaces and delegates invocations via an <code>InvocationHandler</code>. CGLIB (and modern ByteBuddy) creates a dynamic subclass of the target class at runtime and overrides methods using method interceptors. CGLIB can proxy classes without interfaces, but it cannot proxy <code>final</code> classes or override <code>final</code> methods. Since Spring Boot 2.x, CGLIB subclass proxying is enabled by default (<code>spring.aop.proxy-target-class=true</code>).</p>
+          <div class="callout callout-danger"><span class="badge badge-danger">🚩 Red Flag to Avoid</span> Stating that Spring always requires interfaces to generate AOP proxies.</div>
+        </div>
+      </div>
 
-    @Transactional
-    public void saveToDatabase(Order order) {
-        // database ops...
-    }
-}
-                </code></pre>
-                <p><strong>The Fix:</strong> Either extract <code>saveToDatabase</code> into a separate <code>OrderRepositoryService</code> so it's called through a proxy, or use AspectJ weaving instead of Spring AOP proxies (which operates at byte-code level and doesn't suffer from self-invocation).</p>
-            </div>
-        </section>
+      <div class="interview-card">
+        <div class="question-header">
+          <span class="q-num">Q7</span>
+          <h4>How does the Spring MVC `DispatcherServlet` locate the correct controller method for an incoming request?</h4>
+        </div>
+        <div class="answer-content">
+          <p>The <code>DispatcherServlet</code> iterates through registered <code>HandlerMapping</code> implementations, primarily <code>RequestMappingHandlerMapping</code>. This mapping contains an in-memory lookup registry created at startup that maps URL path patterns, HTTP methods, headers, and media types to a <code>HandlerMethod</code> wrapper. Once matched, it returns a <code>HandlerExecutionChain</code> containing the controller method and an ordered list of matching <code>HandlerInterceptor</code> instances.</p>
+          <div class="callout callout-danger"><span class="badge badge-danger">🚩 Red Flag to Avoid</span> Believing <code>DispatcherServlet</code> uses reflection to scan all classes on every incoming HTTP request.</div>
+        </div>
+      </div>
+
+      <div class="interview-card">
+        <div class="question-header">
+          <span class="q-num">Q8</span>
+          <h4>What happens under the hood when `spring.threads.virtual.enabled=true` is set in Spring Boot 3.2+?</h4>
+        </div>
+        <div class="answer-content">
+          <p>Spring Boot configures the embedded Tomcat / Jetty web server to use an <code>Executor</code> backed by <code>Executors.newVirtualThreadPerTaskExecutor()</code> instead of a fixed platform thread pool. For every incoming HTTP request, Tomcat spawns a new Java 21 Virtual Thread. Furthermore, Spring's <code>applicationTaskExecutor</code> and <code>@Async</code> processing are automatically adapted to use virtual threads. When a virtual thread performs blocking I/O (JDBC query, HTTP client call), it unmounts from its carrier platform thread, eliminating thread pool starvation.</p>
+          <div class="callout callout-danger"><span class="badge badge-danger">🚩 Red Flag to Avoid</span> Assuming virtual threads make CPU-intensive calculations run faster.</div>
+        </div>
+      </div>
+
+      <div class="interview-card">
+        <div class="question-header">
+          <span class="q-num">Q9</span>
+          <h4>What is RFC 7807 (ProblemDetail) in Spring Boot 3, and why does it supersede custom error maps?</h4>
+        </div>
+        <div class="answer-content">
+          <p>RFC 7807 is an IETF specification defining a standardized JSON format for HTTP API error responses. Before Spring 6 / Boot 3, teams created ad-hoc error response maps (e.g., <code>{ "timestamp": ..., "error": ..., "message": ... }</code>) with differing schemas across services. Spring 6 introduced <code>ProblemDetail</code> as a first-class citizen, providing standardized fields: <code>type</code> (URI), <code>title</code>, <code>status</code>, <code>detail</code>, <code>instance</code>, and arbitrary extension properties. This enables API consumers and API Gateways to parse structured errors uniformly across polyglot microservices.</p>
+          <div class="callout callout-danger"><span class="badge badge-danger">🚩 Red Flag to Avoid</span> Returning generic strings or HTTP 500 error pages for client validation errors.</div>
+        </div>
+      </div>
+
+      <div class="interview-card">
+        <div class="question-header">
+          <span class="q-num">Q10</span>
+          <h4>How do `@ConditionalOnMissingBean` and `@AutoConfigureAfter` coordinate custom starter priorities?</h4>
+        </div>
+        <div class="answer-content">
+          <p><code>@ConditionalOnMissingBean</code> enables Spring Boot's "convention over configuration" guarantee: auto-configured beans are registered only if no user-defined bean of that type exists in the <code>BeanFactory</code>. To ensure that user-defined configurations and dependency auto-configurations evaluate before downstream dependent configurations, starters use <code>@AutoConfigureAfter</code> and <code>@AutoConfigureBefore</code>. This enforces a deterministic topological sort of auto-configuration import ordering, preventing order-dependent startup race conditions.</p>
+          <div class="callout callout-danger"><span class="badge badge-danger">🚩 Red Flag to Avoid</span> Using <code>@Order</code> on <code>@Configuration</code> classes expecting it to control auto-configuration evaluation order. (It does not!).</div>
+        </div>
+      </div>
+    </section>
+
   </main>
 </div>
 
 <button class="scroll-top" aria-label="Scroll to top">↑</button>
-<script src="../../js/main.js"></script>
 </body>
 </html>
-

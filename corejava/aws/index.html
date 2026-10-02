@@ -1,10 +1,11 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AWS & Deployment — Cloud Infrastructure for Trading Systems</title>
+    <title>AWS Cloud &amp; Distributed Infrastructure — From Scratch to Principal Architect</title>
     <link rel="stylesheet" href="../../css/style.css">
+    <script src="../../js/main.js" defer></script>
     <script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.0/dist/mermaid.min.js"></script>
 </head>
 <body>
@@ -15,224 +16,468 @@
   <aside class="sidebar" id="sidebar"></aside>
 
   <main class="main-content">
-<nav class="breadcrumbs">
-        <a href="../index.html">Home</a> &gt; AWS & Deployment
+    <div class="platform-switcher">
+      <span>Mastery Portals:</span>
+      <a href="../../index.html">🏛️ System Design</a>
+      <a href="../index.html" class="active">☕ Core Java 21</a>
+      <a href="../../sqlserver/index.html">🗄️ MS SQL Server</a>
+      <a href="../../dotnet/index.html">🔷 .NET 8 / C# 12</a>
+    </div>
+
+    <nav aria-label="breadcrumb">
+      <ol class="breadcrumb">
+        <li><a href="../index.html">Core Java 21</a></li>
+        <li><span>14 · AWS Cloud &amp; Distributed Systems</span></li>
+      </ol>
     </nav>
+    
     <header>
-        <h1>AWS & Deployment — Cloud Infrastructure for Trading Systems</h1>
-        <p>Architecting low-latency, highly available financial systems on the Cloud.</p>
+      <h1>☁️ AWS Cloud &amp; Distributed Infrastructure for Trading Systems</h1>
+      <p class="subtitle">An architectural masterclass on enterprise cloud infrastructure: EC2 Nitro vs ECS Fargate vs Lambda SnapStart, SQS FIFO vs Kinesis Data Streams, DynamoDB Single-Table Design, Aurora Global Database quorum replication, KMS envelope encryption, and the Principal Engineer Grill Round.</p>
     </header>
 
-    
-        <!-- TOPIC 1: EC2 vs ECS vs Lambda -->
-        <section id="compute">
-            <h2>1. Compute: EC2 vs ECS vs Lambda</h2>
-            
-            <div class="pillar">
-                <h3>PILLAR 1: Ground-Zero Theory & The Pain Point</h3>
-                <p>In a trading system, you have diverse computational needs. A FIX (Financial Information eXchange) engine requires persistent, long-lived TCP connections. A trade processing engine requires scalable microservices. A daily reconciliation report runs once a day. If you use a single server for all three, you either pay for idle capacity or face starvation during market open. AWS provides three main compute paradigms:</p>
-                <ul>
-                    <li><strong>EC2 (Elastic Compute Cloud):</strong> Full Virtual Machines. You control the OS, networking, and patching.</li>
-                    <li><strong>ECS (Elastic Container Service):</strong> Container orchestration (often via AWS Fargate). You deploy Docker containers without managing the underlying VMs.</li>
-                    <li><strong>Lambda:</strong> Serverless compute. You deploy code, and AWS runs it in response to events, billing by the millisecond.</li>
-                </ul>
-                <p class="jargon"><strong>Pain Point:</strong> Choosing the wrong compute primitive leads to either bloated AWS bills (running EC2s for batch jobs) or disconnected clients (using Lambda for long-lived FIX sessions).</p>
-            </div>
+    <!-- TABLE OF CONTENTS -->
+    <nav class="toc-container">
+      <h3>Table of Contents</h3>
+      <ul>
+        <li><a href="#definitions">1. Formal Textbook Definitions &amp; 10-Second Elevator Pitch</a></li>
+        <li><a href="#compute-topology">2. Compute Architecture: EC2 Nitro, ECS Fargate &amp; Lambda SnapStart</a></li>
+        <li><a href="#messaging-streaming">3. Event Ingestion: SQS FIFO vs Kinesis Data Streams</a></li>
+        <li><a href="#data-persistence">4. High-Throughput Persistence: DynamoDB Single-Table Design &amp; Aurora Global DB</a></li>
+        <li><a href="#security-networking">5. Zero-Trust Security &amp; KMS Envelope Encryption</a></li>
+        <li><a href="#production-pipeline">6. Production-Grade Java 21 AWS SDK v2 Settlement Pipeline</a></li>
+        <li><a href="#interview-grill">7. The Principal Engineer's 10-Question Grill Round</a></li>
+      </ul>
+    </nav>
 
-            <div class="pillar">
-                <h3>PILLAR 2: Architectural Decision Rationales</h3>
-                <table>
-                    <tr>
-                        <th>Compute Primitive</th>
-                        <th>Control & Scaling</th>
-                        <th>Startup Time</th>
-                        <th>Finance Use Case</th>
-                    </tr>
-                    <tr>
-                        <td><strong>EC2</strong></td>
-                        <td>Total control, slow manual/ASG scaling</td>
-                        <td>Minutes</td>
-                        <td>FIX engines needing kernel tuning, persistent IP, and long-lived TCP sockets.</td>
-                    </tr>
-                    <tr>
-                        <td><strong>ECS (Fargate)</strong></td>
-                        <td>High control, auto-scaling containers</td>
-                        <td>Seconds</td>
-                        <td>Order Management System (OMS) Microservices, Pricing engines.</td>
-                    </tr>
-                    <tr>
-                        <td><strong>AWS Lambda</strong></td>
-                        <td>Low control, hyper-scaling (event-driven)</td>
-                        <td>Milliseconds (Cold starts vary)</td>
-                        <td>Trade reconciliation batch jobs, EOD (End-of-Day) report generation, S3 trigger parsing.</td>
-                    </tr>
-                </table>
-            </div>
+    <!-- SECTION 1: DEFINITIONS & ELEVATOR PITCH -->
+    <section id="definitions">
+      <h2>1. Formal Textbook Definitions &amp; 10-Second Elevator Pitch</h2>
 
-            <div class="pillar">
-                <h3>PILLAR 3: Step-by-Step Evolution</h3>
-                <p><strong>Naive Approach:</strong> Deploy everything on giant EC2 instances ("Lift and Shift"). Result: Wasted money during non-market hours and slow deployments.<br>
-                <strong>Evolution 1:</strong> Move microservices to ECS. Dockerizes the OMS, allowing seamless Blue-Green deployments and faster scaling during market volatility.<br>
-                <strong>Evolution 2:</strong> Offload event-driven tasks to Lambda. When a generic end-of-day trade file lands in S3, a Lambda wakes up, parses it, updates the DB, and dies.</p>
-            </div>
+      <div class="callout callout-info">
+        <div class="callout-title">🧠 The 10-Second Elevator Pitch</div>
+        <p><strong>"Enterprise cloud architecture decouples trading services into specialized compute and storage tiers aligned with latency and throughput requirements. Persistent, stateful FIX engines leverage dedicated EC2 Nitro instances with Elastic Network Adapters (ENA), microservices scale containerized workloads across ECS Fargate, while asynchronous settlement workflows execute on event-driven Lambda with Java 21 SnapStart. Data persistence leverages DynamoDB single-table design for predictable single-digit millisecond reads, combined with KMS envelope encryption and VPC PrivateLinks for zero-trust compliance."</strong></p>
+      </div>
 
-            <div class="pillar">
-                <h3>PILLAR 4: Production-Grade Java 21 Code</h3>
-                <p>An AWS Lambda Handler written in Java 21 for Trade Reconciliation, utilizing records and pattern matching.</p>
-                <pre><code class="language-java">
-package com.finance.aws.lambda;
+      <div class="definition-grid">
+        <div class="def-card">
+          <h4>AWS Nitro System</h4>
+          <p>A specialized hardware and hypervisor architecture that offloads virtualization, networking (ENA), and storage (NVMe) to dedicated PCIe ASICs. It delivers near-bare-metal performance with zero hypervisor jitter, essential for low-latency financial gateways.</p>
+        </div>
+        <div class="def-card">
+          <h4>AWS Lambda SnapStart (CRaC)</h4>
+          <p>A performance feature for Java runtimes based on Coordinated Restore at Checkpoint (CRaC). During deployment, Lambda initializes the JVM, takes a microVM snapshot, and caches it. Subsequent cold starts restore from the snapshot in under 200ms instead of 6+ seconds.</p>
+        </div>
+        <div class="def-card">
+          <h4>SQS FIFO</h4>
+          <p>A fully managed message queuing service providing strict First-In-First-Out ordering and exactly-once processing via deduplication IDs and Message Group IDs, guaranteeing deterministic trade sequence ingestion.</p>
+        </div>
+        <div class="def-card">
+          <h4>Kinesis Data Streams</h4>
+          <p>A massively scalable real-time streaming service that partitions events across shards. Supports ordered consumer processing with Enhanced Fan-Out (HTTP/2 push), delivering sub-70ms end-to-end propagation for real-time market data ticks.</p>
+        </div>
+        <div class="def-card">
+          <h4>DynamoDB Single-Table Design</h4>
+          <p>A data modeling pattern where multiple entity types (e.g., Accounts, Trades, Executions) reside in a single table using generic partition (<code>PK</code>) and sort (<code>SK</code>) keys, retrieving complex relational hierarchies in a single HTTP request.</p>
+        </div>
+        <div class="def-card">
+          <h4>Envelope Encryption (AWS KMS)</h4>
+          <p>A cryptographic pattern where plaintext data is encrypted locally using a unique Data Encryption Key (DEK). The DEK is encrypted under a KMS Customer Master Key (CMK) and stored alongside the ciphertext, avoiding sending bulk data across the network to KMS.</p>
+        </div>
+      </div>
+    </section>
 
-import com.amazonaws.services.lambda.runtime.Context;
-import com.amazonaws.services.lambda.runtime.RequestHandler;
-import com.amazonaws.services.lambda.runtime.events.S3Event;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+    <!-- SECTION 2: COMPUTE TOPOLOGY -->
+    <section id="compute-topology">
+      <h2>2. Compute Architecture: EC2 Nitro, ECS Fargate &amp; Lambda SnapStart</h2>
 
-// Using Java 21 records for DTOs
-public record TradeRecord(String tradeId, String isin, double quantity, double price) {}
+      <div class="diagram-box">
+        <div class="diagram-title">Workload Placement Across AWS Compute Primitives</div>
+        <div class="mermaid">
+flowchart TD
+    subgraph Edge["1. Trading Gateways &amp; FIX Engines"]
+        EC2["EC2 c6in.4xlarge (Nitro System)<br/>Persistent TCP, ENA 100 Gbps, Zero Jitter"]
+    end
+
+    subgraph Core["2. Core Order Management Microservices"]
+        ECS["ECS Fargate Container Tasks<br/>Auto-scaling on CPU/Request Count, Zero VM Ops"]
+    end
+
+    subgraph Batch["3. Asynchronous Settlement &amp; Reporting"]
+        Lambda["AWS Lambda with SnapStart (Java 21)<br/>Event-Driven, Scales to Zero, &lt;200ms Cold Start"]
+    end
+
+    Edge --> Core --> Batch
+    style Edge fill:#1e1e1e,stroke:#4ec9b0,stroke-width:2px,color:#fff
+    style Core fill:#2d3748,stroke:#ed8936,color:#fff
+    style Batch fill:#1a2d1a,stroke:#38a169,color:#fff
+        </div>
+      </div>
+
+      <h3>Trade-Off Comparison</h3>
+      <table class="table table-bordered">
+        <thead>
+          <tr>
+            <th>Platform</th>
+            <th>Network Latency &amp; Jitter</th>
+            <th>Scaling Speed</th>
+            <th>Cost Model</th>
+            <th>Target Trading Component</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>EC2 (Nitro)</strong></td>
+            <td>Sub-millisecond (ENA, SR-IOV)</td>
+            <td>Minutes (ASG boot)</td>
+            <td>Continuous hourly rate</td>
+            <td>FIX Protocol Gateways, Matching Engines.</td>
+          </tr>
+          <tr>
+            <td><strong>ECS Fargate</strong></td>
+            <td>Low (3–10ms)</td>
+            <td>Seconds (Container pull)</td>
+            <td>vCPU / GB per second</td>
+            <td>OMS, Pricing Services, Risk Engines.</td>
+          </tr>
+          <tr>
+            <td><strong>AWS Lambda</strong></td>
+            <td>Medium (50–150ms)</td>
+            <td>Milliseconds (Auto-concurrency)</td>
+            <td>Per millisecond execution</td>
+            <td>Reconciliation, EOD reports, S3 file ETL.</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <!-- SECTION 3: MESSAGING & STREAMING -->
+    <section id="messaging-streaming">
+      <h2>3. Event Ingestion: SQS FIFO vs Kinesis Data Streams</h2>
+
+      <div class="diagram-box">
+        <div class="diagram-title">SQS FIFO vs Kinesis Data Streams Architecture</div>
+        <div class="mermaid">
+flowchart LR
+    subgraph SQS["Amazon SQS FIFO"]
+        direction TB
+        Q1["Message Group ID = 'ACC-101'"] --> M1["Msg 1"] --> M2["Msg 2"]
+        Q2["Message Group ID = 'ACC-102'"] --> M3["Msg 3"]
+        Note1["Concurrent consumers process distinct groups in parallel!<br/>Strict FIFO guaranteed within each group."]
+    end
+
+    subgraph Kinesis["Amazon Kinesis Data Streams"]
+        direction TB
+        Shard1["Shard 1 (1 MB/s Ingest, 2 MB/s Out)"]
+        Shard2["Shard 2 (1 MB/s Ingest, 2 MB/s Out)"]
+        Note2["Partition Key determines shard routing via MD5.<br/>Enhanced Fan-Out provides dedicated 2 MB/s pipe per consumer."]
+    end
+
+    style SQS fill:#1e1e1e,stroke:#4ec9b0,stroke-width:2px,color:#fff
+    style Kinesis fill:#2d3748,stroke:#ed8936,stroke-width:2px,color:#fff
+        </div>
+      </div>
+
+      <h3>Architectural Decision Rules</h3>
+      <ul>
+        <li><strong>Use SQS FIFO:</strong> When individual messages represent independent discrete business transactions (e.g., account deposits, order cancellations) requiring exactly-once semantics and group-level parallelization.</li>
+        <li><strong>Use Kinesis:</strong> When handling continuous high-velocity time-series event streams (e.g., market tick data, clickstreams, distributed tracing) where multiple independent consumers replay identical data offsets.</li>
+      </ul>
+    </section>
+
+    <!-- SECTION 4: DATA PERSISTENCE -->
+    <section id="data-persistence">
+      <h2>4. High-Throughput Persistence: DynamoDB Single-Table Design &amp; Aurora Global DB</h2>
+
+      <h3>DynamoDB Single-Table Design for Trading Entities</h3>
+      <p>By overloading Partition Keys (<code>PK</code>) and Sort Keys (<code>SK</code>), an OMS queries a portfolio and all its child positions in a single network round-trip:</p>
+
+      <table class="table table-bordered">
+        <thead>
+          <tr>
+            <th>PK (Partition Key)</th>
+            <th>SK (Sort Key)</th>
+            <th>Data Attributes</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>PORTFOLIO#1001</code></td>
+            <td><code>METADATA</code></td>
+            <td><code>Name: Growth Fund, TraderId: T99</code></td>
+          </tr>
+          <tr>
+            <td><code>PORTFOLIO#1001</code></td>
+            <td><code>POSITION#AAPL</code></td>
+            <td><code>Quantity: 5000, AvgPrice: $185.20</code></td>
+          </tr>
+          <tr>
+            <td><code>PORTFOLIO#1001</code></td>
+            <td><code>POSITION#NVDA</code></td>
+            <td><code>Quantity: 1200, AvgPrice: $890.50</code></td>
+          </tr>
+          <tr>
+            <td><code>PORTFOLIO#1001</code></td>
+            <td><code>TRADE#2024-03-01#001</code></td>
+            <td><code>ExecutedQty: 500, Price: $185.00</code></td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>Amazon Aurora Global Database Quorum Replication</h3>
+      <p>Aurora decouples compute from storage. In an Aurora Global Database, storage volume replication is handled by dedicated storage nodes using an asynchronous physical redo-log stream directly over AWS's global backbone. Cross-region replication latency is typically <strong>under 1 second</strong> with zero CPU overhead on the primary database cluster.</p>
+    </section>
+
+    <!-- SECTION 5: SECURITY & NETWORKING -->
+    <section id="security-networking">
+      <h2>5. Zero-Trust Security &amp; KMS Envelope Encryption</h2>
+
+      <p>Financial regulations (SOC2, PCI-DSS, Basel III) mandate strict data encryption both in-transit (mTLS) and at-rest. AWS KMS utilizes <strong>Envelope Encryption</strong>:</p>
+
+      <div class="diagram-box">
+        <div class="diagram-title">KMS Envelope Encryption Workflow</div>
+        <div class="mermaid">
+sequenceDiagram
+    autonumber
+    actor App as Trading Service
+    participant KMS as AWS KMS (HSM)
+    participant DB as Storage / S3
+
+    App->>KMS: GenerateDataKey(KeyId='alias/master-key', KeySpec='AES_256')
+    KMS-->>App: Returns [Plaintext DEK, Encrypted DEK (Ciphertext)]
+    Note over App: Encrypts trade payload locally in RAM using Plaintext DEK
+    Note over App: Wipes Plaintext DEK from RAM immediately!
+    App->>DB: Persists [Encrypted Trade Data + Encrypted DEK]
+    Note over DB: Master Key never left KMS! Data cannot be decrypted without KMS access.
+        </div>
+      </div>
+    </section>
+
+    <!-- SECTION 6: PRODUCTION PIPELINE -->
+    <section id="production-pipeline">
+      <h2>6. Production-Grade Java 21 AWS SDK v2 Settlement Pipeline</h2>
+
+      <p>Below is a production-hardened institutional trade settlement pipeline implemented with the non-blocking <strong>AWS SDK v2</strong> for SQS and DynamoDB.</p>
+
+      <pre><code>package com.finance.trading.aws;
+
+import software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider;
+import software.amazon.awssdk.http.nio.netty.NettyNioAsyncHttpClient;
+import software.amazon.awssdk.regions.Region;
+import software.amazon.awssdk.services.dynamodb.DynamoDbAsyncClient;
+import software.amazon.awssdk.services.dynamodb.model.*;
+import software.amazon.awssdk.services.sqs.SqsAsyncClient;
+import software.amazon.awssdk.services.sqs.model.*;
+
+import java.time.Duration;
+import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 
 /**
- * Triggered by an S3 event when a new daily trade file is uploaded.
+ * Non-blocking AWS SDK v2 Settlement Worker.
+ * Demonstrates:
+ * 1. Netty-backed async clients with connection pooling.
+ * 2. Atomic DynamoDB PutItem with conditional idempotency.
+ * 3. SQS message receipt and deletion lifecycle.
  */
-public class TradeReconciliationHandler implements RequestHandler&lt;S3Event, String&gt; {
-    private static final Logger log = LoggerFactory.getLogger(TradeReconciliationHandler.class);
+public class InstitutionalSettlementWorker implements AutoCloseable {
+
+    private final SqsAsyncClient sqsClient;
+    private final DynamoDbAsyncClient dynamoClient;
+    private final String queueUrl;
+    private final String tableName;
+
+    public InstitutionalSettlementWorker(String queueUrl, String tableName) {
+        this.queueUrl = queueUrl;
+        this.tableName = tableName;
+
+        var httpClient = NettyNioAsyncHttpClient.builder()
+            .maxConcurrency(100)
+            .connectionTimeout(Duration.ofSeconds(2))
+            .build();
+
+        this.sqsClient = SqsAsyncClient.builder()
+            .region(Region.US_EAST_1)
+            .credentialsProvider(DefaultCredentialsProvider.create())
+            .httpClient(httpClient)
+            .build();
+
+        this.dynamoClient = DynamoDbAsyncClient.builder()
+            .region(Region.US_EAST_1)
+            .credentialsProvider(DefaultCredentialsProvider.create())
+            .httpClient(httpClient)
+            .build();
+    }
+
+    public record SettlementMessage(String tradeId, String accountId, double amount, String currency) {}
+
+    public CompletableFuture&lt;Void&gt; processNextTrade() {
+        ReceiveMessageRequest receiveRequest = ReceiveMessageRequest.builder()
+            .queueUrl(queueUrl)
+            .maxNumberOfMessages(1)
+            .waitTimeSeconds(20) // Long polling
+            .build();
+
+        return sqsClient.receiveMessage(receiveRequest)
+            .thenCompose(response -&gt; {
+                if (response.messages().isEmpty()) {
+                    return CompletableFuture.completedFuture(null);
+                }
+                Message msg = response.messages().get(0);
+                return persistSettlementAtomically(msg.body())
+                    .thenCompose(_ -&gt; deleteSqsMessage(msg.receiptHandle()));
+            });
+    }
+
+    private CompletableFuture&lt;PutItemResponse&gt; persistSettlementAtomically(String tradeId) {
+        // Enforce idempotency: ConditionExpression guarantees we never settle the same trade twice
+        PutItemRequest putRequest = PutItemRequest.builder()
+            .tableName(tableName)
+            .item(Map.of(
+                "PK", AttributeValue.builder().s("TRADE#" + tradeId).build(),
+                "SK", AttributeValue.builder().s("SETTLEMENT").build(),
+                "Status", AttributeValue.builder().s("SETTLED").build()
+            ))
+            .conditionExpression("attribute_not_exists(PK)")
+            .build();
+
+        return dynamoClient.putItem(putRequest);
+    }
+
+    private CompletableFuture&lt;DeleteMessageResponse&gt; deleteSqsMessage(String receiptHandle) {
+        DeleteMessageRequest deleteRequest = DeleteMessageRequest.builder()
+            .queueUrl(queueUrl)
+            .receiptHandle(receiptHandle)
+            .build();
+        return sqsClient.deleteMessage(deleteRequest);
+    }
 
     @Override
-    public String handleRequest(S3Event s3event, Context context) {
-        log.info("Starting reconciliation for event: {}", s3event.toJson());
-        
-        // Java 21 pattern matching and functional approach
-        s3event.getRecords().forEach(record -> {
-            var bucketName = record.getS3().getBucket().getName();
-            var objectKey = record.getS3().getObject().getKey();
-            
-            log.info("Processing file: {}/{}", bucketName, objectKey);
-            // In a real scenario, stream the S3 object and parse CSV/JSON into TradeRecords
-            processFile(bucketName, objectKey);
-        });
-        
-        return "SUCCESS";
+    public void close() {
+        sqsClient.close();
+        dynamoClient.close();
     }
-    
-    private void processFile(String bucket, String key) {
-        // Business logic for reconciliation...
-    }
-}
-                </code></pre>
-            </div>
+}</code></pre>
+    </section>
 
-            <div class="pillar">
-                <h3>PILLAR 5: The Interviewer's Deep Follow-Up Questions</h3>
-                <div class="interview-box">
-                    <h4>📋 How to Answer This in an Interview</h4>
-                    <p><strong>Q: Difference between EC2, ECS and Lambda in your trading architecture?</strong><br>
-                    <strong>A:</strong> "I map compute to workload characteristics. For our FIX engine, we use EC2 because FIX relies on long-lived TCP sockets and sequence numbers, which Lambda and standard HTTP-based load balancers on ECS struggle with. For our core Order Routing microservices, we use ECS with Fargate because it provides scalable container orchestration without managing VMs. For End-of-Day reconciliation or processing files dropped in S3, we use Lambda because it's purely event-driven, scaling to zero when not in use."</p>
-                </div>
-                <h4>🎯 Interviewer Follow-Up Questions</h4>
-                <ul>
-                    <li><em>"What is a Lambda Cold Start and how do you mitigate it in Java?"</em> -> SnapStart, GraalVM native images, or Provisioned Concurrency.</li>
-                    <li><em>"Can a Lambda run for an hour?"</em> -> No, Lambda has a hard 15-minute timeout. For long batch jobs, use AWS Batch or ECS tasks.</li>
-                </ul>
-            </div>
+    <!-- SECTION 7: PRINCIPAL ENGINEER GRILL ROUND -->
+    <section id="interview-grill">
+      <h2>7. The Principal Engineer's 10-Question Grill Round</h2>
 
-            <div class="pillar">
-                <h3>PILLAR 6: Trade-offs & When NOT To Use It</h3>
-                <ul>
-                    <li><strong>Lambda:</strong> Do not use for low-latency market data processing. Cold starts and unpredictable JVM pauses will violate SLA.</li>
-                    <li><strong>EC2:</strong> Do not use for simple web APIs; the operational overhead of OS patching and AMIs is too high compared to ECS/EKS.</li>
-                </ul>
-            </div>
-        </section>
+      <div class="interview-card">
+        <div class="question-header">
+          <span class="q-num">Q1</span>
+          <h4>Why is EC2 Nitro preferred over standard containers for ultra-low latency FIX engines?</h4>
+        </div>
+        <div class="answer-content">
+          <p>The AWS Nitro System offloads hypervisor overhead, networking, and storage virtualization to dedicated PCIe hardware cards. In an EC2 Nitro instance with Elastic Fabric Adapter (EFA) or Elastic Network Adapter (ENA), the OS kernel interacts directly with hardware queues via SR-IOV (Single Root I/O Virtualization). This eliminates hypervisor context switches, provides stable 100 Gbps network bandwidth, and suppresses the latency jitter that causes TCP heartbeat timeouts on high-frequency trading gateways.</p>
+          <div class="callout callout-danger"><span class="badge badge-danger">🚩 Red Flag to Avoid</span> Claiming Docker containers on ECS provide lower network jitter than bare EC2 Nitro instances.</div>
+        </div>
+      </div>
 
-        <hr>
+      <div class="interview-card">
+        <div class="question-header">
+          <span class="q-num">Q2</span>
+          <h4>How does AWS Lambda SnapStart eliminate Java cold starts under the hood?</h4>
+        </div>
+        <div class="answer-content">
+          <p>SnapStart utilizes Coordinated Restore at Checkpoint (CRaC). During function deployment, AWS launches the Lambda container, starts the JVM, executes static initializers, loads all classes, and warms Spring contexts up to a defined checkpoint hook. It then takes a binary snapshot of the entire Firecracker microVM memory state and persists it in a multi-tier cache. When subsequent invocations occur, AWS restores the pre-warmed memory snapshot in under 200ms, completely bypassing JVM bootstrap and JIT tier compilation.</p>
+          <div class="callout callout-danger"><span class="badge badge-danger">🚩 Red Flag to Avoid</span> Confusing Lambda SnapStart with standard Provisioned Concurrency.</div>
+        </div>
+      </div>
 
-        <!-- TOPIC 2: Deployment Flow -->
-        <section id="deployment">
-            <h2>2. Deployment Flow — CI/CD for Microservices</h2>
-            
-            <div class="pillar">
-                <h3>PILLAR 1: Ground-Zero Theory & The Pain Point</h3>
-                <p>A trading floor cannot endure downtime. Deploying new code by manually SSHing into servers is a recipe for disaster. CI/CD (Continuous Integration / Continuous Deployment) automates the pipeline from Git commit to production release.</p>
-            </div>
+      <div class="interview-card">
+        <div class="question-header">
+          <span class="q-num">Q3</span>
+          <h4>What is the difference between SQS FIFO MessageGroupId and MessageDeduplicationId?</h4>
+        </div>
+        <div class="answer-content">
+          <p><code>MessageGroupId</code> is the tag that designates message sequencing: all messages sharing the same Group ID are processed in strict FIFO order, but distinct Group IDs can be processed concurrently by parallel consumers. <code>MessageDeduplicationId</code> is the token used for exactly-once delivery: if a message with the identical Deduplication ID is sent within a 5-minute rolling deduplication window, SQS acknowledges receipt but refuses to deliver the duplicate message to consumers.</p>
+          <div class="callout callout-danger"><span class="badge badge-danger">🚩 Red Flag to Avoid</span> Using a global constant for <code>MessageGroupId</code> across an entire enterprise pipeline (which limits queue processing to a single thread!).</div>
+        </div>
+      </div>
 
-            <div class="pillar">
-                <h3>PILLAR 3: Step-by-Step Evolution & Visual Flow</h3>
-                <p>Modern deployment on AWS typically follows this flow:</p>
-                <div class="mermaid">
-                flowchart TD
-                    A[Developer Push Git] --> B[AWS CodePipeline]
-                    B --> C[AWS CodeBuild: Maven Test/Build]
-                    C --> D[Docker Build & Tag]
-                    D --> E[AWS ECR: Container Registry]
-                    E --> F[ECS Blue/Green Deployment]
-                    F --> G{Health Checks Pass?}
-                    G -- Yes --> H[Traffic shifts to Green]
-                    G -- No --> I[Rollback to Blue]
-                </div>
-                <p><strong>Blue-Green Deployment:</strong> 'Blue' is the current live version. 'Green' is the new version. Both run simultaneously. Traffic is switched at the load balancer level only when Green passes health checks. Zero downtime.</p>
-                <p><strong>Canary Deployment:</strong> Release the new version to a small percentage of users (e.g., 5% of internal traders) before rolling out to everyone.</p>
-            </div>
+      <div class="interview-card">
+        <div class="question-header">
+          <span class="q-num">Q4</span>
+          <h4>How does Kinesis Enhanced Fan-Out differ from standard Kinesis consumers?</h4>
+        </div>
+        <div class="answer-content">
+          <p>Standard Kinesis consumers poll shards using <code>GetRecords</code> over HTTP/1.1, sharing a single 2 MB/sec read throughput limit per shard among all consumers. If 5 consumers read from the shard, each gets only ~400 KB/sec. <strong>Enhanced Fan-Out (EFO)</strong> uses HTTP/2 server-push (<code>SubscribeToShard</code>) to push records to consumers within 70ms of arrival, and provisions a dedicated 2 MB/sec throughput pipe <em>per registered consumer</em> per shard, completely eliminating consumer read contention.</p>
+          <div class="callout callout-danger"><span class="badge badge-danger">🚩 Red Flag to Avoid</span> Believing adding more consumers to a standard Kinesis shard increases overall read bandwidth.</div>
+        </div>
+      </div>
 
-            <div class="pillar">
-                <h3>PILLAR 5: The Interviewer's Deep Follow-Up Questions</h3>
-                <div class="interview-box">
-                    <h4>📋 How to Answer This in an Interview</h4>
-                    <p><strong>Q: Have you deployed microservices on AWS? Explain the deployment flow.</strong><br>
-                    <strong>A:</strong> "Yes, we use a fully automated CI/CD pipeline via GitHub Actions and AWS CodePipeline. Code is built using Maven, and tests are run. Upon success, a Docker image is built and pushed to Amazon ECR. We use ECS with Fargate for execution, and AWS CodeDeploy manages a Blue-Green deployment. CodeDeploy spins up the new 'Green' task set, runs health checks against the /actuator/health endpoint, and if successful, shifts ALB traffic from Blue to Green. If a health check fails, it instantly rolls back without customer impact."</p>
-                </div>
-            </div>
-        </section>
+      <div class="interview-card">
+        <div class="question-header">
+          <span class="q-num">Q5</span>
+          <h4>Explain DynamoDB Single-Table Design and how it avoids multiple relational queries.</h4>
+        </div>
+        <div class="answer-content">
+          <p>In relational databases, retrieving a customer, their active orders, and their trade history requires 3 queries or multiple SQL joins. DynamoDB Single-Table design collocates related entity types into a single table using generic composite keys: <code>PK</code> (e.g., <code>USER#101</code>) and <code>SK</code> (e.g., <code>METADATA</code>, <code>ORDER#2024#001</code>). Executing a single <code>Query</code> operation filtering by <code>PK = USER#101</code> returns the user profile and all nested child records in a single sub-10ms network round-trip.</p>
+          <div class="callout callout-danger"><span class="badge badge-danger">🚩 Red Flag to Avoid</span> Designing DynamoDB tables by directly mapping one Java entity class to one DynamoDB table.</div>
+        </div>
+      </div>
 
-        <hr>
+      <div class="interview-card">
+        <div class="question-header">
+          <span class="q-num">Q6</span>
+          <h4>How does AWS KMS Envelope Encryption protect sensitive trading records while optimizing latency?</h4>
+        </div>
+        <div class="answer-content">
+          <p>Sending large payloads across the network to AWS KMS for encryption is slow and subject to strict KMS API rate limits. With Envelope Encryption, the application calls KMS <code>GenerateDataKey</code> once to obtain a plaintext Data Encryption Key (DEK) and an encrypted DEK. The application encrypts the sensitive data locally in memory using the plaintext DEK via hardware AES-NI instructions in microseconds, wipes the plaintext DEK from memory, and stores the encrypted DEK alongside the ciphertext.</p>
+          <div class="callout callout-danger"><span class="badge badge-danger">🚩 Red Flag to Avoid</span> Sending gigabytes of raw database files directly to KMS <code>Encrypt</code> API calls.</div>
+        </div>
+      </div>
 
-        <!-- TOPIC 3: Messaging - SQS vs SNS vs Kafka -->
-        <section id="messaging">
-            <h2>3. Messaging: SQS vs SNS vs Kafka</h2>
-            
-            <div class="pillar">
-                <h3>PILLAR 1 & 2: Theory & Architectural Decisions</h3>
-                <ul>
-                    <li><strong>SQS (Simple Queue Service):</strong> Point-to-point message queuing. Great for decoupling components (e.g., Decoupling the Trade Capture system from the Settlement system). Consumer pulls messages.</li>
-                    <li><strong>SNS (Simple Notification Service):</strong> Pub/Sub messaging. Great for fan-out. Push-based. E.g., A trade is executed -> SNS pushes to Email alert system, SMS alert, and an SQS queue for downstream processing.</li>
-                    <li><strong>Kafka (MSK on AWS):</strong> Distributed commit log. High throughput, low latency, replayable. Best for massive market data firehoses or event-sourcing ledgers where order and replayability are paramount.</li>
-                </ul>
-            </div>
-            <div class="pillar">
-                <h3>PILLAR 5: Interviewer Questions</h3>
-                <div class="interview-box">
-                    <p><strong>Q: When would you use Kafka over SQS in a financial system?</strong><br>
-                    <strong>A:</strong> "I use SQS for simple, asynchronous task queues like sending trade confirmation emails, where order isn't strictly critical and once it's processed, it can be deleted. I use Kafka for the core Order Routing fabric or Market Data feeds, because Kafka guarantees strict ordering within a partition, allows multiple distinct consumer groups to read the same stream without deleting the message, and supports replaying historical events to rebuild state—critical for financial auditing and event-sourcing architectures."</p>
-                </div>
-            </div>
-        </section>
-        
-        <hr>
+      <div class="interview-card">
+        <div class="question-header">
+          <span class="q-num">Q7</span>
+          <h4>How does Amazon Aurora Global Database achieve cross-region replication in under 1 second?</h4>
+        </div>
+        <div class="answer-content">
+          <p>Traditional database replication (like MySQL binlog replication) executes at the compute layer, where secondary instances must replay incoming SQL statements or write-row events, competing with read traffic. Aurora Global Database decouples compute from storage and performs physical replication at the <strong>storage fleet layer</strong>. The primary cluster storage nodes stream raw redo logs asynchronously across AWS's private optical network directly to secondary storage nodes, avoiding compute bottlenecks and driving cross-region lag under 1,000ms.</p>
+          <div class="callout callout-danger"><span class="badge badge-danger">🚩 Red Flag to Avoid</span> Assuming Aurora Global Database relies on logical MySQL binlog replication.</div>
+        </div>
+      </div>
 
-        <section id="other-aws">
-            <h2>4. Essential AWS Services for Finance</h2>
-            <ul>
-                <li><strong>Monitoring (CloudWatch & X-Ray):</strong> CloudWatch handles metrics and logs. X-Ray provides distributed tracing (adding trace IDs to HTTP headers) so you can track a trade lifecycle across 15 different microservices.</li>
-                <li><strong>S3 (Simple Storage Service):</strong> Immutable object storage. Perfect for storing immutable trade archives, regulatory reports, and daily market data dumps. Using Glacier lifecycle policies saves costs for 7-year regulatory retention.</li>
-                <li><strong>RDS vs DynamoDB:</strong> 
-                    <ul>
-                        <li><em>RDS (Relational - PostgreSQL/Aurora):</em> ACID compliance is mandatory for financial ledger balances and core transactional data.</li>
-                        <li><em>DynamoDB (NoSQL):</em> Millisecond latency at any scale. Used for user session state, high-frequency tick data caching, or configurations where strict relational joins are not required.</li>
-                    </ul>
-                </li>
-                <li><strong>VPC & Security Groups:</strong> Network isolation. The Database tier (RDS) resides in a Private Subnet with no internet route. Only the Application tier (ECS in another private subnet) can reach it via Security Group rules. The ALB sits in the Public Subnet.</li>
-                <li><strong>IAM:</strong> Identity and Access Management. Never use hardcoded AWS credentials in Java code. Use IAM Task Roles for ECS so the container inherently has permission to read from a specific S3 bucket (Least Privilege).</li>
-            </ul>
-        </section>
+      <div class="interview-card">
+        <div class="question-header">
+          <span class="q-num">Q8</span>
+          <h4>What is the difference between AWS Security Groups and Network Access Control Lists (NACLs)?</h4>
+        </div>
+        <div class="answer-content">
+          <p><strong>Security Groups</strong> operate at the virtual network interface (ENI) level, are <strong>stateful</strong> (return traffic is automatically allowed regardless of inbound rules), and only support allow rules. <strong>NACLs</strong> operate at the subnet boundary, are <strong>stateless</strong> (explicit inbound and outbound rules required for ephemeral ports), evaluate rules in strict numerical order, and support both allow and deny rules. Production financial architectures use Security Groups for microsegmentation and NACLs as coarse-grained subnet perimeter defense.</p>
+          <div class="callout callout-danger"><span class="badge badge-danger">🚩 Red Flag to Avoid</span> Forgetting to configure return ephemeral ports (1024–65535) when configuring custom outbound NACLs.</div>
+        </div>
+      </div>
 
-    
-    <script>
-        mermaid.initialize({ startOnLoad: true });
-    </script>
+      <div class="interview-card">
+        <div class="question-header">
+          <span class="q-num">Q9</span>
+          <h4>How do VPC Endpoints (AWS PrivateLink) eliminate security vulnerabilities in finance architectures?</h4>
+        </div>
+        <div class="answer-content">
+          <p>By default, connecting to AWS services (like S3, DynamoDB, or KMS) routes traffic across the public internet gateway. In banking architectures, compliance rules forbid trading microservices from having public internet access or NAT gateways. AWS PrivateLink provisions private Elastic Network Interfaces (ENIs) with private RFC-1918 IP addresses directly inside your private subnets. All traffic to AWS services remains entirely within the secure AWS backbone network without traversing public internet routes.</p>
+          <div class="callout callout-danger"><span class="badge badge-danger">🚩 Red Flag to Avoid</span> Routing sensitive financial traffic over public NAT Gateways to access AWS APIs.</div>
+        </div>
+      </div>
+
+      <div class="interview-card">
+        <div class="question-header">
+          <span class="q-num">Q10</span>
+          <h4>Why should you choose AWS SDK for Java v2 over SDK v1 in high-throughput reactive services?</h4>
+        </div>
+        <div class="answer-content">
+          <p>AWS SDK v1 is built on synchronous, blocking Apache HttpClient, requiring a dedicated OS thread for every in-flight AWS request. AWS SDK v2 is completely non-blocking, built on top of Netty and Java 8+ <code>CompletableFuture</code>. It supports true non-blocking I/O, streaming request/response bodies without heap buffering, and integrates seamlessly with reactive streams and Java 21 Virtual Threads, delivering up to 10x higher throughput per node.</p>
+          <div class="callout callout-danger"><span class="badge badge-danger">🚩 Red Flag to Avoid</span> Using synchronous <code>.join()</code> or <code>.get()</code> immediately after calling SDK v2 asynchronous client methods.</div>
+        </div>
+      </div>
+    </section>
+
   </main>
 </div>
 
 <button class="scroll-top" aria-label="Scroll to top">↑</button>
-<script src="../../js/main.js"></script>
 </body>
 </html>
-

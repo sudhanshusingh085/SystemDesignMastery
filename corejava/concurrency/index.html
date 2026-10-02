@@ -1,12 +1,12 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Advanced Concurrency — Executors, Futures & The Modern Way</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Advanced Concurrency &amp; Executors — From Scratch to Principal Architect</title>
     <link rel="stylesheet" href="../../css/style.css">
     <script src="../../js/main.js" defer></script>
     <script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.0/dist/mermaid.min.js"></script>
-    
 </head>
 <body>
 
@@ -16,114 +16,635 @@
   <aside class="sidebar" id="sidebar"></aside>
 
   <main class="main-content">
-<nav aria-label="breadcrumb">
-        <ol class="breadcrumb">
-            <li><a href="../../index.html">Home</a></li>
-            <li>Advanced Concurrency</li>
-        </ol>
+    <div class="platform-switcher">
+      <span>Mastery Portals:</span>
+      <a href="../../index.html">🏛️ System Design</a>
+      <a href="../index.html" class="active">☕ Core Java 21</a>
+      <a href="../../sqlserver/index.html">🗄️ MS SQL Server</a>
+      <a href="../../dotnet/index.html">🔷 .NET 8 / C# 12</a>
+    </div>
+
+    <nav aria-label="breadcrumb">
+      <ol class="breadcrumb">
+        <li><a href="../index.html">Core Java 21</a></li>
+        <li><span>05 · Advanced Concurrency, Executors &amp; Reactive Pipelines</span></li>
+      </ol>
     </nav>
     
-        <h1>Advanced Concurrency — Executors, Futures & The Modern Way</h1>
-        
-        <section id="pillar-1">
-            <h2>PILLAR 1: Ground-Zero Theory & The Pain Point</h2>
-            <p>Manually creating and managing <code>Thread</code> objects is inefficient and dangerous. Threads are expensive OS resources. The modern concurrency API (<code>java.util.concurrent</code>) abstracts away thread lifecycle management using Executors, allowing developers to focus on <em>tasks</em> rather than <em>threads</em>. <code>CompletableFuture</code> provides a monadic, non-blocking way to chain asynchronous operations, avoiding "callback hell."</p>
-        </section>
+    <header>
+      <h1>⚡ Advanced Concurrency: Executors, CompletableFuture &amp; Structured Concurrency</h1>
+      <p class="subtitle">An architectural deep-dive into enterprise asynchronous coordination: ThreadPoolExecutor internals, the ctl bit-mask, work-stealing ForkJoinPool mechanics, monadic CompletableFuture DAG execution, LMAX Disruptor mechanical sympathy, and Java 21 Structured Concurrency.</p>
+    </header>
 
-        <section id="pillar-2">
-            <h2>PILLAR 2: Architectural Decision Rationales</h2>
-            <h3>ExecutorService Selection</h3>
-            <ul>
-                <li><strong>FixedThreadPool:</strong> Constant number of threads. Use for CPU-bound tasks (e.g., risk simulation). Pool size = CPU Cores.</li>
-                <li><strong>CachedThreadPool:</strong> Unbounded thread creation. Use for many short-lived I/O tasks. Danger: Can cause OutOfMemoryError if flooded.</li>
-                <li><strong>ScheduledThreadPool:</strong> Replaces <code>Timer</code> for recurring tasks (e.g., daily settlement batch).</li>
-            </ul>
+    <!-- TABLE OF CONTENTS -->
+    <nav class="toc-container">
+      <h3>Table of Contents</h3>
+      <ul>
+        <li><a href="#definitions">1. Formal Textbook Definitions &amp; 10-Second Elevator Pitch</a></li>
+        <li><a href="#threadpool-internals">2. ThreadPoolExecutor Internals: The `ctl` Bitmask, Work Queues &amp; Rejection Policies</a></li>
+        <li><a href="#forkjoin-workstealing">3. ForkJoinPool &amp; The Work-Stealing Algorithm</a></li>
+        <li><a href="#completablefuture-dag">4. CompletableFuture Under the Hood: The Completion Treiber Stack &amp; CommonPool Traps</a></li>
+        <li><a href="#disruptor-ringbuffer">5. Ultra-Low-Latency Concurrency: The LMAX Disruptor &amp; False Sharing</a></li>
+        <li><a href="#structured-concurrency">6. Java 21 Structured Concurrency (StructuredTaskScope) &amp; Scoped Values</a></li>
+        <li><a href="#production-code">7. Production-Grade Java 21 Resilient Trading Pipeline</a></li>
+        <li><a href="#interview-grill">8. The Principal Engineer's 10-Question Grill Round</a></li>
+      </ul>
+    </nav>
 
-            <h3>Virtual Threads (Java 21) vs Platform Threads</h3>
-            <p>Virtual threads (Project Loom) are lightweight, user-mode threads managed by the JVM, not the OS. They are cheap to create (bytes, not megabytes) and automatically yield the underlying carrier OS thread during blocking I/O (like network calls to exchanges). They fundamentally change how we write I/O-bound concurrent apps.</p>
-        </section>
+    <!-- SECTION 1: DEFINITIONS & ELEVATOR PITCH -->
+    <section id="definitions">
+      <h2>1. Formal Textbook Definitions &amp; 10-Second Elevator Pitch</h2>
 
-        <section id="pillar-3">
-            <h2>PILLAR 3: Step-by-Step Evolution & Thought Process</h2>
-            <p>Legacy: <code>Future&lt;T&gt;</code> required calling <code>.get()</code>, which blocked the thread.<br>
-            Modern: <code>CompletableFuture&lt;T&gt;</code> allows registering non-blocking callbacks (<code>thenApply</code>, <code>thenAccept</code>).<br>
-            State of the Art (Java 21): Virtual threads allow writing simple, synchronous-looking blocking code that performs like complex asynchronous code under the hood.</p>
-        </section>
+      <div class="callout callout-info">
+        <div class="callout-title">🧠 The 10-Second Elevator Pitch</div>
+        <p><strong>"Modern Java concurrency decouples logical tasks from OS platform threads through managed worker pools and non-blocking DAG execution. Rather than blocking threads, high-throughput systems coordinate tasks using ThreadPoolExecutor bounded queues, work-stealing ForkJoinPool pipelines, lock-free ring buffers (Disruptor), or Java 21 StructuredTaskScope. This eliminates thread leaks, prevents cascading resource exhaustion, and guarantees deterministic lifecycle coordination across distributed, event-driven microservices."</strong></p>
+      </div>
 
-        <section id="pillar-4">
-            <h2>PILLAR 4: Production-Grade Java 21 Code</h2>
-            <pre><code>
-package com.finance.trading.modern;
+      <div class="definition-grid">
+        <div class="def-card">
+          <h4>ThreadPoolExecutor</h4>
+          <p>An execution framework that manages a pool of worker threads to execute queued tasks. It encapsulates thread lifecycle, task scheduling, bounded buffering via <code>BlockingQueue</code>, and backpressure handling through explicit <code>RejectedExecutionHandler</code> strategies, bounded by Goetz's thread-sizing formulas.</p>
+        </div>
+        <div class="def-card">
+          <h4>ForkJoinPool</h4>
+          <p>An implementation of <code>AbstractExecutorService</code> employing the <em>work-stealing</em> algorithm. Designed for divide-and-conquer parallelism, every worker thread owns a double-ended queue (deque). Idle workers steal tasks from the top of busy workers' deques, maximizing CPU core saturation while minimizing contention.</p>
+        </div>
+        <div class="def-card">
+          <h4>CompletableFuture</h4>
+          <p>A monadic, non-blocking promise abstraction representing a stage in an asynchronous computational Directed Acyclic Graph (DAG). Stages are linked through an internal Treiber stack of <code>Completion</code> nodes, executing callbacks synchronously upon stage completion or asynchronously across designated thread pools.</p>
+        </div>
+        <div class="def-card">
+          <h4>LMAX Disruptor</h4>
+          <p>A high-performance inter-thread messaging library that achieves millions of operations per second with microsecond latency. It replaces locks, CAS loops, and queues with a pre-allocated circular ring buffer, sequence barriers, and CPU cache-line padding (<code>@Contended</code>) to eliminate false sharing.</p>
+        </div>
+        <div class="def-card">
+          <h4>Structured Concurrency</h4>
+          <p>A programming paradigm introduced in Java 21 (Preview) via <code>StructuredTaskScope</code> that treats multiple concurrent subtasks running in separate threads as a single unit of work. It guarantees that child threads cannot outlive their syntactic scope, completely eliminating thread leaks, orphan tasks, and unhandled failure propagation.</p>
+        </div>
+        <div class="def-card">
+          <h4>Scoped Values</h4>
+          <p>A lightweight, immutable alternative to <code>ThreadLocal</code> (JEP 446/429) optimized for Virtual Threads. Scoped Values allow safely sharing contextual data (e.g., security credentials, trace IDs) across call trees and child virtual threads with zero allocation overhead and strictly bounded lexical lifetimes.</p>
+        </div>
+      </div>
+    </section>
 
-import java.util.concurrent.*;
+    <!-- SECTION 2: THREADPOOLEXECUTOR INTERNALS -->
+    <section id="threadpool-internals">
+      <h2>2. ThreadPoolExecutor Internals: The `ctl` Bitmask, Work Queues &amp; Rejection Policies</h2>
+
+      <p>At the core of <code>java.util.concurrent.ThreadPoolExecutor</code> lies a single 32-bit atomic integer named <code>ctl</code>. HotSpot uses bitwise packing to store both the executor's <strong>run state</strong> and the <strong>active worker count</strong> in a single word, enabling atomic CAS state transitions without locking.</p>
+
+      <div class="diagram-box">
+        <div class="diagram-title">ThreadPoolExecutor 32-bit `ctl` Bitmask Allocation</div>
+        <div class="mermaid">
+flowchart LR
+    subgraph CTL["32-Bit ctl AtomicInteger"]
+        direction LR
+        RS["Bits 31-29 (3 bits): runState<br/>(RUNNING, SHUTDOWN, STOP, TIDYING, TERMINATED)"]
+        WC["Bits 28-0 (29 bits): workerCount<br/>(Capacity: 2^29 - 1 ≈ 536 Million Threads)"]
+    end
+    style CTL fill:#1e1e1e,stroke:#4ec9b0,stroke-width:2px,color:#fff
+    style RS fill:#2d3748,stroke:#ed8936,stroke-width:1.5px,color:#fff
+    style WC fill:#2d3748,stroke:#4299e1,stroke-width:1.5px,color:#fff
+        </div>
+      </div>
+
+      <h3>The 5 Lifecycle RunStates</h3>
+      <table class="table table-bordered">
+        <thead>
+          <tr>
+            <th>RunState</th>
+            <th>Value (Bits 31–29)</th>
+            <th>Accepts New Tasks?</th>
+            <th>Executes Queued Tasks?</th>
+            <th>Interrupts Active Threads?</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>RUNNING</code></td>
+            <td><code>-1 &lt;&lt; 29</code> (-536,870,912)</td>
+            <td>Yes</td>
+            <td>Yes</td>
+            <td>No</td>
+          </tr>
+          <tr>
+            <td><code>SHUTDOWN</code></td>
+            <td><code>0 &lt;&lt; 29</code> (0)</td>
+            <td><strong>No</strong> (rejects new)</td>
+            <td><strong>Yes</strong> (finishes queue)</td>
+            <td>No</td>
+          </tr>
+          <tr>
+            <td><code>STOP</code></td>
+            <td><code>1 &lt;&lt; 29</code> (536,870,912)</td>
+            <td><strong>No</strong></td>
+            <td><strong>No</strong> (dumps queue)</td>
+            <td><strong>Yes</strong> (interrupts running)</td>
+          </tr>
+          <tr>
+            <td><code>TIDYING</code></td>
+            <td><code>2 &lt;&lt; 29</code> (1,073,741,824)</td>
+            <td>No</td>
+            <td>No</td>
+            <td>All workers terminated; invokes <code>terminated()</code></td>
+          </tr>
+          <tr>
+            <td><code>TERMINATED</code></td>
+            <td><code>3 &lt;&lt; 29</code> (1,610,612,736)</td>
+            <td>No</td>
+            <td>No</td>
+            <td>Complete. <code>awaitTermination()</code> returns.</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>Task Submission Workflow (`execute(Runnable)`)</h3>
+      <div class="diagram-box">
+        <div class="diagram-title">Exact Task Submission Decision Tree</div>
+        <div class="mermaid">
+flowchart TD
+    Start["Task Submitted: execute(command)"] --> C1{"workerCount &lt; corePoolSize?"}
+    C1 -- Yes --> AddCore["AddWorker(command, true)<br/>Launch new core thread"]
+    C1 -- No --> C2{"workQueue.offer(command)?"}
+    C2 -- Succeeded (Buffer has room) --> Queued["Task waiting in workQueue"]
+    C2 -- Failed (Queue is Full) --> C3{"workerCount &lt; maximumPoolSize?"}
+    C3 -- Yes --> AddNonCore["AddWorker(command, false)<br/>Launch non-core thread"]
+    C3 -- No (Max threads reached) --> Reject["handler.rejectedExecution(command, this)<br/>Trigger Rejection Policy"]
+
+    style Start fill:#2d3748,stroke:#a0aec0,color:#fff
+    style AddCore fill:#1b4d3e,stroke:#48bb78,color:#fff
+    style Queued fill:#2b6cb0,stroke:#63b3ed,color:#fff
+    style AddNonCore fill:#2c5282,stroke:#4299e1,color:#fff
+    style Reject fill:#742a2a,stroke:#f56565,color:#fff
+        </div>
+      </div>
+
+      <div class="callout callout-warning">
+        <div class="callout-title">⚠️ The Critical Thread Pool Sizing Fallacy</div>
+        <p>A pervasive production blunder: developers assume setting <code>corePoolSize = 5</code> and <code>maximumPoolSize = 100</code> with a default <code>new LinkedBlockingQueue&lt;&gt;()</code> will create threads up to 100 as load increases. <strong>It will never create thread #6!</strong> Because <code>LinkedBlockingQueue</code> has an integer capacity of <code>2^31 - 1</code>, <code>workQueue.offer()</code> will <em>always</em> succeed. Non-core threads are only spawned when the queue refuses tasks. Thus, tasks will pile into memory until the JVM dies of <code>OutOfMemoryError</code>.</p>
+      </div>
+
+      <h3>Rejection Execution Policies</h3>
+      <ul>
+        <li><strong><code>AbortPolicy</code> (Default):</strong> Throws a runtime <code>RejectedExecutionException</code>. Ideal when client callers must immediately know the system is overloaded.</li>
+        <li><strong><code>CallerRunsPolicy</code>:</strong> The submitting thread executes the task itself! This creates automatic backpressure: while the submitting thread is executing the task, it cannot submit new tasks, throttling upstream ingestion.</li>
+        <li><strong><code>DiscardPolicy</code>:</strong> Silently drops the rejected task without exception. Dangerous for transactions; only acceptable for non-critical telemetry metrics.</li>
+        <li><strong><code>DiscardOldestPolicy</code>:</strong> Drops the oldest unhandled task at the head of the queue, then retries execution. Use for real-time market price tickers where newer data supersedes stale updates.</li>
+      </ul>
+
+      <h3>Mathematical Thread Pool Sizing (Goetz Formula)</h3>
+      <p>To determine optimal pool sizing without starving or thrashing the OS:</p>
+      <div class="math-box">
+        $$N_{threads} = N_{cpu} \times U_{cpu} \times \left(1 + \frac{W}{C}\right)$$
+      </div>
+      <p>Where:</p>
+      <ul>
+        <li><strong>$N_{cpu}$</strong>: Number of available CPU cores (via <code>Runtime.getRuntime().availableProcessors()</code>).</li>
+        <li><strong>$U_{cpu}$</strong>: Target CPU utilization ($0 \le U_{cpu} \le 1$). Typically $0.80$ to $0.90$.</li>
+        <li><strong>$W/C$</strong>: The ratio of <strong>Wait time</strong> (I/O, database roundtrip, REST latency) to <strong>Compute time</strong> (CPU processing).</li>
+      </ul>
+      <p><em>Example:</em> A 16-core server processing financial trades where database query takes 90ms and risk validation takes 10ms ($W/C = 9$). Sizing = $16 \times 0.85 \times (1 + 9) = 136$ threads.</p>
+    </section>
+
+    <!-- SECTION 3: FORKJOINPOOL & WORK-STEALING -->
+    <section id="forkjoin-workstealing">
+      <h2>3. ForkJoinPool &amp; The Work-Stealing Algorithm</h2>
+
+      <p>Standard thread pools suffer from queue contention: dozens of threads lock and unlock a shared work queue. <code>ForkJoinPool</code> eliminates this bottleneck through <strong>Work-Stealing</strong>, designed by Doug Lea based on Cilk.</p>
+
+      <div class="diagram-box">
+        <div class="diagram-title">ForkJoinPool Dual-Ended Queue (Deque) Work-Stealing Mechanics</div>
+        <div class="mermaid">
+flowchart TD
+    subgraph W1["Worker Thread 1 (Owner)"]
+        direction TB
+        T1["Push / Pop (LIFO)"] <--> D1["Deque 1<br/>[Top] Task A | Task B | Task C [Base]"]
+    end
+    
+    subgraph W2["Worker Thread 2 (Idle Thief)"]
+        direction TB
+        T2["Steal (FIFO)"] --> D1
+    end
+
+    style W1 fill:#1a202c,stroke:#48bb78,stroke-width:2px,color:#fff
+    style W2 fill:#1a202c,stroke:#ed8936,stroke-width:2px,color:#fff
+    style D1 fill:#2d3748,stroke:#4ec9b0,color:#fff
+        </div>
+      </div>
+
+      <h3>Why LIFO for Owner and FIFO for Thief?</h3>
+      <ol>
+        <li><strong>Owner pops from Bottom (LIFO):</strong> The most recently pushed subtask represents the smallest, freshest chunk of work in recursive divide-and-conquer. Executing it immediately guarantees high CPU L1/L2 cache locality, because the task's working data is already warm in registers and cache lines.</li>
+        <li><strong>Thief steals from Top (FIFO):</strong> The oldest task in the deque represents the largest unexploded subtree of work. Stealing from the opposite end minimizes CAS contention against the owner, and by stealing the largest unit of work, the thief will divide it locally, reducing the need for future steals.</li>
+      </ol>
+
+      <div class="callout callout-danger">
+        <div class="callout-title">🚨 The ForkJoinPool.commonPool() Poison Trap</div>
+        <p>By default, Java 8 parallel streams and <code>CompletableFuture.supplyAsync()</code> without an explicit executor run inside the static <code>ForkJoinPool.commonPool()</code>. This pool has a fixed thread count equal to <code>Runtime.getRuntime().availableProcessors() - 1</code>. If a developer runs a parallel stream that performs blocking network calls or database queries, <strong>the common pool's worker threads will block</strong>. This stalls every parallel stream, reactive stream, and async future throughout the entire JVM process!</p>
+      </div>
+    </section>
+
+    <!-- SECTION 4: COMPLETABLEFUTURE UNDER THE HOOD -->
+    <section id="completablefuture-dag">
+      <h2>4. CompletableFuture Under the Hood: The Completion Treiber Stack &amp; CommonPool Traps</h2>
+
+      <p>A <code>CompletableFuture&lt;T&gt;</code> maintains two volatile fields: <code>volatile Object result</code> and <code>volatile Completion stack</code>. Dependent downstream stages are stored as a lock-free, Treiber stack of <code>Completion</code> objects.</p>
+
+      <div class="diagram-box">
+        <div class="diagram-title">CompletableFuture Treiber Stack Execution Flow</div>
+        <div class="mermaid">
+sequenceDiagram
+    autonumber
+    actor Client as Caller Thread
+    participant CF as CompletableFuture&lt;T&gt;
+    participant Stack as Completion Treiber Stack
+    participant Pool as Custom Executor Thread
+
+    Client->>CF: supplyAsync(supplier, customExecutor)
+    Pool->>CF: Executes supplier.get()
+    Client->>CF: thenApplyAsync(fn, customExecutor)
+    Note over CF,Stack: If not complete: Push UniApply node to Stack
+    Pool->>CF: Complete with Result (CAS result field)
+    CF->>Stack: Pop &amp; Dispatch Completion Nodes (postComplete)
+    Stack->>Pool: Schedule UniApply(fn) with Result
+        </div>
+      </div>
+
+      <h3>Async vs Non-Async Method Signatures</h3>
+      <ul>
+        <li><code>thenApply(fn)</code>: Runs the callback <strong>synchronously</strong>. If the future is already complete, the calling thread executes <code>fn</code> immediately. If the future is still running, the thread completing the future executes <code>fn</code>. <em>Warning:</em> Can tie up your database/I/O thread doing CPU computations!</li>
+        <li><code>thenApplyAsync(fn, executor)</code>: Unconditionally submits <code>fn</code> to the specified executor. Guarantees thread boundary isolation, preventing I/O thread contamination.</li>
+      </ul>
+
+      <h3>Handling DAG Combinations</h3>
+      <table class="table table-bordered">
+        <thead>
+          <tr>
+            <th>Operation</th>
+            <th>CompletableFuture Method</th>
+            <th>Semantics</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Transform</strong></td>
+            <td><code>thenApply(T -&gt; U)</code></td>
+            <td>Maps output of stage 1 to input of stage 2. (Functor <code>map</code>)</td>
+          </tr>
+          <tr>
+            <td><strong>Chain</strong></td>
+            <td><code>thenCompose(T -&gt; CompletableFuture&lt;U&gt;)</code></td>
+            <td>Flattens nested futures. (Monadic <code>flatMap</code>)</td>
+          </tr>
+          <tr>
+            <td><strong>Combine Both</strong></td>
+            <td><code>thenCombine(CF&lt;U&gt;, (T, U) -&gt; V)</code></td>
+            <td>Waits for both futures to complete and merges their outputs.</td>
+          </tr>
+          <tr>
+            <td><strong>Race First</strong></td>
+            <td><code>applyToEither(CF&lt;T&gt;, T -&gt; V)</code></td>
+            <td>Takes whichever future finishes first; ignores the slower one.</td>
+          </tr>
+          <tr>
+            <td><strong>Scatter-Gather</strong></td>
+            <td><code>CompletableFuture.allOf(CF...)</code></td>
+            <td>Waits for all futures in the array to complete. Returns <code>CF&lt;Void&gt;</code>.</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <!-- SECTION 5: DISRUPTOR RING BUFFER -->
+    <section id="disruptor-ringbuffer">
+      <h2>5. Ultra-Low-Latency Concurrency: The LMAX Disruptor &amp; False Sharing</h2>
+
+      <p>When high-frequency trading (HFT) platforms target sub-microsecond processing, traditional concurrent queues like <code>ArrayBlockingQueue</code> fail due to three hardware realities:</p>
+
+      <ol>
+        <li><strong>Lock/CAS Contention:</strong> Enqueueing and dequeueing contend on the same head/tail counters, causing CPU core cache invalidation.</li>
+        <li><strong>False Sharing:</strong> Head and tail pointers often reside on the same 64-byte CPU cache line. When Core 1 updates the head, Core 2's L1 cache containing the tail is invalidated, causing severe latency spikes.</li>
+        <li><strong>GC Pressure:</strong> Nodes allocated dynamically per task trigger frequent young-gen garbage collections.</li>
+      </ol>
+
+      <div class="diagram-box">
+        <div class="diagram-title">False Sharing on 64-Byte CPU Cache Line vs @Contended Padding</div>
+        <div class="mermaid">
+flowchart TD
+    subgraph FS["Unpadded Queue: False Sharing"]
+        CL1["64-Byte Cache Line: [ Head (8B) | Tail (8B) | Other Vars (48B) ]"]
+        Core1["Core 1 writes Head"] -.->|Invalidates Line| Core2["Core 2 reading Tail suffers Cache Miss!"]
+    end
+
+    subgraph Pad["Disruptor: Cache Line Padded (Mechanical Sympathy)"]
+        CL2["Cache Line 1: [ 56B Padding | Head (8B) ]"]
+        CL3["Cache Line 2: [ 56B Padding | Tail (8B) ]"]
+    end
+
+    style FS fill:#2d1a1a,stroke:#e53e3e,color:#fff
+    style Pad fill:#1a2d1a,stroke:#38a169,color:#fff
+        </div>
+      </div>
+
+      <h3>Disruptor Architecture: The Circular Ring Buffer</h3>
+      <p>The LMAX Disruptor achieves zero GC and lock-free execution through:</p>
+      <ul>
+        <li><strong>Pre-allocated Ring Buffer:</strong> Fixed-size array (must be a power of 2, e.g., 1024). Element slots are pre-allocated at startup and overwritten in place. Zero object allocation during message processing.</li>
+        <li><strong>Single-Producer / Multi-Consumer Sequencing:</strong> A 64-bit sequence counter monotonically increments. Finding slot index is a bitwise mask: <code>index = sequence &amp; (bufferSize - 1)</code>. No modulo operator required.</li>
+        <li><strong>Sequence Barriers:</strong> Consumers track their own read sequences and coordinate via memory barriers without mutual exclusion locks.</li>
+      </ul>
+    </section>
+
+    <!-- SECTION 6: STRUCTURED CONCURRENCY -->
+    <section id="structured-concurrency">
+      <h2>6. Java 21 Structured Concurrency (StructuredTaskScope) &amp; Scoped Values</h2>
+
+      <p>In traditional Java concurrency, asynchronous tasks lack syntactic hierarchy. If method <code>executeOrder()</code> starts three background threads and throws an exception, those three threads continue running as <strong>orphan zombie threads</strong>, leaking database connections, sockets, and memory.</p>
+
+      <p>Java 21 Structured Concurrency (JEP 453) restores the structured programming principle: <em>concurrent execution branches must join before their syntactic block exits</em>.</p>
+
+      <div class="diagram-box">
+        <div class="diagram-title">Unstructured Concurrency (Thread Leak) vs Structured Task Scope</div>
+        <div class="mermaid">
+flowchart TD
+    subgraph Unstructured["Unstructured Concurrency (Legacy)"]
+        M1["Method enters"] --> T1["Spawn Thread A"]
+        M1 --> T2["Spawn Thread B (Fails!)"]
+        M1 --> Ex["Method Throws Exception &amp; Exits"]
+        T1 -.->|Orphaned! Continues running indefinitely| Leak["Resource &amp; Memory Leak"]
+    end
+
+    subgraph Structured["StructuredTaskScope (Java 21)"]
+        M2["Scope Enters try-with-resources"] --> S1["fork(Subtask A)"]
+        M2 --> S2["fork(Subtask B - Fails!)"]
+        S2 --> Cancel["Scope triggers Shutdown: Cancels Subtask A"]
+        M2 --> Join["scope.join() awaits or cancels all"]
+        Join --> Exit["Scope exits cleanly. Zero orphans."]
+    end
+
+    style Unstructured fill:#2d1a1a,stroke:#e53e3e,color:#fff
+    style Structured fill:#1a2d1a,stroke:#38a169,color:#fff
+        </div>
+      </div>
+
+      <h3>StructuredTaskScope Policies</h3>
+      <ul>
+        <li><strong><code>StructuredTaskScope.ShutdownOnFailure</code>:</strong> Scatter-gather where ALL subtasks must succeed. If any subtask throws an exception, all other running subtasks are automatically cancelled (interrupted).</li>
+        <li><strong><code>StructuredTaskScope.ShutdownOnSuccess&lt;T&gt;</code>:</strong> Speculative execution / racing. Returns the result of the <em>first</em> successful subtask and immediately cancels all other pending subtasks.</li>
+      </ul>
+    </section>
+
+    <!-- SECTION 7: PRODUCTION IMPLEMENTATION -->
+    <section id="production-code">
+      <h2>7. Production-Grade Java 21 Resilient Trading Pipeline</h2>
+
+      <p>Below is a production-hardened institutional trade routing pipeline implementing custom bounded ThreadPoolExecutor with metric telemetry, fallback scatter-gather CompletableFuture with timeout deadlines, and Java 21 StructuredTaskScope.</p>
+
+      <pre><code>package com.finance.trading.concurrency;
+
+import java.time.Duration;
 import java.util.List;
+import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicInteger;
 
-public class SmartRouter {
-    // 1. CompletableFuture - fetching best price concurrently
-    public CompletableFuture&lt;Double&gt; getBestPriceAsync(String ticker) {
-        CompletableFuture&lt;Double&gt; nysePrice = CompletableFuture.supplyAsync(() -> fetchNYSE(ticker));
-        CompletableFuture&lt;Double&gt; nasdaqPrice = CompletableFuture.supplyAsync(() -> fetchNASDAQ(ticker));
-        
-        // Combine results without blocking
-        return nysePrice.thenCombine(nasdaqPrice, Math::min)
-            .exceptionally(ex -> {
-                System.err.println("Pricing feed down: " + ex.getMessage());
-                return -1.0;
+/**
+ * Institutional Resilient Trade Router.
+ * Demonstrates:
+ * 1. Bounded, instrumented ThreadPoolExecutor with CallerRuns backpressure.
+ * 2. CompletableFuture pipeline with timeout, fallbacks, and thread isolation.
+ * 3. Java 21 StructuredTaskScope for atomic fan-out execution.
+ */
+public class InstitutionalOrderRouter implements AutoCloseable {
+
+    private final ThreadPoolExecutor routingPool;
+    private final ScheduledExecutorService timeoutScheduler;
+
+    public InstitutionalOrderRouter(int coreThreads, int maxThreads, int queueCapacity) {
+        // Instrumented thread factory with descriptive names and unhandled exception logging
+        ThreadFactory factory = new ThreadFactory() {
+            private final AtomicInteger counter = new AtomicInteger(1);
+            @Override
+            public Thread newThread(Runnable r) {
+                Thread t = new Thread(r, "order-router-worker-" + counter.getAndIncrement());
+                t.setDaemon(false);
+                t.setUncaughtExceptionHandler((thread, ex) -> 
+                    System.err.printf("[FATAL] Thread %s died from unhandled exception: %s%n", thread.getName(), ex.getMessage())
+                );
+                return t;
+            }
+        };
+
+        // Bounded queue with CallerRuns backpressure to protect system from OOM
+        this.routingPool = new ThreadPoolExecutor(
+            coreThreads,
+            maxThreads,
+            60L, TimeUnit.SECONDS,
+            new ArrayBlockingQueue&lt;&gt;(queueCapacity),
+            factory,
+            new ThreadPoolExecutor.CallerRunsPolicy() // In-flight caller throttling
+        );
+
+        // Core threads prestarted to avoid latency hit on first burst
+        this.routingPool.prestartAllCoreThreads();
+
+        this.timeoutScheduler = Executors.newSingleThreadScheduledExecutor(r -> {
+            Thread t = new Thread(r, "router-timeout-scheduler");
+            t.setDaemon(true);
+            return t;
+        });
+    }
+
+    public record Quote(String venue, double price, long latencyMs) {}
+    public record OrderRoute(String orderId, String chosenVenue, double executedPrice) {}
+
+    /**
+     * CompletableFuture Multi-Venue Scatter-Gather with strict SLA timeout.
+     */
+    public CompletableFuture&lt;Quote&gt; getBestQuoteAsync(String symbol) {
+        // Fetch from NYSE and NASDAQ asynchronously on designated pool
+        CompletableFuture&lt;Quote&gt; nyse = CompletableFuture.supplyAsync(() -> fetchVenueQuote("NYSE", symbol, 100.50, 40), routingPool);
+        CompletableFuture&lt;Quote&gt; nasdaq = CompletableFuture.supplyAsync(() -> fetchVenueQuote("NASDAQ", symbol, 100.45, 60), routingPool);
+
+        // Race/Combine both quotes
+        return nyse.thenCombine(nasdaq, (q1, q2) -> q1.price() &lt; q2.price() ? q1 : q2)
+            .orTimeout(100, TimeUnit.MILLISECONDS) // Java 9+ SLA enforcement
+            .exceptionallyCompose(ex -> {
+                System.err.printf("[WARN] Primary exchanges timed out or failed (%s). Falling back to DarkPool%n", ex.getMessage());
+                return CompletableFuture.supplyAsync(() -> fetchVenueQuote("DARK_POOL", symbol, 100.55, 10), routingPool);
             });
     }
 
-    private double fetchNYSE(String ticker) { /* network call */ return 100.5; }
-    private double fetchNASDAQ(String ticker) { /* network call */ return 100.4; }
+    /**
+     * Java 21 StructuredTaskScope Scatter-Gather.
+     * Guarantees zero orphan threads if any venue blows up.
+     */
+    public Quote getBestQuoteStructured(String symbol) throws InterruptedException, ExecutionException {
+        try (var scope = new StructuredTaskScope.ShutdownOnFailure()) {
+            StructuredTaskScope.Subtask&lt;Quote&gt; nyseTask = 
+                scope.fork(() -> fetchVenueQuote("NYSE", symbol, 100.50, 30));
+            StructuredTaskScope.Subtask&lt;Quote&gt; nasdaqTask = 
+                scope.fork(() -> fetchVenueQuote("NASDAQ", symbol, 100.42, 45));
+            StructuredTaskScope.Subtask&lt;Quote&gt; lseTask = 
+                scope.fork(() -> fetchVenueQuote("LSE", symbol, 100.48, 55));
 
-    // 2. CountDownLatch - Waiting for initialization
-    public void startTradingEngine() throws InterruptedException {
-        CountDownLatch latch = new CountDownLatch(3);
-        
-        new Thread(() -> { initializeRiskRules(); latch.countDown(); }).start();
-        new Thread(() -> { connectToFIX(); latch.countDown(); }).start();
-        new Thread(() -> { loadMarketData(); latch.countDown(); }).start();
-        
-        latch.await(); // Main thread blocks until countdown reaches 0
-        System.out.println("All subsystems go. Engine accepting orders.");
+            // Wait for all or abort instantly on first failure
+            scope.join();
+            scope.throwIfFailed(ExecutionException::new);
+
+            // Compute minimum price across all completed subtasks
+            List&lt;Quote&gt; quotes = List.of(nyseTask.get(), nasdaqTask.get(), lseTask.get());
+            return quotes.stream().min((a, b) -> Double.compare(a.price(), b.price())).orElseThrow();
+        }
     }
 
-    // 3. Java 21 Virtual Threads for 100,000 I/O connections
-    public void handleConnections(List&lt;String&gt; clientSockets) {
-        try (var executor = Executors.newVirtualThreadPerTaskExecutor()) {
-            for (String socket : clientSockets) {
-                executor.submit(() -> processClientData(socket));
+    private Quote fetchVenueQuote(String venue, String symbol, double simulatedPrice, long sleepMs) {
+        try {
+            Thread.sleep(sleepMs); // Simulate remote network roundtrip
+            return new Quote(venue, simulatedPrice, sleepMs);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new RuntimeException("Quote fetch interrupted for " + venue, e);
+        }
+    }
+
+    @Override
+    public void close() {
+        System.out.println("Initiating graceful shutdown of InstitutionalOrderRouter...");
+        routingPool.shutdown(); // Refuse new tasks, complete running &amp; queued
+        timeoutScheduler.shutdown();
+        try {
+            if (!routingPool.awaitTermination(5, TimeUnit.SECONDS)) {
+                System.err.println("Tasks did not finish within 5s, forcing shutdownNow()...");
+                List&lt;Runnable&gt; droppedTasks = routingPool.shutdownNow();
+                System.err.printf("Forced stop. Dropped %d unstarted tasks.%n", droppedTasks.size());
             }
-        } // Auto-closes and waits for all virtual threads to finish
+        } catch (InterruptedException ex) {
+            routingPool.shutdownNow();
+            Thread.currentThread().interrupt();
+        }
     }
-}
-            </code></pre>
-        </section>
+}</code></pre>
+    </section>
 
-        <section id="pillar-5">
-            <h2>PILLAR 5: The Interviewer's Deep Follow-Up Questions</h2>
-            <div class="interview-box">
-                <h3>📋 How to Answer This in an Interview</h3>
-                <p>Show deep knowledge of <code>java.util.concurrent</code>. Never mention raw <code>Thread</code> unless asked about legacy code. Speak fluently about thread pool sizing (Amdahl's Law, Little's Law), CAS algorithms, and non-blocking I/O.</p>
-            </div>
-            <div class="follow-up-box">
-                <h3>🎯 Interviewer Follow-Up Questions</h3>
-                <p><strong>Trap Question:</strong> "Does CompletableFuture create its own thread pool? Which pool does it use by default?"</p>
-                <p><strong>Answer:</strong> By default, if you don't pass an explicit Executor, <code>CompletableFuture.supplyAsync()</code> uses <code>ForkJoinPool.commonPool()</code>. This can be disastrous in production if tasks perform blocking I/O, as the common pool is sized to the number of CPU cores. A few blocking tasks will stall the entire application. Always pass a custom I/O-optimized executor.</p>
+    <!-- SECTION 8: PRINCIPAL ENGINEER GRILL ROUND -->
+    <section id="interview-grill">
+      <h2>8. The Principal Engineer's 10-Question Grill Round</h2>
 
-                <p><strong>Trap Question:</strong> "shutdown() vs shutdownNow() on an ExecutorService?"</p>
-                <p><strong>Answer:</strong> <code>shutdown()</code> rejects new tasks but allows currently executing and queued tasks to finish gracefully. <code>shutdownNow()</code> attempts to cancel running tasks (via thread interrupts) and returns a list of tasks that were queued but never started.</p>
-            </div>
-        </section>
+      <div class="interview-card">
+        <div class="question-header">
+          <span class="q-num">Q1</span>
+          <h4>How does ThreadPoolExecutor store its runState and workerCount, and why is this design significant?</h4>
+        </div>
+        <div class="answer-content">
+          <p>HotSpot packs both values into a single 32-bit <code>AtomicInteger</code> named <code>ctl</code>. The high 3 bits store the <code>runState</code> (<code>RUNNING</code>, <code>SHUTDOWN</code>, <code>STOP</code>, <code>TIDYING</code>, <code>TERMINATED</code>), while the low 29 bits store the <code>workerCount</code> (up to $2^{29}-1$ workers). This design eliminates the need for two-phase synchronization or locking when state transitions occur. Checking whether the pool can accept a task and incrementing the worker count can be accomplished in a single atomic CAS loop without lock contention.</p>
+          <div class="callout callout-danger"><span class="badge badge-danger">🚩 Red Flag to Avoid</span> Claiming that ThreadPoolExecutor uses a <code>ReentrantLock</code> to protect every state check and thread counter.</div>
+        </div>
+      </div>
 
-        <section id="pillar-6">
-            <h2>PILLAR 6: Trade-offs & When NOT To Use It</h2>
-            <p><strong>Trade-off:</strong> Using heavy concurrency frameworks (like ForkJoinPool) for simple tasks incurs massive overhead. If a task takes less than a few milliseconds, the overhead of dispatching it to a thread pool and synchronizing the result outstrips the benefit of parallelization. Measure before applying concurrency.</p>
-        </section>
+      <div class="interview-card">
+        <div class="question-header">
+          <span class="q-num">Q2</span>
+          <h4>What happens when you submit a task to a ThreadPoolExecutor configured with core=5, max=50, and an unbounded LinkedBlockingQueue?</h4>
+        </div>
+        <div class="answer-content">
+          <p>The pool will never allocate more than 5 threads, regardless of task volume. When <code>execute()</code> is called and <code>workerCount &gt;= corePoolSize</code>, the executor attempts <code>workQueue.offer(task)</code>. Because <code>LinkedBlockingQueue</code> is unbounded ($2^{31}-1$ capacity), <code>offer()</code> always succeeds. The executor never evaluates whether <code>workerCount &lt; maximumPoolSize</code>. Under high throughput, tasks queue indefinitely until the JVM runs out of heap memory with <code>java.lang.OutOfMemoryError: Java heap space</code>.</p>
+          <div class="callout callout-danger"><span class="badge badge-danger">🚩 Red Flag to Avoid</span> Believing that thread creation scales linearly up to <code>max</code> before tasks enter the queue.</div>
+        </div>
+      </div>
+
+      <div class="interview-card">
+        <div class="question-header">
+          <span class="q-num">Q3</span>
+          <h4>Why is CallerRunsPolicy considered the gold standard for backpressure in asynchronous architectures?</h4>
+        </div>
+        <div class="answer-content">
+          <p>When the work queue reaches capacity and thread count reaches <code>maximumPoolSize</code>, <code>CallerRunsPolicy</code> forces the thread that called <code>execute()</code> to execute the task itself. If that thread is a Netty I/O worker or Web API request handler, executing the task blocks it from reading from the network socket or accepting new HTTP connections. This automatically pushes TCP backpressure upstream to clients, preventing memory exhaustion and stabilizing throughput under sudden traffic surges.</p>
+          <div class="callout callout-danger"><span class="badge badge-danger">🚩 Red Flag to Avoid</span> Recommending <code>DiscardPolicy</code> or <code>DiscardOldestPolicy</code> for transactional business workflows.</div>
+        </div>
+      </div>
+
+      <div class="interview-card">
+        <div class="question-header">
+          <span class="q-num">Q4</span>
+          <h4>Explain the exact difference between `shutdown()` and `shutdownNow()`. What happens to queued tasks?</h4>
+        </div>
+        <div class="answer-content">
+          <p><code>shutdown()</code> shifts the state to <code>SHUTDOWN</code>. It rejects new incoming tasks (triggers rejection handler) but allows actively running threads to continue and processes all tasks currently buffered in the <code>workQueue</code>. In contrast, <code>shutdownNow()</code> shifts state to <code>STOP</code>, sends <code>Thread.interrupt()</code> to all active worker threads, drains the <code>workQueue</code>, and returns the unprocessed tasks as a <code>List&lt;Runnable&gt;</code> so the caller can persist or re-route them.</p>
+          <div class="callout callout-danger"><span class="badge badge-danger">🚩 Red Flag to Avoid</span> Assuming <code>shutdownNow()</code> forcibly kills threads like OS <code>kill -9</code>. It only sets the thread's interrupt flag.</div>
+        </div>
+      </div>
+
+      <div class="interview-card">
+        <div class="question-header">
+          <span class="q-num">Q5</span>
+          <h4>Why does calling blocking I/O inside ForkJoinPool.commonPool() degrade the entire JVM?</h4>
+        </div>
+        <div class="answer-content">
+          <p><code>ForkJoinPool.commonPool()</code> is a shared JVM-wide singleton with worker parallelism sized strictly to CPU core count ($N_{cores} - 1$). It is designed exclusively for CPU-intensive, non-blocking divide-and-conquer computations. If tasks perform blocking network I/O or sleep, those rare worker threads become blocked. This starves all parallel streams (<code>collection.parallelStream()</code>) and default <code>CompletableFuture</code> instances across the entire application.</p>
+          <div class="callout callout-danger"><span class="badge badge-danger">🚩 Red Flag to Avoid</span> Using <code>CompletableFuture.supplyAsync(() -&gt; dbCall())</code> without passing a dedicated I/O thread pool.</div>
+        </div>
+      </div>
+
+      <div class="interview-card">
+        <div class="question-header">
+          <span class="q-num">Q6</span>
+          <h4>How does ForkJoinPool's work-stealing algorithm resolve thread contention between owners and thieves?</h4>
+        </div>
+        <div class="answer-content">
+          <p>Each worker thread owns a double-ended queue (deque). The worker pushes and pops subtasks from the <strong>bottom</strong> of its deque in LIFO order, which maximizes CPU cache locality. When an idle worker becomes a thief, it steals subtasks from the <strong>top</strong> of a victim's deque in FIFO order. Because owner and thief access opposite ends of the deque, lock synchronization is minimized, requiring only lightweight CAS operations on head and tail pointers.</p>
+          <div class="callout callout-danger"><span class="badge badge-danger">🚩 Red Flag to Avoid</span> Thinking all ForkJoinPool worker threads poll from a single central synchronized queue.</div>
+        </div>
+      </div>
+
+      <div class="interview-card">
+        <div class="question-header">
+          <span class="q-num">Q7</span>
+          <h4>What is the difference between `thenApply` and `thenApplyAsync` in CompletableFuture?</h4>
+        </div>
+        <div class="answer-content">
+          <p><code>thenApply(fn)</code> executes the mapping function in the calling thread if the target stage is already complete, or within the worker thread that finishes the target stage. It provides no thread isolation. <code>thenApplyAsync(fn, executor)</code> always submits the execution of <code>fn</code> as a new task to the specified <code>Executor</code>. This guarantees thread boundaries and prevents heavy computation from hijacking an I/O thread.</p>
+          <div class="callout callout-danger"><span class="badge badge-danger">🚩 Red Flag to Avoid</span> Assuming <code>thenApply</code> always spawns a new background thread.</div>
+        </div>
+      </div>
+
+      <div class="interview-card">
+        <div class="question-header">
+          <span class="q-num">Q8</span>
+          <h4>What is False Sharing in high-frequency trading queues, and how is it eliminated in the LMAX Disruptor?</h4>
+        </div>
+        <div class="answer-content">
+          <p>False sharing occurs when two independent variables (such as a queue's read pointer and write pointer) reside on the same 64-byte hardware CPU cache line. When Core 1 modifies its pointer, the MESI cache coherency protocol invalidates the entire cache line across all CPU cores, forcing Core 2 to stall and reload from L3/DRAM. The LMAX Disruptor and Java 8+ (via <code>@jdk.internal.vm.annotation.Contended</code>) solve this by injecting 128 bytes of empty padding around sequence fields, ensuring each pointer occupies its own dedicated cache line.</p>
+          <div class="callout callout-danger"><span class="badge badge-danger">🚩 Red Flag to Avoid</span> Confusing False Sharing with multi-threaded data race conditions.</div>
+        </div>
+      </div>
+
+      <div class="interview-card">
+        <div class="question-header">
+          <span class="q-num">Q9</span>
+          <h4>How does Java 21 Structured Concurrency prevent thread leaks when subtasks fail?</h4>
+        </div>
+        <div class="answer-content">
+          <p>With <code>StructuredTaskScope</code>, subtasks are bound to a lexical try-with-resources scope block. When configured with <code>ShutdownOnFailure()</code>, if any subtask throws an exception, the scope's state changes to cancelled and it automatically sends <code>Thread.interrupt()</code> to all other sibling subtasks. The enclosing block cannot exit until <code>scope.join()</code> completes, ensuring that no orphan threads continue executing in the background unnoticed.</p>
+          <div class="callout callout-danger"><span class="badge badge-danger">🚩 Red Flag to Avoid</span> Believing that <code>CompletableFuture.allOf()</code> cancels surviving futures when one fails. (It does not!).</div>
+        </div>
+      </div>
+
+      <div class="interview-card">
+        <div class="question-header">
+          <span class="q-num">Q10</span>
+          <h4>Why should Scoped Values (JEP 446) be preferred over ThreadLocal when using Java 21 Virtual Threads?</h4>
+        </div>
+        <div class="answer-content">
+          <p><code>ThreadLocal</code> values are mutable, meaning every virtual thread carries its own <code>ThreadLocalMap</code>. In an application with 1,000,000 virtual threads, replicating mutable <code>ThreadLocalMap</code> tables creates massive heap overhead and GC pressure. Furthermore, unbounded inheritance via <code>InheritableThreadLocal</code> copies the entire map to every child thread. <code>ScopedValue</code> is immutable, bound to a bounded lexical execution scope, and child threads share the identical memory structure via a single pointer without allocation.</p>
+          <div class="callout callout-danger"><span class="badge badge-danger">🚩 Red Flag to Avoid</span> Assuming <code>ThreadLocal</code> is harmless on Virtual Threads because "Virtual Threads are cheap".</div>
+        </div>
+      </div>
+    </section>
+
   </main>
 </div>
 
 <button class="scroll-top" aria-label="Scroll to top">↑</button>
-<script src="../../js/main.js"></script>
 </body>
 </html>
-

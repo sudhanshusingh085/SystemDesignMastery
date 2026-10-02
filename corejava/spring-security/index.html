@@ -280,7 +280,7 @@ SecurityContextHolder.setContext(context);</code></pre>
 flowchart TD
     Req["Incoming HTTP Request"] --> AF["AuthorizationFilter (Final Security Filter)"]
     AF --> SCH["SecurityContextHolder.getContext().getAuthentication()"]
-    SCH --> AM["AuthorizationManager<RequestAuthorizationContext>"]
+    SCH --> AM["AuthorizationManager (RequestAuthorizationContext)"]
     
     subgraph RuleEvaluation ["Authorization Decision Matrix"]
         AM --> Check1{"Is path permitAll()?"}

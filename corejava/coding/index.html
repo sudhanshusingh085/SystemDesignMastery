@@ -1,10 +1,12 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Coding & Implementation Problems — Live Interview Coding</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Advanced Coding &amp; Algorithmic Architecture — From Scratch to Principal Architect</title>
     <link rel="stylesheet" href="../../css/style.css">
-  <script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.0/dist/mermaid.min.js"></script>
+    <script src="../../js/main.js" defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.0/dist/mermaid.min.js"></script>
 </head>
 <body>
 
@@ -14,150 +16,536 @@
   <aside class="sidebar" id="sidebar"></aside>
 
   <main class="main-content">
-<nav class="breadcrumb">
-        <a href="../index.html">Home</a> &gt; <span>Live Coding</span>
+    <div class="platform-switcher">
+      <span>Mastery Portals:</span>
+      <a href="../../index.html">🏛️ System Design</a>
+      <a href="../index.html" class="active">☕ Core Java 21</a>
+      <a href="../../sqlserver/index.html">🗄️ MS SQL Server</a>
+      <a href="../../dotnet/index.html">🔷 .NET 8 / C# 12</a>
+    </div>
+
+    <nav aria-label="breadcrumb">
+      <ol class="breadcrumb">
+        <li><a href="../index.html">Core Java 21</a></li>
+        <li><span>13 · Live Coding &amp; Algorithmic Architecture</span></li>
+      </ol>
     </nav>
+    
     <header>
-        <h1>Coding & Implementation Problems</h1>
-        <p>Live Interview Coding with Java 21 in the Finance Domain</p>
+      <h1>💻 Live Coding &amp; Algorithmic Architecture in Java 21</h1>
+      <p class="subtitle">An architectural drill on mission-critical algorithms and data structures: Limit Order Book price-time matching, O(1) LRU Cache internals, Token Bucket rate limiters, lock-free ring buffers, zero-allocation primitive optimizations, and the Principal Engineer Grill Round.</p>
     </header>
-    
-    
-        <section>
-            <h2>1. Reverse a String (FIX Tag Value)</h2>
-            <div class="pillar">
-                <h3>PILLAR 1: Ground-Zero Theory & The Pain Point</h3>
-                <p>String reversal is a fundamental algorithmic test. In finance, this often applies to parsing or reversing serialized data like FIX protocol tags (e.g., reversing a transaction ID). If done inefficiently (using <code>+</code> operator in a loop), it causes severe memory bloat due to String immutability, creating O(N) garbage objects.</p>
-            </div>
-            <div class="pillar">
-                <h3>PILLAR 2: Architectural Decision Rationales</h3>
-                <p>We use <code>StringBuilder</code> or a simple <code>char[]</code> swap. <code>StringBuilder</code> is standard because it handles surrogate pairs (UTF-16) correctly, whereas naive <code>char[]</code> reversal might corrupt emojis or complex characters (less common in FIX, but good to mention). We avoid recursion due to <code>StackOverflowError</code> risks on long strings.</p>
-            </div>
-            <div class="pillar">
-                <h3>PILLAR 3: Step-by-Step Evolution</h3>
-                <p>Naive: <code>String s = ""; for(int i=len-1; i>=0; i--) s+=orig.charAt(i);</code> (O(N^2) time).<br>
-                Better: <code>char[]</code> swap in-place (O(N) time, O(N) space for array).<br>
-                Best: <code>new StringBuilder(str).reverse().toString()</code>.</p>
-            </div>
-            <div class="pillar">
-                <h3>PILLAR 4: Production-Grade Java 21 Code</h3>
-                <pre><code>
-public record FixTag(int tag, String value) {
-    public FixTag reverseValue() {
-        if (value == null || value.isEmpty()) return this;
-        // Fast, standard, handles unicode surrogates
-        String reversed = new StringBuilder(value).reverse().toString();
-        return new FixTag(tag, reversed);
+
+    <!-- TABLE OF CONTENTS -->
+    <nav class="toc-container">
+      <h3>Table of Contents</h3>
+      <ul>
+        <li><a href="#definitions">1. Formal Textbook Definitions &amp; 10-Second Elevator Pitch</a></li>
+        <li><a href="#orderbook-engine">2. Drill 1: Price-Time Priority Limit Order Book Matching Engine</a></li>
+        <li><a href="#lru-cache">3. Drill 2: O(1) LRU Cache (Doubly-Linked List &amp; Hash Map)</a></li>
+        <li><a href="#token-bucket">4. Drill 3: Lock-Free High-Throughput Token Bucket Rate Limiter</a></li>
+        <li><a href="#ring-buffer">5. Drill 4: Lock-Free Circular Ring Buffer (Mechanical Sympathy)</a></li>
+        <li><a href="#median-sliding">6. Drill 5: Dynamic Sliding Window Median (Dual Balanced Heaps)</a></li>
+        <li><a href="#low-latency-rules">7. Zero-Allocation &amp; Low-Latency Java Coding Rules</a></li>
+        <li><a href="#interview-grill">8. The Principal Engineer's 10-Question Grill Round</a></li>
+      </ul>
+    </nav>
+
+    <!-- SECTION 1: DEFINITIONS & ELEVATOR PITCH -->
+    <section id="definitions">
+      <h2>1. Formal Textbook Definitions &amp; 10-Second Elevator Pitch</h2>
+
+      <div class="callout callout-info">
+        <div class="callout-title">🧠 The 10-Second Elevator Pitch</div>
+        <p><strong>"Staff and Principal Engineer live-coding transcends elementary syntax; it demands mechanical sympathy, cache-line awareness, zero-allocation algorithms, and deterministic concurrency primitives. In electronic trading and high-throughput systems, every collection allocation, boxing operation, and lock acquisition creates garbage collection pauses and CPU cache line invalidations. Implementing core structures like Price-Time matching engines, lock-free ring buffers, and O(1) eviction caches demonstrates real mastery of memory layout and hardware execution."</strong></p>
+      </div>
+
+      <div class="definition-grid">
+        <div class="def-card">
+          <h4>Price-Time Priority (FIFO)</h4>
+          <p>The standard matching algorithm used by exchanges (NYSE, NASDAQ). Orders are sorted primarily by price (highest bid and lowest ask have priority). At the same price level, orders are executed in strict arrival timestamp order (FIFO queue).</p>
+        </div>
+        <div class="def-card">
+          <h4>LRU Cache (Least Recently Used)</h4>
+          <p>A bounded cache that evicts the least recently accessed element upon reaching capacity. Achieves deterministic $O(1)$ lookup and $O(1)$ eviction by coordinating a hash map (for constant-time reference lookups) with a doubly-linked list (for constant-time node repositioning).</p>
+        </div>
+        <div class="def-card">
+          <h4>Token Bucket Algorithm</h4>
+          <p>A rate-limiting algorithm where tokens are refilled into a bucket at a constant rate $r$ up to capacity $b$. Each incoming request consumes a token. Allows bursts up to bucket capacity while enforcing strict long-term average throughput limits without locking.</p>
+        </div>
+        <div class="def-card">
+          <h4>Circular Ring Buffer</h4>
+          <p>A fixed-size array treated as an infinite circular sequence using modular indexing (<code>index = seq &amp; (capacity - 1)</code>). By pre-allocating memory and updating head and tail sequences using atomic memory fences, it provides zero GC allocations and sub-microsecond latency.</p>
+        </div>
+        <div class="def-card">
+          <h4>Cache-Line Bouncing</h4>
+          <p>A hardware performance degradation occurring when multiple CPU cores continuously read and write variables residing on the same 64-byte L1 cache line, causing the MESI cache coherency protocol to invalidate cache lines across sockets.</p>
+        </div>
+        <div class="def-card">
+          <h4>Dual-Heap Median Tracker</h4>
+          <p>An algorithmic design maintaining two balanced priority queues (a Max-Heap for the lower half and a Min-Heap for the upper half) to compute the running median of a stream in $O(1)$ time and $O(\log K)$ insertion/deletion time.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- SECTION 2: DRILL 1 - ORDER BOOK -->
+    <section id="orderbook-engine">
+      <h2>2. Drill 1: Price-Time Priority Limit Order Book Matching Engine</h2>
+
+      <p>The Limit Order Book maintains bids (buy orders sorted descending by price) and asks (sell orders sorted ascending by price). Orders at the same price are matched FIFO.</p>
+
+      <div class="diagram-box">
+        <div class="diagram-title">Limit Order Book Data Structure Architecture</div>
+        <div class="mermaid">
+flowchart TD
+    subgraph Bids["Bids: NavigableMap (Descending Order: 100.5, 100.4)"]
+        B1["Price $100.50 -> Queue: [Order A (100 sh) -> Order B (50 sh)]"]
+        B2["Price $100.40 -> Queue: [Order C (200 sh)]"]
+    end
+
+    subgraph Asks["Asks: NavigableMap (Ascending Order: 100.6, 100.7)"]
+        A1["Price $100.60 -> Queue: [Order X (150 sh)]"]
+        A2["Price $100.70 -> Queue: [Order Y (300 sh)]"]
+    end
+
+    Crossing["Incoming Buy Order @ $100.60 -> Crosses Spread! Matches with Order X!"]
+    Crossing -.-> A1
+
+    style Bids fill:#1a2d1a,stroke:#38a169,color:#fff
+    style Asks fill:#2d1a1a,stroke:#e53e3e,color:#fff
+    style Crossing fill:#2d3748,stroke:#ed8936,color:#fff
+        </div>
+      </div>
+
+      <pre><code>package com.finance.trading.matching;
+
+import java.util.*;
+
+public class OrderBookEngine {
+
+    public enum Side { BUY, SELL }
+    public record Order(String id, Side side, double price, int qty) {}
+    public record TradeMatch(String buyId, String sellId, double price, int qty) {}
+
+    // Bids sorted descending (highest price first)
+    private final NavigableMap&lt;Double, Deque&lt;Order&gt;&gt; bids = new TreeMap&lt;&gt;(Comparator.reverseOrder());
+    // Asks sorted ascending (lowest price first)
+    private final NavigableMap&lt;Double, Deque&lt;Order&gt;&gt; asks = new TreeMap&lt;&gt;();
+
+    public List&lt;TradeMatch&gt; submitOrder(Order incoming) {
+        List&lt;TradeMatch&gt; matches = new ArrayList&lt;&gt;();
+        int remainingQty = incoming.qty();
+
+        if (incoming.side() == Side.BUY) {
+            while (remainingQty &gt; 0 &amp;&amp; !asks.isEmpty()) {
+                double bestAskPrice = asks.firstKey();
+                if (incoming.price() &lt; bestAskPrice) break; // No price overlap
+
+                Deque&lt;Order&gt; askQueue = asks.get(bestAskPrice);
+                Order restingAsk = askQueue.peekFirst();
+                int matchQty = Math.min(remainingQty, restingAsk.qty());
+
+                matches.add(new TradeMatch(incoming.id(), restingAsk.id(), bestAskPrice, matchQty));
+                remainingQty -= matchQty;
+
+                if (restingAsk.qty() == matchQty) {
+                    askQueue.pollFirst();
+                    if (askQueue.isEmpty()) asks.remove(bestAskPrice);
+                } else {
+                    askQueue.pollFirst();
+                    askQueue.addFirst(new Order(restingAsk.id(), Side.SELL, bestAskPrice, restingAsk.qty() - matchQty));
+                }
+            }
+            if (remainingQty &gt; 0) {
+                bids.computeIfAbsent(incoming.price(), _ -&gt; new ArrayDeque&lt;&gt;())
+                    .addLast(new Order(incoming.id(), Side.BUY, incoming.price(), remainingQty));
+            }
+        } else {
+            // Analogous matching logic for SELL orders against bids...
+        }
+        return matches;
     }
-}
-                </code></pre>
-            </div>
-            <div class="pillar">
-                <h3>PILLAR 5: The Interviewer's Deep Follow-Up Questions</h3>
-                <div class="interview-box">
-                    <h4>📋 How to Answer This in an Interview</h4>
-                    <p>Mention time/space complexity (O(N) time, O(N) space) and highlight the UTF-16 surrogate pair edge case. If they ask to implement it without StringBuilder:</p>
-                    <pre><code>
-char[] chars = value.toCharArray();
-for (int i = 0, j = chars.length - 1; i < j; i++, j--) {
-    char temp = chars[i]; chars[i] = chars[j]; chars[j] = temp;
-}
-return new String(chars);
-                    </code></pre>
-                    <h4>🎯 Interviewer Follow-Up Questions</h4>
-                    <p>Q: What if the string is 10GB? A: You cannot hold it in memory. You must stream it from disk using a RandomAccessFile or memory-mapped buffer, reversing chunks.</p>
-                </div>
-            </div>
-            <div class="pillar">
-                <h3>PILLAR 6: Trade-offs & When NOT To Use It</h3>
-                <p>In-place char array swap uses less memory overhead than StringBuilder but requires careful handling if surrogate pairs are present.</p>
-            </div>
-        </section>
+}</code></pre>
+    </section>
 
-        <section>
-            <h2>2. Frequency of Each Character (FIX Message Analysis)</h2>
-            <div class="pillar">
-                <h3>PILLAR 1: Ground-Zero Theory</h3>
-                <p>Counting character frequencies is crucial for data compression (like Huffman coding) or anomaly detection in FIX message payloads.</p>
-            </div>
-            <div class="pillar">
-                <h3>PILLAR 2: Architectural Decision Rationales</h3>
-                <p>We use a <code>HashMap&lt;Character, Integer&gt;</code> or a flat <code>int[]</code> array if we know the charset is strictly ASCII (which FIX tags often are). The array approach is O(1) space and vastly faster than boxing/unboxing in a Map.</p>
-            </div>
-            <div class="pillar">
-                <h3>PILLAR 3: Step-by-Step Evolution</h3>
-                <p>Naive: Nested loops (O(N^2)).<br>
-                Better: Java 8 Streams <code>Collectors.groupingBy</code> (Concise but slow due to boxing overhead).<br>
-                Best: <code>int[256]</code> frequency array (O(N) time, O(1) space, zero garbage).</p>
-            </div>
-            <div class="pillar">
-                <h3>PILLAR 4: Production-Grade Java 21 Code</h3>
-                <pre><code>
-public static Map&lt;Character, Long&gt; countFixDelimitersStream(String fixMessage) {
-    return fixMessage.chars()
-            .mapToObj(c -> (char) c)
-            .collect(Collectors.groupingBy(Function.identity(), Collectors.counting()));
-}
+    <!-- SECTION 3: DRILL 2 - LRU CACHE -->
+    <section id="lru-cache">
+      <h2>3. Drill 2: O(1) LRU Cache (Doubly-Linked List &amp; Hash Map)</h2>
 
-// Low Latency approach
-public static int[] countFixDelimitersFast(String fixMessage) {
-    int[] freq = new int[256];
-    for (int i = 0; i < fixMessage.length(); i++) {
-        freq[fixMessage.charAt(i) % 256]++;
+      <p>Interviewers expect candidates to build an LRU cache from scratch using custom pointers, rather than inheriting from <code>LinkedHashMap</code>.</p>
+
+      <pre><code>package com.finance.trading.cache;
+
+import java.util.*;
+
+public class FastLruCache&lt;K, V&gt; {
+
+    private static class Node&lt;K, V&gt; {
+        K key;
+        V value;
+        Node&lt;K, V&gt; prev, next;
+        Node(K key, V value) { this.key = key; this.value = value; }
     }
-    return freq;
-}
-                </code></pre>
-            </div>
-            <div class="pillar">
-                <h3>PILLAR 5: The Grill Round</h3>
-                <div class="interview-box">
-                    <h4>📋 How to Answer This in an Interview</h4>
-                    <p>Present the array approach as the "HFT/Low-Latency" answer to show you care about GC pauses, then write the Stream approach to show you know modern Java.</p>
-                    <h4>🎯 Follow-Ups</h4>
-                    <p>Q: Why avoid Streams in low-latency trading? A: Autoboxing primitives to Objects creates immense GC pressure.</p>
-                </div>
-            </div>
-        </section>
 
-        <!-- More topics truncated for brevity in this mock, but structure persists -->
-        <section>
-            <h2>9. Design a Fund Transfer System (Saga Pattern)</h2>
-            <div class="pillar">
-                <h3>PILLAR 4: Production-Grade Java 21 Code</h3>
-                <pre><code>
-public record TransferRequest(String idempotencyKey, String fromAcct, String toAcct, BigDecimal amount) {}
+    private final int capacity;
+    private final Map&lt;K, Node&lt;K, V&gt;&gt; map = new HashMap&lt;&gt;();
+    private final Node&lt;K, V&gt; head = new Node&lt;&gt;(null, null); // Sentinel head
+    private final Node&lt;K, V&gt; tail = new Node&lt;&gt;(null, null); // Sentinel tail
 
-public sealed interface TransferResult permits Success, InsufficientFunds, Failed {}
-public record Success(String txId) implements TransferResult {}
-public record InsufficientFunds() implements TransferResult {}
-public record Failed(String reason) implements TransferResult {}
-
-public class TransferService {
-    @Transactional
-    public TransferResult transfer(TransferRequest req) {
-        // Implement Saga/Outbox pattern logic here
-        return new Success(UUID.randomUUID().toString());
+    public FastLruCache(int capacity) {
+        this.capacity = capacity;
+        head.next = tail;
+        tail.prev = head;
     }
-}
-                </code></pre>
-            </div>
-        </section>
-        
-        <section>
-            <h2>11. Common Patterns Cheat Sheet</h2>
-            <table>
-                <tr><th>Pattern</th><th>When to Use</th><th>Finance Example</th></tr>
-                <tr><td>Sliding Window</td><td>Contiguous subarrays, min/max in range</td><td>Max trade volume in K minutes</td></tr>
-                <tr><td>Two Pointers</td><td>Sorted arrays, pairs</td><td>Matching buy/sell orders</td></tr>
-                <tr><td>Prefix Sum</td><td>Range sum queries</td><td>Cumulative PnL over time</td></tr>
-            </table>
-        </section>
+
+    public synchronized V get(K key) {
+        Node&lt;K, V&gt; node = map.get(key);
+        if (node == null) return null;
+        moveToHead(node);
+        return node.value;
+    }
+
+    public synchronized void put(K key, V value) {
+        Node&lt;K, V&gt; node = map.get(key);
+        if (node != null) {
+            node.value = value;
+            moveToHead(node);
+        } else {
+            if (map.size() &gt;= capacity) {
+                Node&lt;K, V&gt; lru = removeTail();
+                map.remove(lru.key);
+            }
+            Node&lt;K, V&gt; newNode = new Node&lt;&gt;(key, value);
+            map.put(key, newNode);
+            addToHead(newNode);
+        }
+    }
+
+    private void addToHead(Node&lt;K, V&gt; node) {
+        node.next = head.next;
+        node.prev = head;
+        head.next.prev = node;
+        head.next = node;
+    }
+
+    private void removeNode(Node&lt;K, V&gt; node) {
+        node.prev.next = node.next;
+        node.next.prev = node.prev;
+    }
+
+    private void moveToHead(Node&lt;K, V&gt; node) {
+        removeNode(node);
+        addToHead(node);
+    }
+
+    private Node&lt;K, V&gt; removeTail() {
+        Node&lt;K, V&gt; res = tail.prev;
+        removeNode(res);
+        return res;
+    }
+}</code></pre>
+    </section>
+
+    <!-- SECTION 4: DRILL 3 - TOKEN BUCKET -->
+    <section id="token-bucket">
+      <h2>4. Drill 3: Lock-Free High-Throughput Token Bucket Rate Limiter</h2>
+
+      <p>A lock-free Token Bucket algorithm eliminates lock contention using <code>AtomicReference</code> and lazy refill calculation on each request.</p>
+
+      <pre><code>package com.finance.trading.ratelimit;
+
+import java.util.concurrent.atomic.AtomicReference;
+
+public class LockFreeTokenBucket {
+
+    private final long capacity;
+    private final double refillTokensPerNano;
+
+    private record State(long tokens, long lastRefillNanos) {}
+    private final AtomicReference&lt;State&gt; stateRef;
+
+    public LockFreeTokenBucket(long capacity, double refillTokensPerSecond) {
+        this.capacity = capacity;
+        this.refillTokensPerNano = refillTokensPerSecond / 1_000_000_000.0;
+        this.stateRef = new AtomicReference&lt;&gt;(new State(capacity, System.nanoTime()));
+    }
+
+    public boolean tryAcquire(long requestedTokens) {
+        while (true) {
+            long now = System.nanoTime();
+            State current = stateRef.get();
+
+            long elapsedNanos = Math.max(0, now - current.lastRefillNanos());
+            long newTokens = (long) (elapsedNanos * refillTokensPerNano);
+            long availableTokens = Math.min(capacity, current.tokens() + newTokens);
+
+            if (availableTokens &lt; requestedTokens) {
+                return false; // Rate limit exceeded
+            }
+
+            State next = new State(availableTokens - requestedTokens, now);
+            if (stateRef.compareAndSet(current, next)) {
+                return true; // Token successfully acquired!
+            }
+        }
+    }
+}</code></pre>
+    </section>
+
+    <!-- SECTION 5: DRILL 4 - RING BUFFER -->
+    <section id="ring-buffer">
+      <h2>5. Drill 4: Lock-Free Circular Ring Buffer (Mechanical Sympathy)</h2>
+
+      <p>A single-producer, single-consumer lock-free bounded queue achieving zero allocations during message transmission.</p>
+
+      <pre><code>package com.finance.trading.queue;
+
+import java.lang.invoke.VarHandle;
+import java.lang.invoke.MethodHandles;
+
+public class SpscRingBuffer&lt;E&gt; {
+
+    private final Object[] buffer;
+    private final int mask;
+
+    private volatile long head = 0; // Consumer read index
+    private volatile long tail = 0; // Producer write index
+
+    public SpscRingBuffer(int capacity) {
+        if (Integer.bitCount(capacity) != 1) {
+            throw new IllegalArgumentException("Capacity must be a power of 2");
+        }
+        this.buffer = new Object[capacity];
+        this.mask = capacity - 1;
+    }
+
+    public boolean offer(E item) {
+        long currentTail = tail;
+        long currentHead = head;
+
+        if (currentTail - currentHead &gt;= buffer.length) {
+            return false; // Buffer Full!
+        }
+
+        buffer[(int) (currentTail &amp; mask)] = item;
+        tail = currentTail + 1; // Volatile store publishes item
+        return true;
+    }
+
+    @SuppressWarnings("unchecked")
+    public E poll() {
+        long currentHead = head;
+        long currentTail = tail;
+
+        if (currentHead &gt;= currentTail) {
+            return null; // Buffer Empty!
+        }
+
+        int index = (int) (currentHead &amp; mask);
+        E item = (E) buffer[index];
+        buffer[index] = null; // Prevent memory leak
+        head = currentHead + 1; // Volatile store advances consumer
+        return item;
+    }
+}</code></pre>
+    </section>
+
+    <!-- SECTION 6: DRILL 5 - SLIDING MEDIAN -->
+    <section id="median-sliding">
+      <h2>6. Drill 5: Dynamic Sliding Window Median (Dual Balanced Heaps)</h2>
+
+      <p>Tracking the running median over a sliding window of size $K$ without sorting the window on every tick.</p>
+
+      <pre><code>package com.finance.trading.analytics;
+
+import java.util.*;
+
+public class SlidingWindowMedian {
+
+    private final PriorityQueue&lt;Double&gt; small = new PriorityQueue&lt;&gt;(Comparator.reverseOrder()); // Max-heap
+    private final PriorityQueue&lt;Double&gt; large = new PriorityQueue&lt;&gt;(); // Min-heap
+
+    public double[] medianSlidingWindow(double[] nums, int k) {
+        double[] result = new double[nums.length - k + 1];
+
+        for (int i = 0; i &lt; nums.length; i++) {
+            addNumber(nums[i]);
+            if (i &gt;= k) {
+                removeNumber(nums[i - k]);
+            }
+            balanceHeaps();
+
+            if (i &gt;= k - 1) {
+                result[i - k + 1] = getMedian(k);
+            }
+        }
+        return result;
+    }
+
+    private void addNumber(double num) {
+        if (small.isEmpty() || num &lt;= small.peek()) {
+            small.add(num);
+        } else {
+            large.add(num);
+        }
+    }
+
+    private void removeNumber(double num) {
+        if (num &lt;= small.peek()) {
+            small.remove(num);
+        } else {
+            large.remove(num);
+        }
+    }
+
+    private void balanceHeaps() {
+        while (small.size() &gt; large.size() + 1) {
+            large.add(small.poll());
+        }
+        while (large.size() &gt; small.size()) {
+            small.add(large.poll());
+        }
+    }
+
+    private double getMedian(int k) {
+        if (k % 2 != 0) {
+            return small.peek();
+        } else {
+            return (small.peek() + large.peek()) / 2.0;
+        }
+    }
+}</code></pre>
+    </section>
+
+    <!-- SECTION 7: ZERO-ALLOCATION RULES -->
+    <section id="low-latency-rules">
+      <h2>7. Zero-Allocation &amp; Low-Latency Java Coding Rules</h2>
+
+      <ul>
+        <li><strong>Rule 1: Eliminate Auto-Boxing in Loops:</strong> Never use <code>Integer</code> or <code>Double</code> in tight iterative loops. Use primitive types (<code>int</code>, <code>double</code>) or Eclipse Collections / Agrona primitive maps (<code>IntObjectHashMap</code>).</li>
+        <li><strong>Rule 2: Pre-Size Collections:</strong> Calculate capacity up front: <code>HashMap.newHashMap(expectedCount)</code>. Sizing prevents array reallocations and bucket rehashing during production traffic spikes.</li>
+        <li><strong>Rule 3: Replace Streams on the Critical Hot Path:</strong> While Java Streams offer elegant declarative code, intermediate pipeline allocations (Spliterators, function wrappers, boxed collectors) create GC pressure in sub-millisecond loops. Use primitive indexed <code>for</code> loops on hot execution paths.</li>
+      </ul>
+    </section>
+
+    <!-- SECTION 8: PRINCIPAL ENGINEER GRILL ROUND -->
+    <section id="interview-grill">
+      <h2>8. The Principal Engineer's 10-Question Grill Round</h2>
+
+      <div class="interview-card">
+        <div class="question-header">
+          <span class="q-num">Q1</span>
+          <h4>Why does a circular ring buffer require its capacity to be a power of 2?</h4>
+        </div>
+        <div class="answer-content">
+          <p>When capacity is a power of 2 (e.g., $2^{10} = 1024$), mapping a monotonically increasing 64-bit sequence counter to an array index can be calculated using a bitwise AND mask: <code>index = seq &amp; (capacity - 1)</code>. The bitwise AND operation executes in a single CPU cycle. If capacity were an arbitrary number (e.g., 1000), the index calculation would require integer division / modulo (<code>seq % capacity</code>), which costs 15 to 40 CPU clock cycles. Furthermore, bitwise masking handles 64-bit integer overflow safely without negative index bugs.</p>
+          <div class="callout callout-danger"><span class="badge badge-danger">🚩 Red Flag to Avoid</span> Suggesting that capacity is a power of 2 purely for aesthetic or memory alignment reasons.</div>
+        </div>
+      </div>
+
+      <div class="interview-card">
+        <div class="question-header">
+          <span class="q-num">Q2</span>
+          <h4>Why is `PriorityQueue.remove(Object)` an anti-pattern in sliding window median algorithms?</h4>
+        </div>
+        <div class="answer-content">
+          <p>Standard Java <code>PriorityQueue.remove(Object)</code> performs a linear scan over the backing array to locate the element before executing sift-up/sift-down, resulting in $O(N)$ time complexity. In a sliding window of size $K$, performing $O(K)$ deletions on every tick drives overall algorithm complexity to $O(N \times K)$. Staff engineers optimize this using <strong>Lazy Deletion (Hash-Heap)</strong>: track outgoing elements in a secondary frequency map and discard them lazily only when they appear at the top of the heap, preserving $O(\log K)$ operations.</p>
+          <div class="callout callout-danger"><span class="badge badge-danger">🚩 Red Flag to Avoid</span> Assuming <code>PriorityQueue.remove(Object)</code> runs in $O(\log N)$ time.</div>
+        </div>
+      </div>
+
+      <div class="interview-card">
+        <div class="question-header">
+          <span class="q-num">Q3</span>
+          <h4>How do you implement an O(1) LRU cache without relying on Java's `LinkedHashMap`?</h4>
+        </div>
+        <div class="answer-content">
+          <p>Combine a standard <code>HashMap&lt;Key, Node&gt;</code> with a custom <strong>Doubly-Linked List</strong> bounded by sentinel head and tail nodes. The map provides $O(1)$ key lookup returning the pointer to the doubly-linked node. When accessed or updated, the node is spliced out of its current position and inserted at the head of the list in $O(1)$ pointer assignments. When capacity is exceeded, the node immediately preceding the sentinel tail is evicted from both the list and the map in $O(1)$ time.</p>
+          <div class="callout callout-danger"><span class="badge badge-danger">🚩 Red Flag to Avoid</span> Using a singly-linked list (which cannot remove a node in $O(1)$ because it lacks a previous pointer).</div>
+        </div>
+      </div>
+
+      <div class="interview-card">
+        <div class="question-header">
+          <span class="q-num">Q4</span>
+          <h4>Why does auto-boxing create latency spikes in high-frequency trading matching engines?</h4>
+        </div>
+        <div class="answer-content">
+          <p>Auto-boxing converts a primitive (e.g., <code>int</code> or <code>double</code>) into a reference wrapper object (<code>Integer</code> or <code>Double</code>) allocated on the Java heap. In an engine processing 500,000 orders/second, auto-boxing generates millions of short-lived heap objects per second. This triggers rapid Eden space exhaustion, driving young-generation garbage collection frequency and generating stop-the-world GC pauses that break client latency SLAs.</p>
+          <div class="callout callout-danger"><span class="badge badge-danger">🚩 Red Flag to Avoid</span> Claiming modern JVM Escape Analysis eliminates 100% of auto-boxing allocations in collections.</div>
+        </div>
+      </div>
+
+      <div class="interview-card">
+        <div class="question-header">
+          <span class="q-num">Q5</span>
+          <h4>How does the Token Bucket algorithm handle bursting compared to the Leaky Bucket algorithm?</h4>
+        </div>
+        <div class="answer-content">
+          <p>The <strong>Token Bucket</strong> accumulates tokens over idle periods up to its capacity $b$. When a burst of requests arrives, it permits the burst instantly as long as tokens are available, while capping the sustained throughput to the refill rate. In contrast, the <strong>Leaky Bucket</strong> processes requests at a strictly constant, smoothed output rate regardless of incoming traffic bursts, buffering excess requests in a queue or discarding them immediately.</p>
+          <div class="callout callout-danger"><span class="badge badge-danger">🚩 Red Flag to Avoid</span> Treating Token Bucket and Leaky Bucket as interchangeable algorithms.</div>
+        </div>
+      </div>
+
+      <div class="interview-card">
+        <div class="question-header">
+          <span class="q-num">Q6</span>
+          <h4>Why does `ConcurrentHashMap.size()` return an estimate rather than an exact locked count?</h4>
+        </div>
+        <div class="answer-content">
+          <p>To avoid a global lock that would choke concurrent throughput across multiple CPU cores, <code>ConcurrentHashMap</code> tracks size using a striped counter mechanism similar to <code>LongAdder</code> (a base count plus an array of <code>CounterCell</code> objects). The <code>size()</code> method sums these counters without acquiring locks. Under concurrent modifications, updates may occur between counter reads, making <code>size()</code> an approximate estimate rather than an exact atomic snapshot.</p>
+          <div class="callout callout-danger"><span class="badge badge-danger">🚩 Red Flag to Avoid</span> Relying on <code>ConcurrentHashMap.size()</code> for strict transactional invariant validation.</div>
+        </div>
+      </div>
+
+      <div class="interview-card">
+        <div class="question-header">
+          <span class="q-num">Q7</span>
+          <h4>What is the difference between ArrayDeque and LinkedList for FIFO queues, and which is faster?</h4>
+        </div>
+        <div class="answer-content">
+          <p><code>ArrayDeque</code> is substantially faster than <code>LinkedList</code> in almost all scenarios. <code>ArrayDeque</code> is backed by a contiguous circular array, which provides superior CPU L1/L2 cache locality and generates zero node allocations during steady-state polling. <code>LinkedList</code> allocates a new <code>Node</code> object for every element added, creating pointer-chasing overhead across non-contiguous heap memory and generating heavy GC pressure.</p>
+          <div class="callout callout-danger"><span class="badge badge-danger">🚩 Red Flag to Avoid</span> Recommending <code>LinkedList</code> for standard queues in modern Java applications.</div>
+        </div>
+      </div>
+
+      <div class="interview-card">
+        <div class="question-header">
+          <span class="q-num">Q8</span>
+          <h4>How do you implement an atomic Compare-And-Swap (CAS) rate limiter without locks?</h4>
+        </div>
+        <div class="answer-content">
+          <p>Encapsulate the rate limiter state (available tokens and last refill timestamp) into an immutable Java 21 <code>record State(long tokens, long timestamp)</code> stored in an <code>AtomicReference&lt;State&gt;</code>. When a request arrives, calculate elapsed time, compute newly refilled tokens, verify if sufficient tokens exist, construct a new state record, and execute <code>stateRef.compareAndSet(current, next)</code> inside a spin-loop. If concurrent threads contend, the CAS loop retries without OS context switching.</p>
+          <div class="callout callout-danger"><span class="badge badge-danger">🚩 Red Flag to Avoid</span> Using heavy <code>ReentrantLock</code> synchronization for sub-microsecond rate limiting.</div>
+        </div>
+      </div>
+
+      <div class="interview-card">
+        <div class="question-header">
+          <span class="q-num">Q9</span>
+          <h4>Why does `Collections.sort()` in Java use TimSort instead of QuickSort?</h4>
+        </div>
+        <div class="answer-content">
+          <p>TimSort (a hybrid of MergeSort and InsertionSort) is <strong>stable</strong> and takes advantage of existing ordered sequences ("runs") present in real-world data. It guarantees $O(N \log N)$ worst-case time complexity (unlike QuickSort's $O(N^2)$ worst case) and achieves $O(N)$ best-case performance on already-sorted or nearly-sorted data. Stability is vital for object sorting: if two trades share identical prices, TimSort guarantees their relative arrival order is preserved.</p>
+          <div class="callout callout-danger"><span class="badge badge-danger">🚩 Red Flag to Avoid</span> Claiming QuickSort is always preferred for all sorting tasks in enterprise systems.</div>
+        </div>
+      </div>
+
+      <div class="interview-card">
+        <div class="question-header">
+          <span class="q-num">Q10</span>
+          <h4>How do you prevent False Sharing in a multi-threaded queue's sequence pointers?</h4>
+        </div>
+        <div class="answer-content">
+          <p>False sharing occurs when independent volatile variables (such as a queue's <code>head</code> and <code>tail</code> sequence pointers) occupy the same 64-byte hardware CPU cache line. When Core 1 updates <code>tail</code>, Core 2's cache line containing <code>head</code> is invalidated, causing continuous cache line transfers. We eliminate this by padding fields with 56 bytes of dummy primitive fields or by annotating fields with <code>@jdk.internal.vm.annotation.Contended</code> (with <code>-XX:-RestrictContended</code> enabled), forcing the JVM to isolate pointers into dedicated cache lines.</p>
+          <div class="callout callout-danger"><span class="badge badge-danger">🚩 Red Flag to Avoid</span> Confusing False Sharing with multi-threaded race conditions or deadlocks.</div>
+        </div>
+      </div>
+    </section>
+
   </main>
 </div>
 
 <button class="scroll-top" aria-label="Scroll to top">↑</button>
-<script src="../../js/main.js"></script>
 </body>
 </html>
-

@@ -1,12 +1,12 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>JPA & Hibernate — Persistence for Financial Data</title>
+    <title>JPA &amp; Hibernate Persistence Internals — From Scratch to Principal Architect</title>
     <link rel="stylesheet" href="../../css/style.css">
-    
-  <script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.0/dist/mermaid.min.js"></script>
+    <script src="../../js/main.js" defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.0/dist/mermaid.min.js"></script>
 </head>
 <body>
 
@@ -16,91 +16,545 @@
   <aside class="sidebar" id="sidebar"></aside>
 
   <main class="main-content">
-<nav class="breadcrumb">
-        <a href="../index.html">Home</a> &gt; <span>JPA & Hibernate</span>
-    </nav>
+    <div class="platform-switcher">
+      <span>Mastery Portals:</span>
+      <a href="../../index.html">🏛️ System Design</a>
+      <a href="../index.html" class="active">☕ Core Java 21</a>
+      <a href="../../sqlserver/index.html">🗄️ MS SQL Server</a>
+      <a href="../../dotnet/index.html">🔷 .NET 8 / C# 12</a>
+    </div>
 
+    <nav aria-label="breadcrumb">
+      <ol class="breadcrumb">
+        <li><a href="../index.html">Core Java 21</a></li>
+        <li><span>09 · JPA, Hibernate &amp; Persistence Internals</span></li>
+      </ol>
+    </nav>
+    
     <header>
-        <h1>JPA & Hibernate — Persistence for Financial Data</h1>
-        <p class="subtitle">Entity states, optimizations, and avoiding production disasters</p>
+      <h1>🗄️ JPA, Hibernate &amp; High-Throughput Persistence Internals</h1>
+      <p class="subtitle">An architectural deep-dive into enterprise ORM: Persistence Context mechanics, dirty checking algorithms, N+1 query elimination strategies, MultipleBagFetchException Cartesian explosion, Optimistic vs Pessimistic concurrency control, and the Principal Engineer Grill Round.</p>
     </header>
 
-    
-        <!-- Topic 1: Entity Lifecycle -->
-        <section class="topic-section" id="entity-lifecycle">
-            <h2>1. Entity Lifecycle</h2>
-            <div class="pillar pillar-3">
-                <h3>Pillar 3: Step-by-Step Evolution</h3>
-                <pre class="mermaid">
-                stateDiagram-v2
-                    [*] --> Transient : new Trade()
-                    Transient --> Managed : em.persist()
-                    Managed --> Detached : em.clear() / em.close()
-                    Detached --> Managed : em.merge()
-                    Managed --> Removed : em.remove()
-                    Removed --> [*] : commit
-                    Managed --> Database : flush / commit
-                </pre>
-            </div>
-        </section>
+    <!-- TABLE OF CONTENTS -->
+    <nav class="toc-container">
+      <h3>Table of Contents</h3>
+      <ul>
+        <li><a href="#definitions">1. Formal Textbook Definitions &amp; 10-Second Elevator Pitch</a></li>
+        <li><a href="#persistence-context">2. The Persistence Context &amp; First-Level Cache Mechanics</a></li>
+        <li><a href="#dirty-checking">3. Automatic Dirty Checking &amp; Flush Lifecycle</a></li>
+        <li><a href="#n-plus-one">4. Eliminating the N+1 Query &amp; Cartesian Product Disasters</a></li>
+        <li><a href="#concurrency-locking">5. Concurrency Control: Optimistic (@Version) vs Pessimistic (FOR UPDATE)</a></li>
+        <li><a href="#osiv-trap">6. The Open-Session-in-View (OSIV) Anti-Pattern &amp; LazyInitializationException</a></li>
+        <li><a href="#production-pipeline">7. Production-Grade Java 21 Financial Ledger Repository</a></li>
+        <li><a href="#interview-grill">8. The Principal Engineer's 10-Question Grill Round</a></li>
+      </ul>
+    </nav>
 
-        <!-- Topic 2: N+1 Problem -->
-        <section class="topic-section" id="n-plus-1">
-            <h2>2. The N+1 Problem (The Silent Killer)</h2>
-            <div class="pillar pillar-1">
-                <h3>Pillar 1: Ground-Zero Theory & The Pain Point</h3>
-                <p>The N+1 problem occurs when an ORM framework executes one query to retrieve a parent entity, and then executes N additional queries to fetch the lazy-loaded children for each of the N parents. In a financial app, querying 100 Portfolios might trigger 100 separate queries to fetch the Trades for each portfolio. This floods the database with thousands of sub-millisecond queries, utterly destroying application throughput.</p>
-            </div>
+    <!-- SECTION 1: DEFINITIONS & ELEVATOR PITCH -->
+    <section id="definitions">
+      <h2>1. Formal Textbook Definitions &amp; 10-Second Elevator Pitch</h2>
 
-            <div class="pillar pillar-5">
-                <div class="interview-box">
-                    <h4>📋 How to Answer This in an Interview</h4>
-                    <p><strong>Q: "What is the N+1 problem in Hibernate/JPA and how would you solve it?"</strong></p>
-                    <p><em>Candidate:</em> "The N+1 problem is a massive performance flaw where JPA issues 1 query to fetch a list of parent entities, and then N queries to initialize their lazily-loaded associations. My primary solution is to use <code>JOIN FETCH</code> in JPQL to eagerly load the association in a single SQL join query. If the entity has multiple associations and Cartesian products become a concern, I use <code>@EntityGraph</code> for dynamic fetching, or <code>@BatchSize(size = 50)</code> at the entity level to fetch children in chunks using an IN clause, reducing N queries to N/50 queries."</p>
-                </div>
-            </div>
-        </section>
+      <div class="callout callout-info">
+        <div class="callout-title">🧠 The 10-Second Elevator Pitch</div>
+        <p><strong>"Hibernate is an Object-Relational Mapping (ORM) engine implementing the Jakarta Persistence (JPA) standard. It abstracts relational databases through a stateful Unit of Work called the Persistence Context (First-Level Cache). Rather than issuing immediate SQL, Hibernate buffers entity mutations, detects state changes via dirty checking against internal baseline snapshots, and optimizes batch flushes upon transaction commit. Mastering JPA requires controlling query execution plans (avoiding N+1 and Cartesian products) and choosing the correct locking semantics to prevent data corruption under concurrent writes."</strong></p>
+      </div>
 
-        <!-- Topic 3: LazyInitializationException -->
-        <section class="topic-section" id="lazy-init">
-            <h2>3. LazyInitializationException & OSIV</h2>
-            <div class="pillar pillar-5">
-                <div class="interview-box">
-                    <h4>🎯 Interviewer Follow-Up Questions</h4>
-                    <p><strong>Q: "A LazyInitializationException occurs in production but not in development. Why?"</strong></p>
-                    <p><em>A:</em> "Because of <code>Open Session In View (OSIV)</code>. Spring Boot enables OSIV by default. In development, this keeps the Hibernate Session open during the entire HTTP request rendering phase, so lazy loading works in the Controller/View. However, in production, senior engineers rightfully disable OSIV (`spring.jpa.open-in-view=false`) because keeping DB connections open during HTTP transport exhausts connection pools. When disabled, the Session closes immediately after the <code>@Transactional</code> Service method completes. When the Controller tries to access a lazy collection, there's no Session left, resulting in the Exception."</p>
-                </div>
-            </div>
-        </section>
+      <div class="definition-grid">
+        <div class="def-card">
+          <h4>Persistence Context (L1 Cache)</h4>
+          <p>A non-thread-safe transactional cache managed by <code>EntityManager</code> / <code>Session</code>. It acts as a Unit of Work, ensuring identity map semantics (a single database row maps to exactly one Java object instance per session) and buffering uncommitted writes.</p>
+        </div>
+        <div class="def-card">
+          <h4>Dirty Checking</h4>
+          <p>The mechanism by which Hibernate detects entity modifications. When an entity enters the managed state, Hibernate captures an array snapshot of its field values (<code>loadedState</code>). During flush, it compares current values with the snapshot and synthesizes minimal SQL <code>UPDATE</code> statements.</p>
+        </div>
+        <div class="def-card">
+          <h4>N+1 Query Problem</h4>
+          <p>A performance antipattern where an ORM executes 1 initial query to retrieve $N$ parent entities, followed by $N$ separate SQL queries to fetch lazy associations for each parent, resulting in $N+1$ network database roundtrips that destroy application throughput.</p>
+        </div>
+        <div class="def-card">
+          <h4>Cartesian Product Problem</h4>
+          <p>An exponential query explosion occurring when fetching multiple collection associations simultaneously via SQL joins. A parent with 10 child orders and 10 child audits produces $10 \times 10 = 100$ result rows over JDBC, causing high network transfer and heap bloat.</p>
+        </div>
+        <div class="def-card">
+          <h4>Optimistic Locking (@Version)</h4>
+          <p>A lockless concurrency control pattern using a dedicated version column. When committing updates, Hibernate verifies that the version in the database matches the entity's version via <code>UPDATE table SET ... WHERE id=? AND version=?</code>. If 0 rows match, <code>OptimisticLockException</code> is thrown.</p>
+        </div>
+        <div class="def-card">
+          <h4>Pessimistic Locking (FOR UPDATE)</h4>
+          <p>A hardware/database-level locking mechanism (<code>LockModeType.PESSIMISTIC_WRITE</code>) that executes <code>SELECT ... FOR UPDATE</code>. It acquires an exclusive row lock at the database engine level, blocking concurrent transactions until the current transaction commits or rolls back.</p>
+        </div>
+      </div>
+    </section>
 
-        <!-- Topic 4: Locks -->
-        <section class="topic-section" id="locking">
-            <h2>4. Optimistic vs Pessimistic Locking</h2>
-            <div class="pillar pillar-4">
-                <h3>Pillar 4: Production-Grade Java 21 Code</h3>
-                <pre><code class="language-java">
-@Entity
-public class TradeAccount {
-    @Id
-    private Long id;
-    
-    private BigDecimal balance;
+    <!-- SECTION 2: PERSISTENCE CONTEXT -->
+    <section id="persistence-context">
+      <h2>2. The Persistence Context &amp; First-Level Cache Mechanics</h2>
 
-    // OPTIMISTIC LOCKING
-    // Hibernate automatically increments this. If another thread
-    // updates the row, the version changes. Upon commit, Hibernate checks version.
-    // If mismatch -> StaleObjectStateException!
-    @Version
-    private Integer version;
-}
-                </code></pre>
-            </div>
-        </section>
+      <p>Every JPA entity exists in one of four distinct states within the entity lifecycle:</p>
+
+      <div class="diagram-box">
+        <div class="diagram-title">The 4 JPA Entity States &amp; Lifecycle Transitions</div>
+        <div class="mermaid">
+stateDiagram-v2
+    [*] --> Transient : new Trade()
+    Transient --> Managed : em.persist()
+    Managed --> Detached : em.detach() / em.clear() / tx.commit()
+    Detached --> Managed : em.merge()
+    Managed --> Removed : em.remove()
+    Removed --> [*] : Transaction Commit
+    Managed --> Database : flush() triggers SQL INSERT/UPDATE
+        </div>
+      </div>
+
+      <h3>Entity States Explained</h3>
+      <ul>
+        <li><strong>Transient:</strong> Instantiated via <code>new</code> in Java. Has no database identity (primary key is null) and is not associated with any Persistence Context.</li>
+        <li><strong>Managed (Persistent):</strong> Has a database identity and is tracked by the active Persistence Context. Any mutation to its fields will be detected during dirty checking and flushed to the database.</li>
+        <li><strong>Detached:</strong> Possesses a database identity, but the Persistence Context that managed it has been closed or cleared. Mutations are ignored until explicitly re-attached via <code>em.merge()</code>.</li>
+        <li><strong>Removed:</strong> Scheduled for deletion. Hibernate will execute an SQL <code>DELETE</code> statement upon flush.</li>
+      </ul>
+    </section>
+
+    <!-- SECTION 3: DIRTY CHECKING -->
+    <section id="dirty-checking">
+      <h2>3. Automatic Dirty Checking &amp; Flush Lifecycle</h2>
+
+      <p>A frequent beginner question: <em>"Why do tutorial codes never call <code>repository.save(entity)</code> at the end of a <code>@Transactional</code> service method?"</em></p>
+
+      <p>Because of <strong>Automatic Dirty Checking</strong>. Inside an open transaction, the Persistence Context holds an internal array representing the original loaded state of the entity.</p>
+
+      <div class="diagram-box">
+        <div class="diagram-title">Dirty Checking Snapshot Comparison Engine</div>
+        <div class="mermaid">
+flowchart TD
+    subgraph PC["Persistence Context (Session)"]
+        direction TB
+        E["Managed Entity: TradeAccount<br/>id: 101, balance: $1,250.00, status: ACTIVE"]
+        Snap["Loaded Snapshot Array (loadedState):<br/>[101, $1,000.00, ACTIVE]"]
+    end
+
+    subgraph Flush["Flush Operation (Pre-Commit)"]
+        Compare{"Compare Entity Fields vs Snapshot"}
+        Gen["Generate: UPDATE trade_account<br/>SET balance = 1250.00 WHERE id = 101"]
+    end
+
+    E --> Compare
+    Snap --> Compare
+    Compare -- Difference Detected --> Gen
+
+    style PC fill:#1e1e1e,stroke:#4ec9b0,stroke-width:2px,color:#fff
+    style Flush fill:#2d3748,stroke:#ed8936,stroke-width:2px,color:#fff
+        </div>
+      </div>
+
+      <h3>When Does Flush Actually Occur?</h3>
+      <p>By default (<code>FlushModeType.AUTO</code>), Hibernate flushes pending SQL statements in three specific situations:</p>
+      <ol>
+        <li><strong>Prior to executing a JPQL/HQL query:</strong> If the query targets a table with uncommitted entity mutations in the Persistence Context, Hibernate flushes immediately to prevent dirty reads.</li>
+        <li><strong>Upon Transaction Commit:</strong> Right before the JDBC transaction commits (<code>tx.commit()</code>).</li>
+        <li><strong>Explicitly:</strong> When application code calls <code>em.flush()</code>.</li>
+      </ol>
+    </section>
+
+    <!-- SECTION 4: N+1 QUERY PROBLEM -->
+    <section id="n-plus-one">
+      <h2>4. Eliminating the N+1 Query &amp; Cartesian Product Disasters</h2>
+
+      <p>Consider an institutional portfolio with 100 Portfolios, each having lazy-loaded <code>Trades</code>. If you query all portfolios and loop through their trades, Hibernate executes:</p>
+      <pre><code>SELECT * FROM portfolio; -- Returns 100 rows (Query 1)
+SELECT * FROM trade WHERE portfolio_id = 1; -- Query 2
+SELECT * FROM trade WHERE portfolio_id = 2; -- Query 3
+...
+SELECT * FROM trade WHERE portfolio_id = 100; -- Query 101 (101 DB Roundtrips!)</code></pre>
+
+      <div class="diagram-box">
+        <div class="diagram-title">The Three Architectural Solutions to the N+1 Problem</div>
+        <div class="mermaid">
+flowchart TD
+    subgraph S1["Solution 1: JOIN FETCH (JPQL)"]
+        Q1["SELECT p FROM Portfolio p JOIN FETCH p.trades"]
+        R1["Executes exactly 1 SQL query with INNER/LEFT JOIN.<br/>Loads parents and children simultaneously."]
+    end
+
+    subgraph S2["Solution 2: @EntityGraph (JPA 2.1)"]
+        Q2["@EntityGraph(attributePaths = {'trades'})<br/>List&lt;Portfolio&gt; findAll();"]
+        R2["Dynamically changes fetch strategy to JOIN at runtime<br/>without modifying repository query string."]
+    end
+
+    subgraph S3["Solution 3: @BatchSize (Hibernate)"]
+        Q3["@BatchSize(size = 50)<br/>private List&lt;Trade&gt; trades;"]
+        R3["Uses SQL IN clause: WHERE portfolio_id IN (?, ?, ... 50)<br/>Reduces 100 queries to 2 queries!"]
+    end
+
+    style S1 fill:#1a2d1a,stroke:#38a169,color:#fff
+    style S2 fill:#2d3748,stroke:#4299e1,color:#fff
+    style S3 fill:#1e1e1e,stroke:#ed8936,color:#fff
+        </div>
+      </div>
+
+      <div class="callout callout-danger">
+        <div class="callout-title">🚨 MultipleBagFetchException &amp; The Cartesian Explosion</div>
+        <p>If an entity has two <code>List</code> associations (e.g., <code>trades</code> and <code>auditLogs</code>), attempting to fetch both via <code>JOIN FETCH</code> simultaneously triggers <code>org.hibernate.loader.MultipleBagFetchException: cannot simultaneously fetch multiple bags</code>.</p>
+        <p><strong>Why?</strong> In Java, a <code>List</code> is an unordered "bag" that allows duplicates. Joining two bags in SQL generates a Cartesian product ($Rows = N_{trades} \times M_{audits}$). Hibernate cannot reliably reconstruct two separate Java lists from a cross-joined result set without duplicate row multiplication. <strong>Solution:</strong> Use <code>Set</code> instead of <code>List</code>, or fetch the first association with <code>JOIN FETCH</code> and the second using <code>@BatchSize</code>.</p>
+      </div>
+    </section>
+
+    <!-- SECTION 5: CONCURRENCY CONTROL -->
+    <section id="concurrency-locking">
+      <h2>5. Concurrency Control: Optimistic (@Version) vs Pessimistic (FOR UPDATE)</h2>
+
+      <p>Financial ledger balances must never suffer from lost updates when two concurrent transactions attempt to debit the same account.</p>
+
+      <table class="table table-bordered">
+        <thead>
+          <tr>
+            <th>Characteristic</th>
+            <th>Optimistic Locking (<code>@Version</code>)</th>
+            <th>Pessimistic Locking (<code>PESSIMISTIC_WRITE</code>)</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Mechanism</strong></td>
+            <td>Application-level version comparison.</td>
+            <td>Database-level exclusive lock (<code>SELECT ... FOR UPDATE</code>).</td>
+          </tr>
+          <tr>
+            <td><strong>Contention Profile</strong></td>
+            <td>Ideal for <strong>low-to-medium contention</strong>.</td>
+            <td>Essential for <strong>high contention</strong> on few shared records.</td>
+          </tr>
+          <tr>
+            <td><strong>Throughput</strong></td>
+            <td>High; no database locks held during processing.</td>
+            <td>Lower; other transactions wait or timeout.</td>
+          </tr>
+          <tr>
+            <td><strong>Failure Mode</strong></td>
+            <td>Throws <code>OptimisticLockException</code> upon commit; requires application retry loop.</td>
+            <td>Throws <code>PessimisticLockException</code> / <code>LockTimeoutException</code> if wait limit expires.</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="diagram-box">
+        <div class="diagram-title">Optimistic Locking Collision and Automatic Detection</div>
+        <div class="mermaid">
+sequenceDiagram
+    autonumber
+    actor Tx1 as Transaction 1
+    actor Tx2 as Transaction 2
+    participant DB as Postgres Database
+
+    Tx1->>DB: SELECT balance, version FROM account WHERE id=1 (v=1)
+    Tx2->>DB: SELECT balance, version FROM account WHERE id=1 (v=1)
+    Note over Tx1: Decrement balance by $100
+    Note over Tx2: Decrement balance by $200
+    Tx1->>DB: UPDATE account SET balance=$900, version=2 WHERE id=1 AND version=1
+    DB-->>Tx1: 1 Row Updated. (Tx1 Commits Successfully!)
+    Tx2->>DB: UPDATE account SET balance=$800, version=2 WHERE id=1 AND version=1
+    DB-->>Tx2: 0 Rows Updated! (Version is now 2)
+    Note over DB,Tx2: Hibernate detects 0 rows: Throws OptimisticLockException!
+        </div>
+      </div>
+    </section>
+
+    <!-- SECTION 6: OSIV ANTI-PATTERN -->
+    <section id="osiv-trap">
+      <h2>6. The Open-Session-in-View (OSIV) Anti-Pattern &amp; LazyInitializationException</h2>
+
+      <p>In Spring Boot, <code>spring.jpa.open-in-view</code> defaults to <code>true</code>. While convenient for rapid prototyping, it is considered an <strong>anti-pattern in enterprise production</strong>.</p>
+
+      <div class="diagram-box">
+        <div class="diagram-title">Open Session in View (OSIV) Database Connection Exhaustion</div>
+        <div class="mermaid">
+flowchart LR
+    subgraph OSIV_ON["OSIV = true (Dangerous)"]
+        direction TB
+        R1["HTTP Request Enters"] --> C1["Open Hibernate Session &amp; Bind DB Connection"]
+        C1 --> S1["Execute @Transactional Service (10ms)"]
+        S1 --> V1["Render JSON / View (Waiting on slow client: 500ms!)"]
+        V1 --> E1["Close Session &amp; Release DB Connection"]
+        Note1["DB Connection held idle for 510ms! Pool Starvation."]
+    end
+
+    subgraph OSIV_OFF["OSIV = false (Production Standard)"]
+        direction TB
+        R2["HTTP Request Enters"] --> S2["Enter @Transactional Service: Acquire Connection"]
+        S2 --> D2["Exit Service: Commit &amp; Release Connection immediately! (10ms)"]
+        D2 --> V2["Render JSON / View (0ms DB held)"]
+        Note2["DB Connection returned to pool immediately! High throughput."]
+    end
+
+    style OSIV_ON fill:#2d1a1a,stroke:#e53e3e,color:#fff
+    style OSIV_OFF fill:#1a2d1a,stroke:#38a169,stroke-width:2px,color:#fff
+        </div>
+      </div>
+
+      <div class="callout callout-warning">
+        <div class="callout-title">⚠️ The Consequence of Disabling OSIV</div>
+        <p>When you set <code>spring.jpa.open-in-view=false</code>, the Hibernate session closes immediately when the <code>@Transactional</code> service method returns. If your REST Controller or Jackson JSON serializer subsequently attempts to access a lazy collection (e.g., <code>portfolio.getTrades()</code>), Hibernate throws:</p>
+        <p><code>org.hibernate.LazyInitializationException: could not initialize proxy - no Session</code></p>
+        <p><strong>Solution:</strong> Never serialize raw JPA entities directly to JSON! Always map entities to Java 21 DTO <strong>Records</strong> inside the transaction boundary, fetching required associations explicitly via <code>JOIN FETCH</code> or DTO projections.</p>
+      </div>
+    </section>
+
+    <!-- SECTION 7: PRODUCTION CODE -->
+    <section id="production-pipeline">
+      <h2>7. Production-Grade Java 21 Financial Ledger Repository</h2>
+
+      <p>Below is a production-hardened institutional ledger service with optimistic locking retry semantics, Record DTO projections, and batch updates avoiding memory bloat.</p>
+
+      <pre><code>package com.finance.trading.persistence;
+
+import jakarta.persistence.*;
+import org.springframework.data.jpa.repository.*;
+import org.springframework.data.repository.query.Param;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.math.BigDecimal;
+import java.util.*;
+
+/**
+ * Production Financial Ledger Architecture:
+ * 1. Optimistic Locking with programmatic backoff retry.
+ * 2. Record DTO query projections bypassing entity tracking.
+ * 3. Batch clearing to avoid heap exhaustion.
+ */
+public class LedgerArchitecture {
+
+    // 1. Entity with Optimistic Versioning
+    @Entity
+    @Table(name = "trading_account")
+    public static class TradingAccount {
+        @Id
+        @GeneratedValue(strategy = GenerationType.IDENTITY)
+        private Long id;
+
+        @Column(nullable = false, unique = true)
+        private String accountNumber;
+
+        @Column(nullable = false)
+        private BigDecimal balance;
+
+        @Version
+        private Long version; // Managed automatically by Hibernate
+
+        protected TradingAccount() {}
+
+        public TradingAccount(String accountNumber, BigDecimal balance) {
+            this.accountNumber = accountNumber;
+            this.balance = balance;
+        }
+
+        public void debit(BigDecimal amount) {
+            if (this.balance.compareTo(amount) &lt; 0) {
+                throw new IllegalStateException("Insufficient funds");
+            }
+            this.balance = this.balance.subtract(amount);
+        }
+
+        public Long getId() { return id; }
+        public BigDecimal getBalance() { return balance; }
+        public Long getVersion() { return version; }
+    }
+
+    // 2. High-Performance Java 21 Record DTO Projection
+    public record AccountSummary(String accountNumber, BigDecimal balance) {}
+
+    // 3. Spring Data JPA Repository
+    public interface AccountRepository extends JpaRepository&lt;TradingAccount, Long&gt; {
+
+        // Direct DTO projection: Bypasses L1 cache and dirty checking entirely
+        @Query("SELECT new com.finance.trading.persistence.LedgerArchitecture$AccountSummary(a.accountNumber, a.balance) " +
+               "FROM TradingAccount a WHERE a.accountNumber = :accNo")
+        Optional&lt;AccountSummary&gt; findSummaryByAccountNumber(@Param("accNo") String accNo);
+
+        // Pessimistic lock for ultra-high-contention operations
+        @Lock(LockModeType.PESSIMISTIC_WRITE)
+        @Query("SELECT a FROM TradingAccount a WHERE a.id = :id")
+        Optional&lt;TradingAccount&gt; findByIdForUpdate(@Param("id") Long id);
+    }
+
+    // 4. Resilient Service with Optimistic Retry Loop
+    @Service
+    public static class LedgerService {
+        private final AccountRepository repository;
+        private final EntityManager entityManager;
+
+        public LedgerService(AccountRepository repository, EntityManager entityManager) {
+            this.repository = repository;
+            this.entityManager = entityManager;
+        }
+
+        public void transferWithOptimisticRetry(Long accountId, BigDecimal amount, int maxRetries) {
+            int attempts = 0;
+            while (attempts &lt; maxRetries) {
+                try {
+                    executeDebit(accountId, amount);
+                    return; // Success
+                } catch (OptimisticLockException ex) {
+                    attempts++;
+                    if (attempts &gt;= maxRetries) {
+                        throw new RuntimeException("Exceeded maximum retry attempts for account " + accountId, ex);
+                    }
+                    try {
+                        Thread.sleep(50L * (1L &lt;&lt; attempts)); // Exponential backoff
+                    } catch (InterruptedException ie) {
+                        Thread.currentThread().interrupt();
+                        throw new RuntimeException(ie);
+                    }
+                }
+            }
+        }
+
+        @Transactional
+        public void executeDebit(Long accountId, BigDecimal amount) {
+            TradingAccount account = repository.findById(accountId)
+                .orElseThrow(() -&gt; new IllegalArgumentException("Account not found: " + accountId));
+            account.debit(amount);
+            // No repository.save() needed! Hibernate dirty checking automatically issues UPDATE
+        }
+
+        /**
+         * Batch insertion avoiding OutOfMemoryError.
+         */
+        @Transactional
+        public void batchInsertAccounts(List&lt;TradingAccount&gt; accounts, int batchSize) {
+            for (int i = 0; i &lt; accounts.size(); i++) {
+                entityManager.persist(accounts.get(i));
+                if (i &gt; 0 &amp;&amp; i % batchSize == 0) {
+                    // Flush accumulated SQL statements to database and evict entities from L1 cache
+                    entityManager.flush();
+                    entityManager.clear();
+                }
+            }
+        }
+    }
+}</code></pre>
+    </section>
+
+    <!-- SECTION 8: PRINCIPAL ENGINEER GRILL ROUND -->
+    <section id="interview-grill">
+      <h2>8. The Principal Engineer's 10-Question Grill Round</h2>
+
+      <div class="interview-card">
+        <div class="question-header">
+          <span class="q-num">Q1</span>
+          <h4>How does Hibernate's Dirty Checking algorithm work, and what is its memory overhead?</h4>
+        </div>
+        <div class="answer-content">
+          <p>When an entity is loaded or persisted into the Persistence Context, Hibernate creates an internal copy of the entity's property values in an array called <code>loadedState</code> inside the <code>EntityEntry</code> object. During a session flush, Hibernate iterates through every managed entity, compares its current state against the <code>loadedState</code> snapshot using equality checks, and marks modified fields as dirty. This doubles the memory footprint of managed entities in the First-Level Cache because two copies of each entity's state exist in memory until detached.</p>
+          <div class="callout callout-danger"><span class="badge badge-danger">🚩 Red Flag to Avoid</span> Believing Hibernate uses Java Reflection bytecode interception on getters to detect changes.</div>
+        </div>
+      </div>
+
+      <div class="interview-card">
+        <div class="question-header">
+          <span class="q-num">Q2</span>
+          <h4>Why does calling `repository.save(entity)` inside a `@Transactional` method reveal a lack of JPA understanding?</h4>
+        </div>
+        <div class="answer-content">
+          <p>Any entity retrieved from a repository within an active <code>@Transactional</code> method is already in the <code>Managed</code> state within the Persistence Context. Due to automatic dirty checking, Hibernate inspects all managed entities at transaction commit and flushes SQL <code>UPDATE</code> statements for any mutated fields automatically. Calling <code>save()</code> is redundant, wastes CPU cycles checking whether the entity is new or detached via <code>em.merge()</code>, and reveals a failure to understand the Unit of Work pattern.</p>
+          <div class="callout callout-danger"><span class="badge badge-danger">🚩 Red Flag to Avoid</span> Insisting that <code>save()</code> is required to persist in-memory field modifications in JPA.</div>
+        </div>
+      </div>
+
+      <div class="interview-card">
+        <div class="question-header">
+          <span class="q-num">Q3</span>
+          <h4>What causes `MultipleBagFetchException` in Hibernate, and how do you resolve it?</h4>
+        </div>
+        <div class="answer-content">
+          <p>A "bag" in Hibernate is an unordered collection represented as a <code>List</code> that allows duplicate elements. When a JPQL query attempts to <code>JOIN FETCH</code> two distinct bag associations simultaneously (e.g., <code>orders</code> and <code>payments</code>), Hibernate throws <code>MultipleBagFetchException</code> because cross-joining two independent collections in SQL generates a Cartesian product. Hibernate cannot reconstruct two separate Java lists from a Cartesian product without duplicate row ambiguity. Resolution strategies include: (1) Changing <code>List</code> to <code>Set</code>; (2) Fetching one association with <code>JOIN FETCH</code> and the other using <code>@BatchSize</code>.</p>
+          <div class="callout callout-danger"><span class="badge badge-danger">🚩 Red Flag to Avoid</span> Suggesting removing <code>JOIN FETCH</code> and falling back to lazy loading (which reintroduces the N+1 problem).</div>
+        </div>
+      </div>
+
+      <div class="interview-card">
+        <div class="question-header">
+          <span class="q-num">Q4</span>
+          <h4>Why is `spring.jpa.open-in-view=true` considered an enterprise anti-pattern?</h4>
+        </div>
+        <div class="answer-content">
+          <p>Open-Session-In-View (OSIV) binds a Hibernate Session to the entire lifecycle of an incoming HTTP request. This holds an active JDBC connection open from the database connection pool throughout request filtering, service execution, controller handling, and JSON serialization. If a remote client is slow or network latency is high, database connections are held idle for hundreds of milliseconds during network I/O, exhausting connection pools (HikariCP) and causing cascading application timeouts.</p>
+          <div class="callout callout-danger"><span class="badge badge-danger">🚩 Red Flag to Avoid</span> Defending OSIV as a valid solution for avoiding <code>LazyInitializationException</code> in production.</div>
+        </div>
+      </div>
+
+      <div class="interview-card">
+        <div class="question-header">
+          <span class="q-num">Q5</span>
+          <h4>How do you implement `equals()` and `hashCode()` correctly on a JPA Entity?</h4>
+        </div>
+        <div class="answer-content">
+          <p>Never base <code>equals()</code> and <code>hashCode()</code> on generated surrogate primary keys (<code>@Id @GeneratedValue</code>). Before persisting, a transient entity has a null ID; once persisted, its ID changes to a generated number. If an entity is added to a <code>HashSet</code> while transient, its hash code changes upon saving, permanently corrupting the set lookup. Instead, base equality on a <strong>business natural key</strong> (e.g., UUID, email, account number). If no natural key exists, enforce consistent identity equality: return a fixed constant (e.g., 31) for <code>hashCode()</code> and check <code>id != null &amp;&amp; id.equals(((Entity) o).getId())</code> in <code>equals()</code>.</p>
+          <div class="callout callout-danger"><span class="badge badge-danger">🚩 Red Flag to Avoid</span> Generating standard boilerplate <code>equals/hashCode</code> using all entity fields including lazy collections.</div>
+        </div>
+      </div>
+
+      <div class="interview-card">
+        <div class="question-header">
+          <span class="q-num">Q6</span>
+          <h4>What is the difference between `@EntityGraph` and `JOIN FETCH`?</h4>
+        </div>
+        <div class="answer-content">
+          <p><code>JOIN FETCH</code> is statically hardcoded into the JPQL query string. Every caller executing that query is forced to eagerly fetch the specified association. In contrast, <code>@EntityGraph</code> (introduced in JPA 2.1) is a dynamic fetch plan applied as a query hint. It allows the same underlying repository method to fetch associations lazily in one use case and eagerly via SQL left join in another use case, separating the querying logic from the fetching strategy.</p>
+          <div class="callout callout-danger"><span class="badge badge-danger">🚩 Red Flag to Avoid</span> Believing <code>@EntityGraph</code> issues separate SQL queries behind the scenes.</div>
+        </div>
+      </div>
+
+      <div class="interview-card">
+        <div class="question-header">
+          <span class="q-num">Q7</span>
+          <h4>Explain the exact SQL executed by Hibernate when an Optimistic Lock collision occurs.</h4>
+        </div>
+        <div class="answer-content">
+          <p>When an entity has a <code>@Version</code> field, Hibernate appends the version check to the <code>UPDATE</code> statement: <code>UPDATE account SET balance = ?, version = ? WHERE id = ? AND version = ?</code>. It passes the new version as the set value and the old expected version in the WHERE clause. Hibernate inspects the JDBC update count returned by <code>PreparedStatement.executeUpdate()</code>. If the row count is 0 (indicating another transaction committed first and updated the version), Hibernate immediately throws <code>OptimisticLockException</code> / <code>StaleObjectStateException</code>.</p>
+          <div class="callout callout-danger"><span class="badge badge-danger">🚩 Red Flag to Avoid</span> Believing Hibernate queries the database version again immediately before running UPDATE.</div>
+        </div>
+      </div>
+
+      <div class="interview-card">
+        <div class="question-header">
+          <span class="q-num">Q8</span>
+          <h4>When should you use Pessimistic Locking over Optimistic Locking?</h4>
+        </div>
+        <div class="answer-content">
+          <p>Optimistic locking assumes collisions are rare and handles conflicts by rolling back and retrying. In scenarios with <strong>high write contention on the same row</strong> (such as an ultra-popular flash-sale inventory counter or high-frequency trading market-maker cash balance), optimistic retries will continuously collide, thrashing CPU and driving latency exponential. Pessimistic locking (<code>SELECT ... FOR UPDATE</code>) serializes access at the database level, guaranteeing that the first transaction holds an exclusive lock until completion, avoiding wasteful retries.</p>
+          <div class="callout callout-danger"><span class="badge badge-danger">🚩 Red Flag to Avoid</span> Using pessimistic locking everywhere by default without considering database lock contention and deadlocks.</div>
+        </div>
+      </div>
+
+      <div class="interview-card">
+        <div class="question-header">
+          <span class="q-num">Q9</span>
+          <h4>Why does batch inserting 100,000 entities without `flush()` and `clear()` trigger OutOfMemoryError?</h4>
+        </div>
+        <div class="answer-content">
+          <p>The Persistence Context (First-Level Cache) retains references to every managed entity until the transaction ends. When persisting 100,000 entities, none of them can be garbage collected because the session holds strong references to them and their <code>loadedState</code> snapshots. As the heap fills, GC pause times skyrocket until an <code>OutOfMemoryError</code> occurs. To execute large batches, application code must periodically invoke <code>entityManager.flush()</code> (to execute JDBC batch inserts) followed by <code>entityManager.clear()</code> (to evict all managed entities from the L1 cache).</p>
+          <div class="callout callout-danger"><span class="badge badge-danger">🚩 Red Flag to Avoid</span> Assuming Spring Boot's <code>batch-size</code> configuration property clears the Persistence Context automatically.</div>
+        </div>
+      </div>
+
+      <div class="interview-card">
+        <div class="question-header">
+          <span class="q-num">Q10</span>
+          <h4>What are DTO Projections with Java 21 Records, and why do they outperform entities for reads?</h4>
+        </div>
+        <div class="answer-content">
+          <p>A DTO Projection (e.g., <code>SELECT new com.app.AccountSummary(a.number, a.balance) FROM Account a</code>) maps query results directly into an immutable Java 21 <code>record</code>. Because records are not JPA entities, Hibernate skips registering them in the Persistence Context, bypasses the creation of <code>loadedState</code> snapshot arrays, and completely skips dirty checking during flush. This eliminates 50%+ of memory allocations and significantly speeds up read-heavy API responses.</p>
+          <div class="callout callout-danger"><span class="badge badge-danger">🚩 Red Flag to Avoid</span> Loading full entities with all associations just to return 2 fields in a REST response.</div>
+        </div>
+      </div>
+    </section>
+
   </main>
 </div>
 
 <button class="scroll-top" aria-label="Scroll to top">↑</button>
-<script src="../../js/main.js"></script>
 </body>
 </html>
-

@@ -67,20 +67,20 @@
              +dispenseItem()
           }
           class VendingMachineState {
-             <<sealed interface>>
+             «sealed interface»
              +insertCoin(VendingMachine, Coin)
              +selectItem(VendingMachine, String)
              +dispenseItem(VendingMachine)
              +cancel(VendingMachine)
           }
           class IdleState {
-             <<record>>
+             «record»
           }
           class HasMoneyState {
-             <<record>>
+             «record»
           }
           class DispensingState {
-             <<record>>
+             «record»
           }
           VendingMachineState <|.. IdleState
           VendingMachineState <|.. HasMoneyState

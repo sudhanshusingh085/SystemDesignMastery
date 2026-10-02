@@ -1,12 +1,12 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SQL & Database — Mastering Financial Data Queries</title>
+    <title>Advanced SQL &amp; Database Internals — From Scratch to Principal Architect</title>
     <link rel="stylesheet" href="../../css/style.css">
-    
-  <script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.0/dist/mermaid.min.js"></script>
+    <script src="../../js/main.js" defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.0/dist/mermaid.min.js"></script>
 </head>
 <body>
 
@@ -16,102 +16,557 @@
   <aside class="sidebar" id="sidebar"></aside>
 
   <main class="main-content">
-<nav class="breadcrumb">
-        <a href="../index.html">Home</a> &gt; <span>SQL & Database</span>
+    <div class="platform-switcher">
+      <span>Mastery Portals:</span>
+      <a href="../../index.html">🏛️ System Design</a>
+      <a href="../index.html" class="active">☕ Core Java 21</a>
+      <a href="../../sqlserver/index.html">🗄️ MS SQL Server</a>
+      <a href="../../dotnet/index.html">🔷 .NET 8 / C# 12</a>
+    </div>
+
+    <nav aria-label="breadcrumb">
+      <ol class="breadcrumb">
+        <li><a href="../index.html">Core Java 21</a></li>
+        <li><span>11 · SQL &amp; Relational Database Internals</span></li>
+      </ol>
     </nav>
     
     <header>
-        <h1>SQL & Database — Mastering Financial Data Queries</h1>
-        <p>Advanced SQL techniques, query optimization, and ACID properties for financial systems.</p>
+      <h1>🗄️ Advanced SQL &amp; Relational Database Internals</h1>
+      <p class="subtitle">An architectural masterclass on relational database engines: Physical query execution order, B+Tree index tree traversals, ACID &amp; Write-Ahead Logging (WAL), MVCC and Snapshot Isolation, Write Skew anomalies, Window functions, and the Principal Engineer Grill Round.</p>
     </header>
 
-    
-        <section class="pillar">
-            <h2>PILLAR 1: Ground-Zero Theory & The Pain Point</h2>
-            <p><strong>The Pain Point:</strong> Financial data must be impeccably accurate and highly available. Bad queries can lock up the settlement database, causing millions in losses. Knowing how the database executes queries and manages locks is critical.</p>
-            <h3>Order of Execution</h3>
-            <p>You write: <code>SELECT ... FROM ... WHERE ... GROUP BY ... HAVING ... ORDER BY</code></p>
-            <p>The DB executes: <code>FROM &rarr; JOIN &rarr; WHERE &rarr; GROUP BY &rarr; HAVING &rarr; SELECT &rarr; DISTINCT &rarr; ORDER BY &rarr; LIMIT</code></p>
-            <p><em>Why you can't use an alias in WHERE:</em> The <code>WHERE</code> clause filters data before the <code>SELECT</code> clause creates the aliases.</p>
-        </section>
+    <!-- TABLE OF CONTENTS -->
+    <nav class="toc-container">
+      <h3>Table of Contents</h3>
+      <ul>
+        <li><a href="#definitions">1. Formal Textbook Definitions &amp; 10-Second Elevator Pitch</a></li>
+        <li><a href="#execution-order">2. Physical Order of Execution &amp; The Cost-Based Optimizer (CBO)</a></li>
+        <li><a href="#btree-internals">3. B+Tree Index Storage Architecture &amp; Covering Indexes</a></li>
+        <li><a href="#acid-wal">4. ACID Mechanics, Write-Ahead Logging (WAL) &amp; Checkpoints</a></li>
+        <li><a href="#mvcc-isolation">5. Isolation Levels, MVCC &amp; The Write Skew Anomaly</a></li>
+        <li><a href="#window-functions">6. Advanced Analytics: Window Functions &amp; Recursive CTEs</a></li>
+        <li><a href="#production-queries">7. Production-Grade Financial Ledger SQL Architecture</a></li>
+        <li><a href="#interview-grill">8. The Principal Engineer's 10-Question Grill Round</a></li>
+      </ul>
+    </nav>
 
-        <section class="pillar">
-            <h2>PILLAR 2: Architectural Decision Rationales & Modifier Deep Dives</h2>
-            <h3>Transactions & Isolation Levels</h3>
-            <p>Isolation levels define how strictly transactions are separated.</p>
-            <table border="1">
-                <tr><th>Isolation Level</th><th>Dirty Read</th><th>Non-Repeatable Read</th><th>Phantom Read</th></tr>
-                <tr><td>READ_UNCOMMITTED</td><td>Yes</td><td>Yes</td><td>Yes</td></tr>
-                <tr><td>READ_COMMITTED</td><td>No</td><td>Yes</td><td>Yes</td></tr>
-                <tr><td>REPEATABLE_READ</td><td>No</td><td>No</td><td>Yes</td></tr>
-                <tr><td>SERIALIZABLE</td><td>No</td><td>No</td><td>No</td></tr>
-            </table>
-            <p><strong>Finance context:</strong> Money transfers usually require <code>READ_COMMITTED</code> with pessimistic row locks (<code>SELECT FOR UPDATE</code>) or optimistic locking (version numbers).</p>
-        </section>
+    <!-- SECTION 1: DEFINITIONS & ELEVATOR PITCH -->
+    <section id="definitions">
+      <h2>1. Formal Textbook Definitions &amp; 10-Second Elevator Pitch</h2>
 
-        <section class="pillar">
-            <h2>PILLAR 3: Step-by-Step Evolution & Thought Process</h2>
-            <h3>Indexing Strategies</h3>
-            <p><strong>Naive:</strong> Create an index on every column. Result: Extremely slow inserts/updates, as B-Trees must be rebalanced.</p>
-            <p><strong>Better:</strong> Composite Index. E.g., `INDEX(trader_id, trade_date)`. The order matters! It filters by `trader_id` first.</p>
-            <p><strong>Best:</strong> Covering Index. If a query is `SELECT amount FROM trades WHERE trader_id = X`, and we have `INDEX(trader_id, amount)`, the DB never touches the actual table (Index-Only Scan).</p>
-        </section>
+      <div class="callout callout-info">
+        <div class="callout-title">🧠 The 10-Second Elevator Pitch</div>
+        <p><strong>"Relational database engines parse declarative SQL into procedural physical execution trees governed by Cost-Based Optimizers. Durability and atomicity are guaranteed by Write-Ahead Logging (WAL) and slotted disk pages, while concurrency is decoupled via Multi-Version Concurrency Control (MVCC). By structuring queries around B+Tree clustered indexes, covering index scans, and mathematical window frames, high-throughput financial architectures execute sub-millisecond settlements without lock escalation or write-skew anomalies."</strong></p>
+      </div>
 
-        <section class="pillar">
-            <h2>PILLAR 4: Production-Grade SQL Code</h2>
-            <pre><code>
--- Window Functions: Running Total of Daily P&L
-SELECT 
-    trade_date,
-    daily_pnl,
-    SUM(daily_pnl) OVER (ORDER BY trade_date ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as cumulative_pnl,
-    LAG(daily_pnl, 1) OVER (ORDER BY trade_date) as previous_day_pnl
-FROM daily_trader_stats
-WHERE trader_id = 'T123';
-            </code></pre>
-            <pre><code>
--- Joins: Finding unmatched trades (Reconciliation)
-SELECT 
-    t.trade_id, t.amount, s.settlement_id
-FROM trades t
-LEFT JOIN settlements s ON t.trade_id = s.trade_id
-WHERE s.settlement_id IS NULL; -- Trades that haven't been settled
-            </code></pre>
-        </section>
+      <div class="definition-grid">
+        <div class="def-card">
+          <h4>Order of Execution</h4>
+          <p>The deterministic physical pipeline by which a relational engine evaluates clauses: <code>FROM</code> &rarr; <code>JOIN</code> &rarr; <code>WHERE</code> &rarr; <code>GROUP BY</code> &rarr; <code>HAVING</code> &rarr; <code>WINDOW</code> &rarr; <code>SELECT</code> &rarr; <code>DISTINCT</code> &rarr; <code>ORDER BY</code> &rarr; <code>LIMIT/OFFSET</code>. Aliases created in <code>SELECT</code> are inaccessible in <code>WHERE</code> because filtering occurs before projection.</p>
+        </div>
+        <div class="def-card">
+          <h4>B+Tree Clustered Index</h4>
+          <p>A self-balancing search tree where leaf nodes store the actual physical row data, linked sequentially in a doubly-linked list. Non-leaf nodes hold only search keys and child page pointers, providing high fanout ($O(\log N)$ seeks) and efficient contiguous range scans.</p>
+        </div>
+        <div class="def-card">
+          <h4>Write-Ahead Logging (WAL)</h4>
+          <p>A fundamental durability protocol (ARIES) stipulating that changes must be appended synchronously to an append-only transaction log on disk (WAL / Redo Log) <em>before</em> dirty data pages can be written to the main table space. This guarantees crash recovery without random I/O stalls.</p>
+        </div>
+        <div class="def-card">
+          <h4>MVCC (Multi-Version Concurrency Control)</h4>
+          <p>A concurrency mechanism where read operations do not acquire shared locks, and write operations do not block reads. Each transaction observes a consistent snapshot of the database based on transaction visibility timestamps (e.g., Postgres <code>xmin/xmax</code> or MySQL Undo Log roll pointers).</p>
+        </div>
+        <div class="def-card">
+          <h4>Covering Index</h4>
+          <p>An index that contains all columns requested by a given query (either in the index key or via an <code>INCLUDE</code> clause). The engine satisfies the query entirely from the B+Tree index pages without performing expensive random I/O Lookups (Bookmark/Heap lookups).</p>
+        </div>
+        <div class="def-card">
+          <h4>Write Skew</h4>
+          <p>A race condition that occurs under Snapshot Isolation (Repeatable Read) where two concurrent transactions read overlapping data, make disjoint non-overlapping writes based on premises that invalidate each other, and both commit successfully, violating business invariants.</p>
+        </div>
+      </div>
+    </section>
 
-        <section class="pillar">
-            <h2>PILLAR 5: The Interviewer's Deep Follow-Up Questions</h2>
-            <div class="interview-box">
-                <h3>📋 How to Answer This in an Interview</h3>
-                <p><strong>Q: What is the difference between RANK(), DENSE_RANK(), and ROW_NUMBER()?</strong><br>
-                <em>Candidate:</em> Let's say salaries are 100k, 100k, 90k.<br>
-                - <code>ROW_NUMBER()</code>: 1, 2, 3 (always sequential)<br>
-                - <code>RANK()</code>: 1, 1, 3 (skips the next rank after a tie)<br>
-                - <code>DENSE_RANK()</code>: 1, 1, 2 (never skips ranks)</p>
-            </div>
-            
-            <div class="interview-box">
-                <h3>🎯 Interviewer Follow-Up Questions</h3>
-                <p><strong>Q: Write an SQL query to rank employees based on their experience (highest to lowest).</strong><br>
-                <code>SELECT emp_id, exp_years, DENSE_RANK() OVER (ORDER BY exp_years DESC) as rank FROM employees;</code></p>
+    <!-- SECTION 2: EXECUTION ORDER & CBO -->
+    <section id="execution-order">
+      <h2>2. Physical Order of Execution &amp; The Cost-Based Optimizer (CBO)</h2>
 
-                <p><strong>Q: Given account transactions A:+100, B:+200, A:-50, C:+300, B:-100, A:+150, calculate the final balance for each account.</strong><br>
-                <code>SELECT account_id, SUM(amount) as final_balance FROM transactions GROUP BY account_id;</code></p>
-                
-                <p><strong>Q: How would you identify and resolve a database bottleneck?</strong><br>
-                <em>Answer:</em> 1. Enable Slow Query Log. 2. Use <code>EXPLAIN ANALYZE</code> on the slow query to check for Full Table Scans. 3. Add appropriate B-Tree or Covering indexes. 4. Avoid `SELECT *`. 5. Implement application-level caching (Redis) for read-heavy data.</p>
-            </div>
-        </section>
+      <p>While developers write SQL declaratively starting with <code>SELECT</code>, the database storage engine executes the query in a completely different order:</p>
 
-        <section class="pillar">
-            <h2>PILLAR 6: Trade-offs & When NOT To Use It</h2>
-            <p><strong>Relational DB Trade-offs:</strong> ACID compliance guarantees data integrity, but vertical scaling is expensive and horizontal scaling (sharding) is very complex compared to NoSQL databases. Don't use RDBMS for unstructured data, high-velocity time-series data (use InfluxDB/Kdb+), or heavy document storage.</p>
-        </section>
+      <div class="diagram-box">
+        <div class="diagram-title">The Exact 10-Step SQL Physical Execution Pipeline</div>
+        <div class="mermaid">
+flowchart TD
+    S1["1. FROM &amp; JOIN: Identify table data sources &amp; compute Cartesian products"] --> S2["2. ON: Evaluate join predicates"]
+    S2 --> S3["3. WHERE: Filter rows based on boolean predicates"]
+    S3 --> S4["4. GROUP BY: Aggregate rows into groups"]
+    S4 --> S5["5. HAVING: Filter aggregated groups"]
+    S5 --> S6["6. WINDOW: Compute analytic window functions (OVER)"]
+    S6 --> S7["7. SELECT: Evaluate scalar expressions &amp; column projection"]
+    S7 --> S8["8. DISTINCT: Eliminate duplicate rows"]
+    S8 --> S9["9. ORDER BY: Sort result set using Sort operator or Index"]
+    S9 --> S10["10. LIMIT / OFFSET: Slice final row window"]
+
+    style S1 fill:#2d3748,stroke:#a0aec0,color:#fff
+    style S3 fill:#1e1e1e,stroke:#4ec9b0,color:#fff
+    style S7 fill:#744210,stroke:#d69e2e,color:#fff
+    style S9 fill:#2b6cb0,stroke:#63b3ed,color:#fff
+    style S10 fill:#1a2d1a,stroke:#38a169,stroke-width:2px,color:#fff
+        </div>
+      </div>
+
+      <h3>Join Physical Operators</h3>
+      <ul>
+        <li><strong>Nested Loop Join:</strong> Outer table is scanned, and for each row, the inner index is probed. Best for small outer tables where the inner table has a matching B-Tree index. $O(N \log M)$.</li>
+        <li><strong>Hash Join:</strong> The smaller table is hashed into an in-memory hash table, then the larger table streams through, probing the hash table. Best for large, unsorted sets without indexes. $O(N + M)$ memory-intensive.</li>
+        <li><strong>Merge Join:</strong> Both inputs are sorted on the join key and merged sequentially like merge-sort. Most efficient when inputs are already sorted by an index. $O(N + M)$.</li>
+      </ul>
+    </section>
+
+    <!-- SECTION 3: BTREE STORAGE & COVERING INDEXES -->
+    <section id="btree-internals">
+      <h2>3. B+Tree Index Storage Architecture &amp; Covering Indexes</h2>
+
+      <p>Almost all production relational engines (Postgres, MySQL InnoDB, SQL Server, Oracle) organize data into <strong>8KB or 16KB disk pages</strong> structured as B+Trees.</p>
+
+      <div class="diagram-box">
+        <div class="diagram-title">B+Tree Index Hierarchy: Root, Branches &amp; Doubly-Linked Leaf Pages</div>
+        <div class="mermaid">
+flowchart TD
+    subgraph NonLeaf["Non-Leaf Pages (In-Memory Buffer Pool)"]
+        Root["Root Page: [ Key 100 | Key 500 ]"]
+        Branch1["Branch Page A: [ 10 | 50 ]"]
+        Branch2["Branch Page B: [ 150 | 300 ]"]
+        Branch3["Branch Page C: [ 600 | 800 ]"]
+        Root --> Branch1
+        Root --> Branch2
+        Root --> Branch3
+    end
+
+    subgraph Leaves["Leaf Pages (Store Clustered Data Rows on Disk)"]
+        Leaf1["Leaf 1: [ Rows 1-49 ]"]
+        Leaf2["Leaf 2: [ Rows 50-99 ]"]
+        Leaf3["Leaf 3: [ Rows 100-149 ]"]
+        Leaf4["Leaf 4: [ Rows 150-499 ]"]
+        Leaf1 <-->|Doubly Linked List| Leaf2
+        Leaf2 <--> Leaf3
+        Leaf3 <--> Leaf4
+    end
+
+    Branch1 --> Leaf1
+    Branch1 --> Leaf2
+    Branch2 --> Leaf3
+    Branch2 --> Leaf4
+
+    style NonLeaf fill:#1e1e1e,stroke:#4ec9b0,stroke-width:2px,color:#fff
+    style Leaves fill:#2d3748,stroke:#ed8936,stroke-width:2px,color:#fff
+        </div>
+      </div>
+
+      <h3>Index Range Scan vs Covering Index (Index-Only Scan)</h3>
+      <p>When an index does not contain all required columns, the database traverses the secondary index to find row pointers, then performs an expensive random I/O <strong>Bookmark Lookup (Heap Fetch)</strong> to retrieve remaining columns from the clustered table.</p>
+
+      <div class="diagram-box">
+        <div class="diagram-title">Heap Lookup vs Covering Index (Index-Only Scan)</div>
+        <div class="mermaid">
+flowchart LR
+    subgraph Lookup["Standard Secondary Index (With Heap Lookup)"]
+        direction TB
+        Q1["SELECT trade_id, amount FROM trades WHERE trader_id = 'T10'"]
+        I1["Secondary Index: (trader_id)"]
+        H1["Clustered Heap Table"]
+        Q1 --> I1 -->|Random I/O Bookmark Lookup| H1
+    end
+
+    subgraph Covering["Covering Index (Zero Heap Lookup!)"]
+        direction TB
+        Q2["SELECT trade_id, amount FROM trades WHERE trader_id = 'T10'"]
+        I2["Covering Index: (trader_id, trade_id, amount)"]
+        Q2 --> I2
+        Note["Index contains 100% of requested columns.<br/>Heap is NEVER touched! 10x Faster."]
+    end
+
+    style Lookup fill:#2d1a1a,stroke:#e53e3e,color:#fff
+    style Covering fill:#1a2d1a,stroke:#38a169,stroke-width:2px,color:#fff
+        </div>
+      </div>
+    </section>
+
+    <!-- SECTION 4: ACID & WAL -->
+    <section id="acid-wal">
+      <h2>4. ACID Mechanics, Write-Ahead Logging (WAL) &amp; Checkpoints</h2>
+
+      <p>How does a database guarantee durability without waiting for slow mechanical disks or SSD flash blocks on every <code>INSERT</code>?</p>
+
+      <div class="diagram-box">
+        <div class="diagram-title">Write-Ahead Logging (WAL) and Asynchronous Checkpointing Pipeline</div>
+        <div class="mermaid">
+sequenceDiagram
+    autonumber
+    actor Client as Application Tx
+    participant Buffer as In-Memory Buffer Pool (RAM)
+    participant WAL as Write-Ahead Log (Sequential Disk)
+    participant DataFile as Data Tablespace (Random Disk)
+
+    Client->>Buffer: Mutate Row (Page 42 becomes DIRTY)
+    Client->>WAL: Append Redo Log Record (Sequential Write)
+    WAL-->>Client: fsync() Log Ack (Tx COMMITTED!)
+    Note over Client,Buffer: Client gets OK response immediately.
+    Note over Buffer,DataFile: Background Checkpoint Process flushes dirty pages lazily
+    Buffer->>DataFile: Flush Page 42 to Tablespace
+        </div>
+      </div>
+
+      <h3>The ARIES Recovery Protocol</h3>
+      <p>If power fails before dirty buffer pages reach the data file, recovery runs upon restart in three phases:</p>
+      <ol>
+        <li><strong>Analysis:</strong> Scans WAL forward from the last checkpoint to identify dirty pages and active uncommitted transactions.</li>
+        <li><strong>Redo:</strong> Replays all WAL history forward to restore the buffer pool to the exact microsecond before the crash.</li>
+        <li><strong>Undo:</strong> Scans backward, rolling back changes from transactions that were active and never committed.</li>
+      </ol>
+    </section>
+
+    <!-- SECTION 5: MVCC & ISOLATION -->
+    <section id="mvcc-isolation">
+      <h2>5. Isolation Levels, MVCC &amp; The Write Skew Anomaly</h2>
+
+      <p>The ANSI SQL standard defines four transaction isolation levels based on three read phenomena:</p>
+
+      <table class="table table-bordered">
+        <thead>
+          <tr>
+            <th>Isolation Level</th>
+            <th>Dirty Read</th>
+            <th>Non-Repeatable Read</th>
+            <th>Phantom Read</th>
+            <th>Write Skew?</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>READ UNCOMMITTED</code></td>
+            <td>Permitted</td>
+            <td>Permitted</td>
+            <td>Permitted</td>
+            <td>Yes</td>
+          </tr>
+          <tr>
+            <td><code>READ COMMITTED</code> (Postgres/Oracle default)</td>
+            <td><strong>Prevented</strong></td>
+            <td>Permitted</td>
+            <td>Permitted</td>
+            <td>Yes</td>
+          </tr>
+          <tr>
+            <td><code>REPEATABLE READ</code> (MySQL InnoDB default)</td>
+            <td><strong>Prevented</strong></td>
+            <td><strong>Prevented</strong></td>
+            <td><strong>Prevented</strong> (via MVCC)</td>
+            <td><strong>Permitted!</strong></td>
+          </tr>
+          <tr>
+            <td><code>SERIALIZABLE</code></td>
+            <td><strong>Prevented</strong></td>
+            <td><strong>Prevented</strong></td>
+            <td><strong>Prevented</strong></td>
+            <td><strong>Prevented</strong></td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>The Write Skew Anomaly in Finance</h3>
+      <p>Under <code>REPEATABLE READ</code> (Snapshot Isolation), each transaction reads from a private snapshot taken when the transaction started.</p>
+
+      <div class="diagram-box">
+        <div class="diagram-title">Write Skew Anomaly: Simultaneous Margin Withdrawals</div>
+        <div class="mermaid">
+sequenceDiagram
+    autonumber
+    actor Tx1 as Trader 1 (Withdraw $400)
+    actor Tx2 as Trader 2 (Withdraw $400)
+    participant DB as Postgres (Repeatable Read)
+
+    Note over DB: Combined Account Balance: $500. Rule: Balance >= $0.
+    Tx1->>DB: SELECT balance FROM account WHERE id=1 (Reads $500)
+    Tx2->>DB: SELECT balance FROM account WHERE id=1 (Reads $500)
+    Note over Tx1: 500 - 400 = 100 >= 0 (OK!)
+    Note over Tx2: 500 - 400 = 100 >= 0 (OK!)
+    Tx1->>DB: UPDATE account SET balance = balance - 400 WHERE id=1
+    Tx1->>DB: COMMIT (Succeeds!)
+    Tx2->>DB: UPDATE account SET balance = balance - 400 WHERE id=1
+    Note over Tx2,DB: Row-level lock causes Tx2 to wait or fail under Snapshot Isolation.
+    Note over DB: If writing to TWO DIFFERENT linked accounts (A and B), both commit, driving total balance to -$300!
+        </div>
+      </div>
+
+      <p><strong>Solution:</strong> Enforce <code>SERIALIZABLE</code> isolation or use explicit pessimistic row locks: <code>SELECT ... FOR UPDATE</code>.</p>
+    </section>
+
+    <!-- SECTION 6: WINDOW FUNCTIONS -->
+    <section id="window-functions">
+      <h2>6. Advanced Analytics: Window Functions &amp; Recursive CTEs</h2>
+
+      <p>Window functions perform calculations across a set of table rows that are related to the current row, without collapsing the individual rows like <code>GROUP BY</code> does.</p>
+
+      <h3>Ranking Function Taxonomy</h3>
+      <table class="table table-bordered">
+        <thead>
+          <tr>
+            <th>Input Salary</th>
+            <th><code>ROW_NUMBER()</code></th>
+            <th><code>RANK()</code></th>
+            <th><code>DENSE_RANK()</code></th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>$150,000</td>
+            <td>1</td>
+            <td>1</td>
+            <td>1</td>
+          </tr>
+          <tr>
+            <td>$150,000 (Tie)</td>
+            <td>2</td>
+            <td>1</td>
+            <td>1</td>
+          </tr>
+          <tr>
+            <td>$120,000</td>
+            <td>3</td>
+            <td><strong>3</strong> (Skips 2)</td>
+            <td><strong>2</strong> (Never skips)</td>
+          </tr>
+          <tr>
+            <td>$100,000</td>
+            <td>4</td>
+            <td>4</td>
+            <td>3</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>Window Frames: ROWS vs RANGE</h3>
+      <ul>
+        <li><code>ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW</code>: Operates on physical row counts. Deterministic and fast.</li>
+        <li><code>RANGE BETWEEN INTERVAL '7' DAY PRECEDING AND CURRENT ROW</code>: Operates on logical values of the order by column (e.g., dates). Considers duplicate timestamps as peer ties.</li>
+      </ul>
+    </section>
+
+    <!-- SECTION 7: PRODUCTION QUERIES -->
+    <section id="production-queries">
+      <h2>7. Production-Grade Financial Ledger SQL Architecture</h2>
+
+      <pre><code>-- =========================================================================
+-- 1. INSTITUTIONAL FINANCIAL LEDGER SCHEMA WITH COVERING INDEXES
+-- =========================================================================
+CREATE TABLE trading_ledger (
+    ledger_id       BIGSERIAL PRIMARY KEY,
+    account_id      VARCHAR(32) NOT NULL,
+    trade_id        VARCHAR(64) NOT NULL,
+    trade_timestamp TIMESTAMPTZ NOT NULL,
+    amount          NUMERIC(18, 4) NOT NULL,
+    direction       VARCHAR(4) NOT NULL CHECK (direction IN ('BUY', 'SELL')),
+    settlement_status VARCHAR(16) NOT NULL DEFAULT 'PENDING'
+);
+
+-- Covering composite index: satisfies running balance queries entirely in-index
+CREATE INDEX idx_ledger_trader_running_pnl 
+ON trading_ledger (account_id, trade_timestamp ASC) 
+INCLUDE (amount, direction);
+
+-- =========================================================================
+-- 2. CUMULATIVE P&amp;L AND MOVING AVERAGE QUERY WITH WINDOW FUNCTIONS
+-- =========================================================================
+WITH DailyTraderPnL AS (
+    SELECT 
+        account_id,
+        trade_timestamp::DATE AS trading_day,
+        trade_timestamp,
+        amount,
+        -- Running Total P&amp;L partitioned by account
+        SUM(amount) OVER (
+            PARTITION BY account_id 
+            ORDER BY trade_timestamp 
+            ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+        ) AS cumulative_pnl,
+        -- Prior trade tick amount (Lag)
+        LAG(amount, 1, 0.0) OVER (
+            PARTITION BY account_id 
+            ORDER BY trade_timestamp
+        ) AS previous_trade_amount,
+        -- 5-Trade Moving Average
+        AVG(amount) OVER (
+            PARTITION BY account_id 
+            ORDER BY trade_timestamp 
+            ROWS BETWEEN 4 PRECEDING AND CURRENT ROW
+        ) AS rolling_5_trade_avg
+    FROM trading_ledger
+    WHERE account_id = 'ACC-NY-7729'
+)
+SELECT * FROM DailyTraderPnL
+ORDER BY trade_timestamp DESC
+LIMIT 50;
+
+-- =========================================================================
+-- 3. DEADLOCK-FREE ATOMIC MULTI-ACCOUNT TRANSFER PROCEDURE
+-- Always lock resources in deterministic primary key order to prevent deadlocks!
+-- =========================================================================
+CREATE OR REPLACE PROCEDURE transfer_funds(
+    p_from_acc VARCHAR(32),
+    p_to_acc   VARCHAR(32),
+    p_amount   NUMERIC(18, 4)
+)
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    v_first_acc  VARCHAR(32);
+    v_second_acc VARCHAR(32);
+    v_balance    NUMERIC(18, 4);
+BEGIN
+    -- Deterministic lock ordering: Compare IDs lexicographically
+    IF p_from_acc &lt; p_to_acc THEN
+        v_first_acc  := p_from_acc;
+        v_second_acc := p_to_acc;
+    ELSE
+        v_first_acc  := p_to_acc;
+        v_second_acc := p_from_acc;
+    END IF;
+
+    -- Lock accounts in strict alphabetical order
+    PERFORM 1 FROM trading_ledger WHERE account_id = v_first_acc FOR UPDATE;
+    PERFORM 1 FROM trading_ledger WHERE account_id = v_second_acc FOR UPDATE;
+
+    -- Perform debit
+    INSERT INTO trading_ledger (account_id, trade_id, trade_timestamp, amount, direction, settlement_status)
+    VALUES (p_from_acc, gen_random_uuid()::text, clock_timestamp(), -p_amount, 'SELL', 'SETTLED');
+
+    -- Perform credit
+    INSERT INTO trading_ledger (account_id, trade_id, trade_timestamp, amount, direction, settlement_status)
+    VALUES (p_to_acc, gen_random_uuid()::text, clock_timestamp(), p_amount, 'BUY', 'SETTLED');
+END;
+$$;</code></pre>
+    </section>
+
+    <!-- SECTION 8: PRINCIPAL ENGINEER GRILL ROUND -->
+    <section id="interview-grill">
+      <h2>8. The Principal Engineer's 10-Question Grill Round</h2>
+
+      <div class="interview-card">
+        <div class="question-header">
+          <span class="q-num">Q1</span>
+          <h4>Why does an alias defined in the `SELECT` clause fail with an error if referenced in the `WHERE` clause?</h4>
+        </div>
+        <div class="answer-content">
+          <p>Because of the database's physical order of execution. The <code>WHERE</code> clause is evaluated at Step 3 (filtering rows from table sources), whereas the <code>SELECT</code> clause is evaluated at Step 7 (projecting expressions and assigning column aliases). When the <code>WHERE</code> filter evaluates, the aliases have not yet been materialized or assigned by the projection engine. To filter by a computed expression, you must either repeat the expression in the <code>WHERE</code> clause or wrap the query in a Common Table Expression (CTE) or subquery.</p>
+          <div class="callout callout-danger"><span class="badge badge-danger">🚩 Red Flag to Avoid</span> Suggesting that aliases fail because SQL is case-sensitive or due to database dialect bugs.</div>
+        </div>
+      </div>
+
+      <div class="interview-card">
+        <div class="question-header">
+          <span class="q-num">Q2</span>
+          <h4>Explain the exact difference between `RANK()`, `DENSE_RANK()`, and `ROW_NUMBER()`.</h4>
+        </div>
+        <div class="answer-content">
+          <p>Given tied values (e.g., salaries: $100k, $100k, $80k): <code>ROW_NUMBER()</code> assigns strictly sequential, unique integers (1, 2, 3), breaking ties non-deterministically unless secondary order keys are provided. <code>RANK()</code> assigns identical ranks to tied rows and skips subsequent numbers corresponding to the number of ties (1, 1, 3). <code>DENSE_RANK()</code> assigns identical ranks to ties but never skips numbers (1, 1, 2), ensuring contiguous rank values.</p>
+          <div class="callout callout-danger"><span class="badge badge-danger">🚩 Red Flag to Avoid</span> Confusing <code>RANK()</code> and <code>DENSE_RANK()</code> regarding whether gaps are created.</div>
+        </div>
+      </div>
+
+      <div class="interview-card">
+        <div class="question-header">
+          <span class="q-num">Q3</span>
+          <h4>What is the Leftmost Prefix Rule in composite B-Tree indexes?</h4>
+        </div>
+        <div class="answer-content">
+          <p>A composite index on <code>(A, B, C)</code> is sorted first by <code>A</code>, then by <code>B</code> within matching values of <code>A</code>, and finally by <code>C</code> within matching values of <code>(A, B)</code>. Under the Leftmost Prefix Rule, the index can be used for queries filtering on: (1) <code>A</code>, (2) <code>A AND B</code>, or (3) <code>A AND B AND C</code>. It cannot perform an index seek for queries filtering solely on <code>B</code> or <code>C</code>, because the index entries are not sorted globally by <code>B</code> or <code>C</code>. Filtering on <code>A AND C</code> allows an index seek on <code>A</code>, but <code>C</code> can only be used as a filter predicate, not an access predicate.</p>
+          <div class="callout callout-danger"><span class="badge badge-danger">🚩 Red Flag to Avoid</span> Believing the column order in an <code>INDEX(A, B, C)</code> declaration does not affect query performance.</div>
+        </div>
+      </div>
+
+      <div class="interview-card">
+        <div class="question-header">
+          <span class="q-num">Q4</span>
+          <h4>Why does wrapping an indexed column in a function (e.g., `WHERE YEAR(date) = 2024`) kill performance?</h4>
+        </div>
+        <div class="answer-content">
+          <p>Wrapping an indexed column in a scalar function makes the predicate <strong>non-sargable</strong> (Search Argument Able). The B-Tree index contains raw <code>date</code> values, not <code>YEAR(date)</code> values. The query engine cannot perform a binary search tree seek to find the target range. It is forced to perform a full index scan or full table scan, invoking the <code>YEAR()</code> function row-by-row on every single row in the table. To preserve index seeks, rewrite the predicate as a range: <code>WHERE date &gt;= '2024-01-01' AND date &lt; '2025-01-01'</code>.</p>
+          <div class="callout callout-danger"><span class="badge badge-danger">🚩 Red Flag to Avoid</span> Recommending adding more hardware to solve slow function-wrapped queries.</div>
+        </div>
+      </div>
+
+      <div class="interview-card">
+        <div class="question-header">
+          <span class="q-num">Q5</span>
+          <h4>What is a Covering Index, and how does it prevent random I/O Bookmark Lookups?</h4>
+        </div>
+        <div class="answer-content">
+          <p>A covering index is a secondary index that contains all columns referenced by a query (including <code>SELECT</code>, <code>JOIN</code>, <code>WHERE</code>, and <code>ORDER BY</code> clauses). In standard secondary index scans, the engine finds matching index keys and then must perform a random I/O lookup on the clustered table/heap to fetch missing columns. With a covering index, the query engine performs an <strong>Index-Only Scan</strong>, reading all necessary data directly from the contiguous B-Tree leaf pages without touching the underlying table heap.</p>
+          <div class="callout callout-danger"><span class="badge badge-danger">🚩 Red Flag to Avoid</span> Confusing a covering index with a clustered primary key index.</div>
+        </div>
+      </div>
+
+      <div class="interview-card">
+        <div class="question-header">
+          <span class="q-num">Q6</span>
+          <h4>How does Write-Ahead Logging (WAL) guarantee durability while maximizing write throughput?</h4>
+        </div>
+        <div class="answer-content">
+          <p>Writing modified 8KB/16KB data pages directly to random physical locations on disk during a transaction commit would incur high random I/O disk seek latency, choking throughput. Instead, WAL (Write-Ahead Logging) appends a compact binary delta record sequentially to an append-only log file on disk. Sequential disk writes are orders of magnitude faster than random writes. Once the WAL record is flushed (<code>fsync</code>), the transaction commits. Dirty data pages remain safely in RAM (Buffer Pool) and are flushed to tablespace asynchronously during background checkpoints.</p>
+          <div class="callout callout-danger"><span class="badge badge-danger">🚩 Red Flag to Avoid</span> Believing that a transaction commit flushes all modified table pages to disk synchronously.</div>
+        </div>
+      </div>
+
+      <div class="interview-card">
+        <div class="question-header">
+          <span class="q-num">Q7</span>
+          <h4>What is the Write Skew anomaly, and why doesn't Repeatable Read prevent it?</h4>
+        </div>
+        <div class="answer-content">
+          <p>Write Skew occurs under Snapshot Isolation (Repeatable Read) when two concurrent transactions read overlapping data, verify a common constraint (e.g., "at least one doctor must remain on call"), and then update two different records (Doctor A goes off call; Doctor B goes off call). Because both transactions write to distinct rows, their write sets do not conflict, and row locks do not collide. Both commit successfully, leaving zero doctors on call. Repeatable Read only prevents modifying the <em>same</em> row concurrently; preventing Write Skew requires <code>SERIALIZABLE</code> isolation or explicit row locks (<code>SELECT FOR UPDATE</code>).</p>
+          <div class="callout callout-danger"><span class="badge badge-danger">🚩 Red Flag to Avoid</span> Claiming that <code>REPEATABLE READ</code> eliminates all possible concurrency anomalies.</div>
+        </div>
+      </div>
+
+      <div class="interview-card">
+        <div class="question-header">
+          <span class="q-num">Q8</span>
+          <h4>How do Hash Join, Merge Join, and Nested Loop Join compare in terms of algorithmic complexity and memory?</h4>
+        </div>
+        <div class="answer-content">
+          <p><strong>Nested Loop:</strong> Complexity $O(N \log M)$ with index; requires $O(1)$ memory. Optimal when the outer set is small and the inner set has an index on the join key. <strong>Hash Join:</strong> Complexity $O(N + M)$; requires $O(N)$ memory to build an in-memory hash table of the smaller relation. Optimal for large, unsorted datasets without indexes. If the hash table exceeds <code>work_mem</code>, it spills to temporary disk files (Grace Hash Join). <strong>Merge Join:</strong> Complexity $O(N \log N + M \log M)$ or $O(N + M)$ if already sorted; requires $O(1)$ memory. Optimal for large inputs already ordered by an index.</p>
+          <div class="callout callout-danger"><span class="badge badge-danger">🚩 Red Flag to Avoid</span> Stating that Hash Join is always faster than Nested Loop Join in every scenario.</div>
+        </div>
+      </div>
+
+      <div class="interview-card">
+        <div class="question-header">
+          <span class="q-num">Q9</span>
+          <h4>How do you design a database transfer transaction to guarantee deadlock immunity?</h4>
+        </div>
+        <div class="answer-content">
+          <p>Deadlocks occur when Transaction 1 locks Account A and waits for Account B, while Transaction 2 locks Account B and waits for Account A (circular wait condition). Deadlocks are completely eliminated at the application level by enforcing <strong>strict global lock ordering</strong>. When transferring funds between Account X and Account Y, always acquire row locks (<code>SELECT ... FOR UPDATE</code>) on the accounts in lexicographical / numerical primary key order (e.g., <code>MIN(accX, accY)</code> first, then <code>MAX(accX, accY)</code>). This breaks the Coffman circular wait condition mathematically.</p>
+          <div class="callout callout-danger"><span class="badge badge-danger">🚩 Red Flag to Avoid</span> Relying solely on database deadlock detection timeouts to resolve transfer deadlocks.</div>
+        </div>
+      </div>
+
+      <div class="interview-card">
+        <div class="question-header">
+          <span class="q-num">Q10</span>
+          <h4>What is the difference between `ROWS` and `RANGE` in window frame clauses?</h4>
+        </div>
+        <div class="answer-content">
+          <p><code>ROWS</code> specifies an offset based on physical row counts relative to the current row (e.g., <code>ROWS BETWEEN 1 PRECEDING AND CURRENT ROW</code> always evaluates exactly 2 rows). <code>RANGE</code> specifies an offset based on the logical values of the <code>ORDER BY</code> column (e.g., <code>RANGE BETWEEN INTERVAL '1' DAY PRECEDING AND CURRENT ROW</code> evaluates all rows whose timestamps fall within that 1-day value range). Furthermore, when duplicate values exist in the order key, <code>RANGE</code> treats all peers identically, including all tied rows in the calculation frame, whereas <code>ROWS</code> treats them as distinct sequential rows.</p>
+          <div class="callout callout-danger"><span class="badge badge-danger">🚩 Red Flag to Avoid</span> Assuming <code>ROWS</code> and <code>RANGE</code> produce identical results when order keys contain duplicate values.</div>
+        </div>
+      </div>
+    </section>
+
   </main>
 </div>
 
 <button class="scroll-top" aria-label="Scroll to top">↑</button>
-<script src="../../js/main.js"></script>
 </body>
 </html>
-
