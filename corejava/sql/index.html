@@ -570,3 +570,55 @@ $$;</code></pre>
 <button class="scroll-top" aria-label="Scroll to top">↑</button>
 </body>
 </html>
+
+    <!-- SECTION: VARCHAR vs NVARCHAR -->
+    <section id="varchar-nvarchar">
+      <h2>5. VARCHAR vs NVARCHAR</h2>
+      <p><strong>VARCHAR</strong> stores non‑Unicode characters using the database's default code page (usually 1 byte per character). It is suitable for pure ASCII or single‑byte locales.</p>
+      <p><strong>NVARCHAR</strong> stores Unicode data using UTF‑16 encoding (2 bytes per character). This allows storage of any language—Japanese, Arabic, Cyrillic, emojis, etc.</p>
+      <table class="definition-grid" style="width:100%;">
+        <thead><tr><th>Aspect</th><th>VARCHAR</th><th>NVARCHAR</th></tr></thead>
+        <tbody>
+          <tr><td>Storage size per character</td><td>1 byte</td><td>2 bytes</td></tr>
+          <tr><td>Unicode support</td><td>No</td><td>Yes (full Unicode)</td></tr>
+          <tr><td>SQL‑Server behaviour on non‑Unicode text</td><td>Characters outside the code page become <code>?</code></td><td>Stored correctly</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <!-- SECTION: DATETIME vs DATETIME2 -->
+    <section id="datetime-types">
+      <h2>6. DATETIME vs DATETIME2</h2>
+      <p><code>DATETIME</code> offers a fixed 3 ms precision and always occupies 8 bytes. It rounds fractional seconds, which can cause drift (e.g., <code>2026‑10‑03 23:59:59.999</code> becomes <code>2026‑10‑04 00:00:00.000</code>).</p>
+      <p><code>DATETIME2(p)</code> is a flexible type where <code>p</code> ranges from 0‑7, controlling the number of fractional‑second digits:</p>
+      <ul>
+        <li><code>DATETIME2(0)</code> – whole‑seconds only (6 bytes)</li>
+        <li><code>DATETIME2(3)</code> – millisecond precision (7 bytes), matches JavaScript and .NET defaults</li>
+        <li><code>DATETIME2(7)</code> – 100‑nanosecond precision (8 bytes)</li>
+      </ul>
+      <pre><code class="language-sql">DECLARE @Legacy DATETIME = '2026-10-03 23:59:59.999';
+SELECT @Legacy; -- 2026-10-04 00:00:00.000
+
+DECLARE @Modern DATETIME2(3) = '2026-10-03 23:59:59.999';
+SELECT @Modern; -- 2026-10-03 23:59:59.999</code></pre>
+    </section>
+
+    <!-- SECTION: CAST vs CONVERT -->
+    <section id="cast-convert">
+      <h2>7. CAST vs CONVERT (SQL Server)</h2>
+      <p><code>CAST(expr AS data_type)</code> follows the ANSI SQL standard and works identically across PostgreSQL, MySQL, Oracle, and SQL Server. It is the go‑to choice when you simply need to change a column’s data type without formatting.</p>
+      <p><code>CONVERT(data_type, expr, style)</code> is SQL‑Server‑specific and adds an optional third argument that controls the string representation of dates and numbers. This is handy for generating formatted output or parsing non‑standard strings.</p>
+      <pre><code class="language-sql">-- Simple type conversion (portable)
+SELECT CAST(Price AS INT) FROM Products;
+
+-- Formatted date output (SQL Server)
+SELECT CONVERT(VARCHAR(10), GETDATE(), 101) AS MM_DD_YYYY; -- '10/03/2026'
+SELECT CONVERT(VARCHAR(19), GETDATE(), 120) AS YYYY_MM_DD_HH24_MI_SS; -- '2026-10-03 14:30:00'
+</code></pre>
+    </section>
+
+    <!-- SECTION: ACID note -->
+    <section id="acid-note">
+      <h2>8. ACID Guarantees in SQL</h2>
+      <p>SQL Server guarantees full ACID (Atomicity, Consistency, Isolation, Durability) for its engine. However, the older <code>MySQL MyISAM</code> storage engine (sometimes referred to as "07") does **not** provide transaction isolation, so it cannot enforce ACID properties.</p>
+    </section>

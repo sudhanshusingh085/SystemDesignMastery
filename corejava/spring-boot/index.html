@@ -496,3 +496,129 @@ public class TradingApplication {
 <button class="scroll-top" aria-label="Scroll to top">↑</button>
 </body>
 </html>
+
+    <!-- SECTION: CircuitBreaker Configuration -->
+    <section id="circuitbreaker-config">
+      <h2>9. CircuitBreaker Configuration</h2>
+      <div class="callout callout-info">
+        <div class="callout-title">🛡️ Hidden Resilience4j Defaults</div>
+        <p>The <code>@CircuitBreaker</code> annotation by itself falls back to Resilience4j’s hidden default settings (e.g., a 50 % failure rate over the last 100 calls). Those defaults are often too permissive for production workloads, so you should always override them explicitly.</p>
+      </div>
+
+      <h3>Approach 1: The Spring Boot YAML Way (Industry Standard)</h3>
+      <pre><code class="language-yaml"># application.yml
+resilience4j:
+  circuitbreaker:
+    configs:
+      default:
+        registerHealthIndicator: true
+        slidingWindowSize: 20
+        failureRateThreshold: 25   # fail if >25 % of last 20 calls fail
+        waitDurationInOpenState: 30s
+    instances:
+      myService:
+        baseConfig: default
+        recordExceptions:
+          - java.io.IOException
+        ignoreExceptions:
+          - org.springframework.web.client.HttpClientErrorException.NotFound</code></pre>
+
+      <h3>Approach 2: The Programmatic Way (Completing your snippet)</h3>
+      <pre><code class="language-java">import io.github.resilience4j.circuitbreaker.CircuitBreakerConfig;
+import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
+import java.time.Duration;
+
+@Configuration
+public class CircuitBreakerConfigBean {
+    @Bean
+    public CircuitBreakerRegistry circuitBreakerRegistry() {
+        CircuitBreakerConfig defaultConfig = CircuitBreakerConfig.custom()
+            .failureRateThreshold(25)               // 25 % failures opens the circuit
+            .slidingWindowSize(20)                 // last 20 calls examined
+            .waitDurationInOpenState(Duration.ofSeconds(30))
+            .recordExceptions(IOException.class)
+            .ignoreExceptions(NotFoundException.class)
+            .build();
+        return CircuitBreakerRegistry.of(defaultConfig);
+    }
+
+    @Bean
+    public CircuitBreaker myServiceCircuitBreaker(CircuitBreakerRegistry registry) {
+        return registry.circuitBreaker("myService");
+    }
+}</code></pre>
+    </section>
+
+    <!-- SECTION: EnableAutoConfiguration Flow -->
+    <section id="enableautoconfig-flow">
+      <h2>10. How @EnableAutoConfiguration Works</h2>
+      <p><code>@EnableAutoConfiguration</code> is the core "magic" behind Spring Boot. At startup the framework scans the project's <code>pom.xml</code> (Maven) or <code>build.gradle</code> (Gradle) for present dependencies and then reads the file <code>META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports</code>. Each line in that file names a candidate auto‑configuration class.</p>
+      <p>For every candidate the engine evaluates a series of <code>@Conditional</code> annotations (<code>@ConditionalOnClass</code>, <code>@ConditionalOnMissingBean</code>, <code>@ConditionalOnProperty</code>, etc.). Only when all conditions are satisfied does the configuration class get imported into the <code>ApplicationContext</code>.</p>
+      <p><strong>Example 1: The Web Server</strong><br>
+      <em>Trigger:</em> The classpath contains <code>spring-boot-starter-web</code>.<br>
+      <em>Action:</em> Spring detects <code>Tomcat</code> and <code>DispatcherServlet</code>, automatically starts an embedded Tomcat on port 8080 and configures Spring MVC routing.</p>
+    </section>
+
+    <!-- SECTION: Field Injection Anti‑Pattern -->
+    <section id="field-injection">
+      <h2>11. Field Injection – An Anti‑Pattern</h2>
+      <p>Field injection relies on reflection to mutate private fields after object construction, which hides required dependencies and makes unit testing painful.</p>
+      <pre><code class="language-java">@Service
+public class OrderService {
+    @Autowired
+    private PaymentGateway paymentGateway; // mutable, hidden, hard to test
+}</code></pre>
+      <p>By contrast, constructor injection makes dependencies explicit, allows <code>final</code> fields, and enables simple <code>new OrderService(mockGateway)</code> tests.</p>
+      <pre><code class="language-java">@Service
+public class OrderService {
+    private final PaymentGateway paymentGateway;
+
+    public OrderService(PaymentGateway paymentGateway) {
+        this.paymentGateway = paymentGateway;
+    }
+}</code></pre>
+      <div class="callout callout-danger">
+        <span class="badge badge-danger">🚩 Red Flag</span> Defending field injection as "cleaner looking code" ignores testability and immutability concerns.
+      </div>
+      <p><strong>CoffeeMaker analogy</strong>: Without Spring, creating <code>new CoffeeMaker()</code> would leave <code>pump</code> null, causing a <code>NullPointerException</code>. Constructor injection avoids that hidden requirement.
+    </section>
+
+    <!-- SECTION: Self‑Invocation Problem -->
+    <section id="self-invocation">
+      <h2>12. Self‑Invocation Trap & Fixes</h2>
+      <p>When a bean method calls another method on the same instance using <code>this</code>, the call bypasses the Spring AOP proxy. Consequently, annotations such as <code>@Transactional</code>, <code>@Async</code>, or <code>@Cacheable</code> are ignored.</p>
+      <div class="diagram-box">
+        <div class="diagram-title">External Call vs Self‑Invocation</div>
+        <div class="mermaid">
+flowchart TD
+    subgraph HappyPath["External Call (Works via Proxy)"]
+        Caller1["Client / Controller"] --> Proxy1["CGLIB Spring Proxy"]
+        Proxy1 --> TxStart1["Begin Transaction (JDBC setAutoCommit false)"]
+        TxStart1 --> Real1["Target OrderService.executeTrade()"]
+        Real1 --> TxCommit1["Commit Transaction"]
+    end
+    subgraph Trap["Internal Self‑Invocation (FAILS!)"]
+        Caller2["Client / Controller"] --> Proxy2["CGLIB Spring Proxy"]
+        Proxy2 --> M1["Target OrderService.placeOrder() (Non‑Transactional)"]
+        M1 -->|this.executeTrade()| M2["Target OrderService.executeTrade() (@Transactional)"]
+        Note["Calls 'this' directly!\nBypasses Proxy! Transaction NEVER starts!"]
+    end
+    style HappyPath fill:#1a2d1a,stroke:#38a169,color:#fff
+    style Trap fill:#2d1a1a,stroke:#e53e3e,color:#fff
+        </div>
+      </div>
+      <p>Four standard ways to solve the problem (ranked from best to last resort):</p>
+      <ol>
+        <li><strong>Extract to a separate service (recommended):</strong> Move the <code>@Transactional</code> method into its own bean and inject that bean where needed.</li>
+        <li><strong>Self‑injection:</strong> Inject the bean into itself (e.g., <code>@Lazy private final OrderService self;</code>) and call <code>self.executeTrade()</code> to go through the proxy.</li>
+        <li><strong>Compile‑time AspectJ weaving:</strong> Use the AspectJ compiler (<code>ajc</code>) to weave advice directly into the bytecode, so <code>this</code> calls are also intercepted.</li>
+        <li><strong>Make the method public and call via <code>ApplicationContext.getBean()</code>:</strong> Less ideal because it couples code to the container.</li>
+      </ol>
+    </section>
+
+    <!-- SECTION: Dependency Injection Overview -->
+    <section id="di-overview">
+      <h2>13. Dependency Injection Overview</h2>
+      <p>Dependency Injection (DI) is the technique by which a framework supplies an object’s required collaborators (its dependencies) rather than the object creating them itself. In Spring, DI is realized through the IoC container, which wires beans together via constructor injection, setter injection, or field injection (the latter being discouraged).</p>
+    </section>
+  
