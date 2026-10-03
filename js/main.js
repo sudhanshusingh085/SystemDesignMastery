@@ -154,12 +154,14 @@ const NAV_SECTIONS = [
     title: '20 · HLD Building Blocks',
     items: [
       { label: '🏗️ All Components Reference', href: '/hld-building-blocks/index.html' },
+      { label: '⏱️ Rate Limiter Masterclass', href: '/hld/rate-limiter.html' },
       { label: '⚖️ Why This, Why Not That?', href: '/hld/architectural-decisions.html' },
     ]
   },
   {
     title: '21 · HLD Problems',
     items: [
+      { label: '⏱️ Rate Limiter System', href: '/hld/rate-limiter.html' },
       { label: '🔗 URL Shortener', href: '/hld/case-studies/url-shortener.html' },
       { label: '💬 Chat System', href: '/hld/case-studies/chat-system.html' },
       { label: '📰 News Feed', href: '/hld/case-studies/news-feed.html' },

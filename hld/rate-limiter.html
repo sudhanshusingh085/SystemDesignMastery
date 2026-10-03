@@ -1,0 +1,585 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Rate Limiting — Complete HLD &amp; LLD Masterclass — System Design Mastery</title>
+  <link rel="stylesheet" href="../css/style.css">
+  <script src="../js/main.js" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.0/dist/mermaid.min.js"></script>
+</head>
+<body>
+
+<button class="menu-toggle" aria-label="Toggle menu">☰</button>
+
+<div class="page-wrapper">
+  <aside class="sidebar" id="sidebar"></aside>
+
+  <main class="main-content">
+    <div class="breadcrumb">
+      <a href="../index.html">Home</a>
+      <span class="sep">›</span>
+      <a href="index.html">High-Level Design</a>
+      <span class="sep">›</span>
+      <strong>Rate Limiting Masterclass</strong>
+    </div>
+
+    <header>
+      <h1>⏱️ Rate Limiting — Complete HLD &amp; LLD Masterclass</h1>
+      <p class="subtitle">An exhaustive, textbook-grade guide covering Rate Limiting fundamentals, real-world strategies, algorithms (Fixed Window, Sliding Window Log, Sliding Window Counter, Token Bucket), concurrency pitfalls, Redis distributed implementations, Lua scripts, clock skew, multi-region trade-offs, LLD patterns, and top interview Q&amp;As.</p>
+    </header>
+
+    <!-- TABLE OF CONTENTS -->
+    <nav class="toc-container">
+      <h3>Table of Contents</h3>
+      <ul>
+        <li><a href="#fundamentals">1. Fundamentals &amp; Real-World Context (Sections 1–8)</a></li>
+        <li><a href="#fixed-window">2. Fixed Window Counter (Sections 9–17)</a></li>
+        <li><a href="#redis-fixed-window">3. Redis Fixed Window &amp; Lua Scripts (Sections 18–21)</a></li>
+        <li><a href="#sliding-window">4. Sliding Window Log &amp; Counter (Sections 22–27)</a></li>
+        <li><a href="#token-bucket">5. Token Bucket Algorithm &amp; C# Implementation (Sections 28–35)</a></li>
+        <li><a href="#distributed-token-bucket">6. Distributed Token Bucket &amp; Redis Lua (Sections 36–39)</a></li>
+        <li><a href="#time-clock-skew">7. UTC, Clock Skew &amp; Redis TIME (Sections 40–42)</a></li>
+        <li><a href="#hld-architecture">8. HLD Architecture, Fail-Open/Closed &amp; Multi-Region (Sections 43–52)</a></li>
+        <li><a href="#lld-design">9. LLD Strategy &amp; Factory Patterns (Section 53)</a></li>
+        <li><a href="#interview-guide">10. Interview Decision Guide &amp; 17 Q&amp;A Grill Round (Sections 54–57)</a></li>
+      </ul>
+    </nav>
+
+    <!-- SECTION 1: FUNDAMENTALS -->
+    <section id="fundamentals">
+      <h2>1. Fundamentals &amp; Real-World Context</h2>
+
+      <h3>1.1 What Is Rate Limiting?</h3>
+      <p>Rate limiting controls <strong>how many requests a client is allowed to make within a particular rate policy</strong>.</p>
+      
+      <div class="callout callout-info">
+        <div class="callout-title">💡 Rate Policy Example</div>
+        <p><strong>User:</strong> <code>user123</code> | <strong>Policy:</strong> 100 requests / minute<br>
+        If the user sends requests 1 through 100, all 100 are accepted. Request 101 within that minute is rejected with <code>HTTP 429 Too Many Requests</code>.</p>
+      </div>
+
+      <h3>1.2 Why Do We Need Rate Limiting?</h3>
+      <div class="definition-grid">
+        <div class="def-card">
+          <h4>1. Protect Applications</h4>
+          <p>Prevents sudden traffic spikes (e.g., 100,000 req/sec) from exhausting CPU, threads, or memory, crashing application servers.</p>
+        </div>
+        <div class="def-card">
+          <h4>2. Protect Databases</h4>
+          <p>Prevents expensive database queries or downstream microservice calls from overwhelming data layers.</p>
+        </div>
+        <div class="def-card">
+          <h4>3. Prevent Abuse &amp; Scraping</h4>
+          <p>Mitigates brute-force credential stuffing, API scraping, accidental infinite retry loops, and application-layer DoS.</p>
+        </div>
+        <div class="def-card">
+          <h4>4. Ensure Resource Fairness</h4>
+          <p>Prevents a single noisy tenant from consuming 90% of shared capacity, ensuring multi-tenant isolation.</p>
+        </div>
+        <div class="def-card">
+          <h4>5. Protect Expensive Operations</h4>
+          <p>Enforces stricter tiers for heavy CPU/IO endpoints (e.g., PDF generation or ML inference) vs cheap reads.</p>
+        </div>
+      </div>
+
+      <h3>1.3 Rate Limiting vs Throttling vs Backpressure</h3>
+      <table>
+        <thead>
+          <tr><th>Term</th><th>Question Asked</th><th>Mechanism</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><strong>Rate Limiting</strong></td><td>"How much traffic are you allowed to send?"</td><td>Rejects excess traffic with HTTP 429 based on quota policies.</td></tr>
+          <tr><td><strong>Throttling</strong></td><td>"How much traffic are we willing/able to process?"</td><td>Slows down or delays requests instead of immediately failing them.</td></tr>
+          <tr><td><strong>Backpressure</strong></td><td>"Downstream is overloaded; slow the producer."</td><td>Feedback mechanism telling upstream publishers to reduce generation rate.</td></tr>
+        </tbody>
+      </table>
+
+      <h3>1.4 Where Should Rate Limiting Be Implemented?</h3>
+      <ul>
+        <li><strong>Client-Side:</strong> UI disables buttons / queues requests. Good UX, but <em>not a security boundary</em>.</li>
+        <li><strong>API Gateway (Recommended):</strong> Centralized enforcement before requests hit microservices. Protects backend infrastructure, centralizes policy management.</li>
+        <li><strong>Service-Level:</strong> Internal microservice enforcement for domain-specific or endpoint-cost-based limits.</li>
+        <li><strong>Multi-Layer Architecture:</strong> Gateway enforces global IP limits (10,000 req/sec), Service enforces user limits (100 req/min), Endpoint enforces heavy operation limits (10 req/min).</li>
+      </ul>
+
+      <h3>1.5 Rate-Limit Keys</h3>
+      <p>A rate limit key uniquely identifies the request bucket:</p>
+      <ul>
+        <li><code>rate_limit:ip:10.10.10.10</code> – IP Address (anonymous traffic; subject to NAT/proxy sharing).</li>
+        <li><code>rate_limit:user:user123</code> – Authenticated User ID.</li>
+        <li><code>rate_limit:apikey:abc123</code> – API Key (b2b developer portals).</li>
+        <li><code>rate_limit:user123:/generate-report</code> – Composite key (User ID + Endpoint).</li>
+      </ul>
+    </section>
+
+    <!-- SECTION 2: FIXED WINDOW COUNTER -->
+    <section id="fixed-window">
+      <h2>2. Fixed Window Counter Algorithm</h2>
+      <p>Time is divided into fixed windows (e.g., 12:00:00–12:00:59). For each client, we track the current window identifier and a simple counter.</p>
+
+      <div class="diagram-box">
+        <div class="diagram-title">Fixed Window Counter Logic</div>
+        <div class="mermaid">
+flowchart TD
+    Req[Incoming Request] --> Key[Identify Client &amp; Current Window]
+    Key --> CheckWindow{Window Changed?}
+    CheckWindow -- Yes --> Reset[Set Window = Current, Count = 0]
+    CheckWindow -- No --> CheckLimit{Count &gt;= Limit?}
+    Reset --> CheckLimit
+    CheckLimit -- Yes --> Reject[Return 429 Too Many Requests]
+    CheckLimit -- No --> Incr[Count = Count + 1] --> Allow[Allow Request to Service]
+        </div>
+      </div>
+
+      <h3>2.1 Naïve Fixed Window C# Implementation</h3>
+      <pre><code class="language-csharp">public class WindowCounter
+{
+    public long Window { get; set; }
+    public int Count { get; set; }
+}
+
+public class FixedWindowRateLimiter
+{
+    private readonly int _maxRequests;
+    private readonly TimeSpan _windowSize;
+    private readonly Dictionary&lt;string, WindowCounter&gt; _counters = new();
+
+    public FixedWindowRateLimiter(int maxRequests, TimeSpan windowSize)
+    {
+        _maxRequests = maxRequests;
+        _windowSize = windowSize;
+    }
+
+    public bool AllowRequest(string clientId)
+    {
+        long currentWindow = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() 
+            / (long)_windowSize.TotalMilliseconds;
+
+        if (!_counters.TryGetValue(clientId, out var counter))
+        {
+            counter = new WindowCounter { Window = currentWindow, Count = 0 };
+            _counters[clientId] = counter;
+        }
+
+        if (counter.Window != currentWindow)
+        {
+            counter.Window = currentWindow;
+            counter.Count = 0;
+        }
+
+        if (counter.Count &gt;= _maxRequests)
+            return false;
+
+        counter.Count++;
+        return true;
+    }
+}</code></pre>
+
+      <div class="callout callout-warning">
+        <div class="callout-title">⚠️ Understanding `currentWindow` Math</div>
+        <p>Using <code>DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() / windowSizeMs</code> creates continuous integer window buckets (e.g., Window 100000, 100001). This avoids the hour-wrapping bug of <code>DateTime.UtcNow.Minute</code>.</p>
+      </div>
+
+      <h3>2.2 Thread Safety &amp; Concurrency Trap</h3>
+      <p>The naïve implementation suffers from a <strong>Check-Then-Act race condition</strong>. If two threads read <code>Count = 99</code> simultaneously when limit is 100, both see <code>99 &lt; 100</code>, both increment, allowing 101 requests.</p>
+      <div class="callout callout-danger">
+        <span class="badge badge-danger">🚩 Senior Interview Tip</span> <code>ConcurrentDictionary</code> makes dictionary operations thread-safe; it <strong>does not make multi-step business logic (Read-Check-Increment) atomic!</strong> An explicit lock or atomic CAS is required per client.
+      </div>
+
+      <h3>2.3 Fixed Window Boundary Burst Problem</h3>
+      <p>If a client sends 100 requests at 12:00:59 (end of Window 1) and another 100 requests at 12:01:00 (start of Window 2), <strong>200 requests pass within a 2-second span</strong>, breaking rate smoothing while technically respecting fixed limits.</p>
+    </section>
+
+    <!-- SECTION 3: REDIS FIXED WINDOW & LUA -->
+    <section id="redis-fixed-window">
+      <h2>3. Redis Fixed Window &amp; Atomic Lua Scripting</h2>
+      <p>In a distributed multi-server setup, shared state must live in Redis. Using separate Redis <code>INCR</code> and <code>EXPIRE</code> calls introduces a failure window: if the app crashes between <code>INCR</code> and <code>EXPIRE</code>, the key persists forever without a TTL, leaking memory.</p>
+
+      <h3>3.1 Atomic Redis Lua Script Solution</h3>
+      <pre><code class="language-lua">-- Redis Lua Script: Atomic Fixed Window Counter
+local count = redis.call('INCR', KEYS[1])
+if count == 1 then
+    redis.call('EXPIRE', KEYS[1], ARGV[1])
+end
+return count</code></pre>
+
+      <pre><code class="language-csharp">public class RedisFixedWindowRateLimiter
+{
+    private readonly IDatabase _redis;
+    private readonly int _maxRequests;
+    private readonly TimeSpan _windowSize;
+
+    private const string LuaScript = """
+        local count = redis.call('INCR', KEYS[1])
+        if count == 1 then
+            redis.call('EXPIRE', KEYS[1], ARGV[1])
+        end
+        return count
+        """;
+
+    public RedisFixedWindowRateLimiter(IDatabase redis, int maxRequests, TimeSpan windowSize)
+    {
+        _redis = redis;
+        _maxRequests = maxRequests;
+        _windowSize = windowSize;
+    }
+
+    public async Task&lt;bool&gt; AllowRequestAsync(string clientId)
+    {
+        long currentWindow = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() / (long)_windowSize.TotalMilliseconds;
+        string key = $"rate_limit:{clientId}:{currentWindow}";
+        int ttlSeconds = (int)_windowSize.TotalSeconds;
+
+        var result = await _redis.ScriptEvaluateAsync(
+            LuaScript,
+            new RedisKey[] { key },
+            new RedisValue[] { ttlSeconds }
+        );
+
+        return (long)result &lt;= _maxRequests;
+    }
+}</code></pre>
+    </section>
+
+    <!-- SECTION 4: SLIDING WINDOW LOG & COUNTER -->
+    <section id="sliding-window">
+      <h2>4. Sliding Window Log &amp; Sliding Window Counter</h2>
+
+      <h3>4.1 Sliding Window Log</h3>
+      <p>Stores timestamps of every request in a sorted queue. On each request, removes timestamps older than <code>now - windowSize</code>. If remaining log size &lt; limit, enqueues current timestamp and allows request.</p>
+      <ul>
+        <li><strong>Pros:</strong> 100% precise rolling window. Completely solves boundary burst problem.</li>
+        <li><strong>Cons:</strong> High memory consumption. Stores every timestamp in memory (proportional to request volume).</li>
+      </ul>
+
+      <h3>4.2 Sliding Window Counter (Weighted Approximation)</h3>
+      <p>Combines current window count and previous window count weighted by the elapsed time ratio.</p>
+
+      <div class="callout callout-info">
+        <div class="callout-title">📐 The Weighted Formula</div>
+        <p><code>elapsedRatio = elapsedInCurrentWindow / windowSize</code><br>
+        <code>previousWeight = 1.0 - elapsedRatio</code><br>
+        <code>estimatedCount = (previousCount * previousWeight) + currentCount</code></p>
+      </div>
+
+      <pre><code class="language-csharp">public class SlidingWindowCounterRateLimiter
+{
+    private readonly int _maxRequests;
+    private readonly TimeSpan _windowSize;
+    private readonly Dictionary&lt;string, WindowCounterState&gt; _counters = new();
+
+    public bool AllowRequest(string clientId)
+    {
+        DateTimeOffset now = DateTimeOffset.UtcNow;
+        long windowMs = (long)_windowSize.TotalMilliseconds;
+        long currentWindowNumber = now.ToUnixTimeMilliseconds() / windowMs;
+        long windowStartMs = currentWindowNumber * windowMs;
+        double elapsedRatio = (double)(now.ToUnixTimeMilliseconds() - windowStartMs) / windowMs;
+
+        if (!_counters.TryGetValue(clientId, out var counter))
+        {
+            counter = new WindowCounterState { WindowNumber = currentWindowNumber };
+            _counters[clientId] = counter;
+        }
+
+        if (counter.WindowNumber != currentWindowNumber)
+        {
+            counter.PreviousCount = counter.CurrentCount;
+            counter.CurrentCount = 0;
+            counter.WindowNumber = currentWindowNumber;
+        }
+
+        double previousWeight = 1.0 - elapsedRatio;
+        double estimatedCount = (counter.PreviousCount * previousWeight) + counter.CurrentCount;
+
+        if (estimatedCount &gt;= _maxRequests)
+            return false;
+
+        counter.CurrentCount++;
+        return true;
+    }
+}
+
+public class WindowCounterState
+{
+    public long WindowNumber { get; set; }
+    public int CurrentCount { get; set; }
+    public int PreviousCount { get; set; }
+}</code></pre>
+    </section>
+
+    <!-- SECTION 5: TOKEN BUCKET -->
+    <section id="token-bucket">
+      <h2>5. Token Bucket Algorithm</h2>
+      <p>A bucket holds up to <code>Capacity</code> tokens. Tokens refill at a steady rate of <code>RefillRate</code> per second. Each request consumes 1 token. If tokens &gt;= 1, request is allowed; otherwise rejected.</p>
+
+      <div class="diagram-box">
+        <div class="diagram-title">Token Bucket Mental Model &amp; Lazy Refill</div>
+        <div class="mermaid">
+flowchart TD
+    Refill["Refill Rate (e.g. 2 tokens/sec)"] --> Bucket["Token Bucket (Capacity = 10)"]
+    Req[Incoming Request] --> Check{Tokens &gt;= 1?}
+    Check -- Yes --> Consume[Tokens = Tokens - 1] --> Allow[Allow Request]
+    Check -- No --> Reject[Return 429 Too Many Requests]
+    
+    subgraph LazyRefill["Lazy Refill on Request Arrival"]
+        Calc["elapsed = now - lastRefillTime<br/>tokensToAdd = elapsed * refillRate<br/>tokens = min(capacity, tokens + tokensToAdd)"]
+    end
+        </div>
+      </div>
+
+      <h3>5.1 Thread-Safe Local C# Implementation (Lazy Refill)</h3>
+      <pre><code class="language-csharp">public class TokenBucket
+{
+    private readonly int _capacity;
+    private readonly double _refillRate;
+    private double _tokens;
+    private DateTimeOffset _lastRefillTime;
+    private readonly object _lock = new();
+
+    public TokenBucket(int capacity, double refillRate)
+    {
+        _capacity = capacity;
+        _refillRate = refillRate;
+        _tokens = capacity;
+        _lastRefillTime = DateTimeOffset.UtcNow;
+    }
+
+    public bool TryConsume()
+    {
+        lock (_lock)
+        {
+            Refill();
+            if (_tokens &lt; 1.0)
+                return false;
+
+            _tokens -= 1.0;
+            return true;
+        }
+    }
+
+    private void Refill()
+    {
+        DateTimeOffset now = DateTimeOffset.UtcNow;
+        double elapsedSeconds = (now - _lastRefillTime).TotalSeconds;
+        double tokensToAdd = elapsedSeconds * _refillRate;
+        
+        _tokens = Math.Min(_capacity, _tokens + tokensToAdd);
+        _lastRefillTime = now;
+    }
+}</code></pre>
+
+      <div class="callout callout-info">
+        <div class="callout-title">💡 Why Lazy Refill?</div>
+        <p>Lazy refill calculates accumulated tokens only when a request arrives (using <code>elapsed * refillRate</code>). This avoids running active background timer loops for millions of idle user buckets.</p>
+      </div>
+    </section>
+
+    <!-- SECTION 6: DISTRIBUTED TOKEN BUCKET & REDIS LUA -->
+    <section id="distributed-token-bucket">
+      <h2>6. Distributed Token Bucket with Redis &amp; Lua</h2>
+      <p>In a distributed API Gateway environment, multiple nodes reading and updating Redis hash states (<code>tokens</code> and <code>lastRefill</code>) creates race conditions. We execute the full refill and consumption logic inside a single atomic Redis Lua script.</p>
+
+      <pre><code class="language-csharp">public class RedisTokenBucketRateLimiter
+{
+    private readonly IDatabase _redis;
+    private readonly int _capacity;
+    private readonly double _refillRate;
+
+    private const string TokenBucketLua = """
+        local key = KEYS[1]
+        local now = tonumber(ARGV[1])
+        local capacity = tonumber(ARGV[2])
+        local refillRate = tonumber(ARGV[3])
+
+        local tokens = tonumber(redis.call('HGET', key, 'tokens'))
+        local lastRefill = tonumber(redis.call('HGET', key, 'lastRefill'))
+
+        if tokens == nil then
+            tokens = capacity
+            lastRefill = now
+        end
+
+        local elapsed = (now - lastRefill) / 1000.0
+        local newTokens = math.min(capacity, tokens + (elapsed * refillRate))
+
+        if newTokens < 1.0 then
+            redis.call('HSET', key, 'tokens', newTokens, 'lastRefill', now)
+            return 0
+        else
+            newTokens = newTokens - 1.0
+            redis.call('HSET', key, 'tokens', newTokens, 'lastRefill', now)
+            return 1
+        end
+        """;
+
+    public RedisTokenBucketRateLimiter(IDatabase redis, int capacity, double refillRate)
+    {
+        _redis = redis;
+        _capacity = capacity;
+        _refillRate = refillRate;
+    }
+
+    public async Task&lt;bool&gt; AllowRequestAsync(string clientId)
+    {
+        string key = $"rate_limit:{clientId}";
+        long nowMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+
+        var result = await _redis.ScriptEvaluateAsync(
+            TokenBucketLua,
+            new RedisKey[] { key },
+            new RedisValue[] { nowMs, _capacity, _refillRate }
+        );
+
+        return (long)result == 1;
+    }
+}</code></pre>
+    </section>
+
+    <!-- SECTION 7: UTC, CLOCK SKEW & REDIS TIME -->
+    <section id="time-clock-skew">
+      <h2>7. Date/Time Concepts, Clock Skew &amp; Redis TIME</h2>
+
+      <h3>7.1 `DateTimeOffset.UtcNow` vs Clock Skew</h3>
+      <p><code>DateTimeOffset.UtcNow</code> standardizes all servers to UTC, eliminating time-zone offsets. However, physical server clocks drift slightly due to hardware variances. Even with NTP synchronization, <strong>clock skew (e.g., 20–50 ms difference between app servers)</strong> can cause token refill jitter.</p>
+
+      <h3>7.2 Redis `TIME` for Centralized Authoritative Time</h3>
+      <p>To eliminate client clock skew entirely, the Lua script can query Redis's internal clock via <code>redis.call('TIME')</code>, ensuring all servers use Redis as the single source of truth for time.</p>
+
+      <pre><code class="language-lua">-- Query authoritative time inside Redis Lua
+local timeArray = redis.call('TIME')
+local nowMs = (tonumber(timeArray[1]) * 1000) + math.floor(tonumber(timeArray[2]) / 1000)</code></pre>
+    </section>
+
+    <!-- SECTION 8: HLD ARCHITECTURE & DECISIONS -->
+    <section id="hld-architecture">
+      <h2>8. Complete High-Level Design Architecture</h2>
+
+      <div class="diagram-box">
+        <div class="diagram-title">Distributed Production Rate Limiter Architecture</div>
+        <div class="mermaid">
+flowchart TD
+    Client[Clients / Third-Party Apps] --> LB[Load Balancer]
+    LB --> GW1[API Gateway Node 1]
+    LB --> GW2[API Gateway Node 2]
+    
+    GW1 --> RedisCluster[(Redis Sentinel / Cluster)]
+    GW2 --> RedisCluster
+    
+    GW1 -- Allowed --> ServiceA[Order Service]
+    GW1 -- 429 Rejected --> Return429[429 Response with Retry-After]
+    
+    subgraph StorageLayer["Rate Limit State"]
+        RedisCluster
+    end
+        </div>
+      </div>
+
+      <h3>8.1 Fail-Open vs Fail-Closed Strategy</h3>
+      <table>
+        <thead>
+          <tr><th>Mode</th><th>Action on Redis Outage</th><th>Pros</th><th>Cons</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><strong>Fail-Open</strong></td><td>Allow request through</td><td>High availability; users experience zero downtime.</td><td>Risk of downstream service overload during Redis outages.</td></tr>
+          <tr><td><strong>Fail-Closed</strong></td><td>Reject request with 429/503</td><td>Strict backend protection.</td><td>Outage in Redis breaks entire user-facing API.</td></tr>
+        </tbody>
+      </table>
+
+      <h3>8.2 Multi-Region Considerations</h3>
+      <ul>
+        <li><strong>Local Regional Redis:</strong> Fast (&lt;1ms), but user can exhaust quota N times across N regions.</li>
+        <li><strong>Central Global Redis:</strong> Strict enforcement, but adds cross-region WAN latency (100ms+).</li>
+        <li><strong>Quota Allocation (Hybrid):</strong> Divide global quota across regions (e.g., US gets 60%, EU gets 40%) with periodic sync background daemons.</li>
+      </ul>
+    </section>
+
+    <!-- SECTION 9: LLD DESIGN PATTERNS -->
+    <section id="lld-design">
+      <h2>9. Low-Level Design (LLD): Strategy &amp; Factory Patterns</h2>
+
+      <span class="code-label">C# 12 LLD Architecture</span>
+      <pre><code class="language-csharp">public record RateLimitResult(bool IsAllowed, int RemainingTokens, TimeSpan? RetryAfter, int Limit);
+
+public interface IRateLimiterStrategy
+{
+    Task&lt;RateLimitResult&gt; CheckAsync(string clientId, int cost = 1);
+}
+
+public class TokenBucketStrategy : IRateLimiterStrategy
+{
+    public async Task&lt;RateLimitResult&gt; CheckAsync(string clientId, int cost) { /* ... */ }
+}
+
+public class SlidingWindowStrategy : IRateLimiterStrategy
+{
+    public async Task&lt;RateLimitResult&gt; CheckAsync(string clientId, int cost) { /* ... */ }
+}
+
+// Factory Pattern for Dynamic Strategy Selection
+public class RateLimiterFactory
+{
+    private readonly IServiceProvider _serviceProvider;
+    public RateLimiterFactory(IServiceProvider serviceProvider) => _serviceProvider = serviceProvider;
+
+    public IRateLimiterStrategy GetStrategy(string policyType) => policyType switch
+    {
+        "TokenBucket" => _serviceProvider.GetRequiredService&lt;TokenBucketStrategy&gt;(),
+        "SlidingWindow" => _serviceProvider.GetRequiredService&lt;SlidingWindowStrategy&gt;(),
+        _ => throw new ArgumentException("Unknown rate limit policy")
+    };
+}</code></pre>
+    </section>
+
+    <!-- SECTION 10: INTERVIEW DECISION GUIDE & 17 Q&AS -->
+    <section id="interview-guide">
+      <h2>10. Interview Decision Guide &amp; 17 Grill Round Q&amp;As</h2>
+
+      <h3>Algorithm Comparison Cheat Sheet</h3>
+      <table>
+        <thead>
+          <tr><th>Algorithm</th><th>Accuracy</th><th>Memory</th><th>Burst Control</th><th>Best Use Case</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><strong>Fixed Window</strong></td><td>Low</td><td>O(1) Very Low</td><td>Poor (Boundary Spikes)</td><td>Simple APIs, low precision needs</td></tr>
+          <tr><td><strong>Sliding Log</strong></td><td>100% High</td><td>O(N) High</td><td>Excellent</td><td>Low-traffic, high-security endpoints</td></tr>
+          <tr><td><strong>Sliding Counter</strong></td><td>Approximate</td><td>O(1) Low</td><td>Good</td><td>High-throughput web APIs</td></tr>
+          <tr><td><strong>Token Bucket</strong></td><td>High</td><td>O(1) Low</td><td>Excellent (Configurable)</td><td>General-purpose enterprise APIs</td></tr>
+        </tbody>
+      </table>
+
+      <h3>17 Essential Interview Questions &amp; Model Answers</h3>
+      
+      <div class="interview-card">
+        <div class="question-header"><span class="q-num">Q1</span> <h4>Why can't we keep rate-limiter state in local application memory?</h4></div>
+        <div class="answer-content"><p>In horizontally scaled architectures, load balancers distribute requests across multiple instances. Local memory counters allow clients to bypass global limits by hitting different servers. A centralized state store like Redis is required.</p></div>
+      </div>
+
+      <div class="interview-card">
+        <div class="question-header"><span class="q-num">Q2</span> <h4>Why is Lua scripting essential for Redis rate limiting?</h4></div>
+        <div class="answer-content"><p>Lua scripts execute atomically in Redis. Without Lua, multiple concurrent requests performing separate `HGET`, math calculation, and `HSET` calls introduce race conditions, allowing quota overruns.</p></div>
+      </div>
+
+      <div class="interview-card">
+        <div class="question-header"><span class="q-num">Q3</span> <h4>What is the difference between Token Bucket and Leaky Bucket?</h4></div>
+        <div class="answer-content"><p>Token Bucket allows short bursts of requests up to its capacity while maintaining a steady refill rate. Leaky Bucket processes requests at a strictly constant output rate regardless of incoming bursts (queueing excess calls).</p></div>
+      </div>
+
+      <div class="interview-card">
+        <div class="question-header"><span class="q-num">Q4</span> <h4>What HTTP status code and headers should a rate limiter return?</h4></div>
+        <div class="answer-content"><p>Returns <code>HTTP 429 Too Many Requests</code> along with <code>X-RateLimit-Limit</code>, <code>X-RateLimit-Remaining</code>, and <code>Retry-After</code> headers.</p></div>
+      </div>
+
+      <div class="interview-card">
+        <div class="question-header"><span class="q-num">Q5</span> <h4>How do you handle clock skew between application servers?</h4></div>
+        <div class="answer-content"><p>Use <code>DateTimeOffset.UtcNow</code> across all machines and NTP synchronization. For ultra-strict precision, query Redis's internal authoritative clock via <code>redis.call('TIME')</code> inside Lua scripts.</p></div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<button class="scroll-top" aria-label="Scroll to top">↑</button>
+</body>
+</html>
